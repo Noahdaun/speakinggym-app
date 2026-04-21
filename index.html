@@ -125,17 +125,17 @@ textarea{resize:none;height:80px;}
 /* REVIEW SESSION */
 #rs{display:none;position:fixed;inset:0;background:var(--bg);z-index:300;flex-direction:column;}
 #rs.on{display:flex;}
-.stb{background:#1e2d4a;padding:11px 13px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.stb{background:#1e2d4a;padding:8px 13px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
 .sbk{display:flex;align-items:center;gap:6px;cursor:pointer;}
 .sbki{width:25px;height:25px;border-radius:7px;background:rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;}
 .sbk span{font-size:12px;color:rgba(255,255,255,.7);}
 .sti{font-size:13px;font-weight:600;color:#fff;}
 .sbd{font-size:10px;background:rgba(255,255,255,.15);color:rgba(255,255,255,.8);padding:3px 8px;border-radius:99px;}
-.scnt{flex:1;overflow-y:auto;background:#f7f8fa;padding:9px 11px;}
-.sbot{background:var(--card);border-top:1px solid var(--brd);padding:10px 13px 18px;flex-shrink:0;}
-.sbl{font-size:11px;color:var(--mu);text-align:center;margin-bottom:8px;}
-.scir{display:flex;gap:7px;justify-content:center;margin-bottom:5px;}
-.sc{width:37px;height:37px;border-radius:50%;border:2px solid var(--brd);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:var(--mu);cursor:pointer;}
+.scnt{flex:1;overflow-y:auto;background:#f7f8fa;padding:6px 8px;}
+.sbot{background:var(--card);border-top:1px solid var(--brd);padding:6px 13px 10px;flex-shrink:0;}
+.sbl{font-size:10px;color:var(--mu);text-align:center;margin-bottom:5px;}
+.scir{display:flex;gap:5px;justify-content:center;margin-bottom:3px;}
+.sc{width:30px;height:30px;border-radius:50%;border:2px solid var(--brd);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:var(--mu);cursor:pointer;}
 .sc.dn{background:var(--g);border-color:var(--g);color:#fff;}
 .sc.ac{border-color:var(--am);background:var(--aml);color:var(--amd);}
 .sh{font-size:10px;text-align:center;}
@@ -173,6 +173,9 @@ textarea{resize:none;height:80px;}
     <input type="text" id="sun" placeholder="이름">
     <input type="email" id="sue" placeholder="이메일">
     <input type="password" id="sup" placeholder="비밀번호 (6자 이상)">
+    <div style="font-size:12px;font-weight:600;margin-bottom:7px;">수강 중인 반 선택 <span style="font-weight:400;color:#888780;">(선택사항)</span></div>
+    <div id="su-classes" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px;min-height:32px;"></div>
+    <div style="font-size:11px;color:#888780;margin-bottom:10px;">없으면 선생님께 문의해주세요</div>
     <button class="btn bp" onclick="doSignup()">가입하기</button>
     <button class="btn bo" onclick="showLogin()">로그인으로 돌아가기</button>
     <div id="suerr" class="err"></div>
@@ -294,15 +297,26 @@ textarea{resize:none;height:80px;}
     </div>
     <div class="tbb">
       <button class="tbn on" onclick="adTab('st',this)">학생현황</button>
+      <button class="tbn" onclick="adTab('cl',this)">반관리</button>
       <button class="tbn" onclick="adTab('ls',this)">레슨</button>
       <button class="tbn" onclick="adTab('at',this)">출석</button>
-      <button class="tbn" onclick="adTab('vo',this)">단어추가</button>
+      <button class="tbn" onclick="adTab('vo',this)">단어</button>
     </div>
 
     <!-- 학생현황 -->
     <div id="ad-st">
       <div class="cpills" id="adcp"></div>
       <div id="adsl"><div class="loading">로딩중...</div></div>
+    </div>
+
+    <!-- 반관리 -->
+    <div id="ad-cl" style="display:none;">
+      <div style="font-size:12px;font-weight:600;margin-bottom:7px;">새 반 만들기</div>
+      <div style="display:flex;gap:7px;margin-bottom:12px;">
+        <input type="text" id="new-cls" placeholder="반 이름 (예: 월수금반)" style="flex:1;margin-bottom:0;">
+        <button onclick="addClass()" style="padding:0 14px;border-radius:var(--rs);background:var(--g);color:#fff;border:none;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;">추가</button>
+      </div>
+      <div id="cls-list"><div class="loading">로딩중...</div></div>
     </div>
 
     <!-- 레슨 -->
@@ -340,7 +354,15 @@ textarea{resize:none;height:80px;}
       <div style="font-size:12px;font-weight:600;margin-bottom:4px;">여러 단어 일괄 추가</div>
       <div class="mu" style="margin-bottom:6px;">영어,한국어 형식으로 줄마다 입력</div>
       <textarea id="vbulk" placeholder="I can't resist,~하지 않을 수가 없어&#10;hit differently,색다르게 느껴지다&#10;out of nowhere,갑자기 뜬금없이"></textarea>
-      <button class="btn bp" onclick="admBulkV()">일괄 추가</button>
+      <button class="btn bp" onclick="admBulkV()" style="margin-bottom:12px;">일괄 추가</button>
+      <div class="dv"></div>
+      <div style="font-size:12px;font-weight:600;margin-bottom:4px;">AI 자동 추출 <span style="font-size:10px;font-weight:400;color:#888780;">· 자막에서 핵심 표현 자동 추출</span></div>
+      <div style="font-size:11px;color:var(--mu);margin-bottom:7px;">레슨 선택</div>
+      <select id="extract-lesson" style="margin-bottom:8px;">
+        <option value="">레슨을 선택하세요</option>
+      </select>
+      <button class="btn bp" onclick="extractVocab()" id="extract-btn">AI로 표현 추출하기</button>
+      <div id="extract-result" style="margin-top:10px;"></div>
       <div style="background:#F3F0FC;border-radius:9px;padding:8px 11px;margin-top:8px;border:1px solid #AFA9EC;">
         <div style="font-size:11px;color:var(--pud);">추가된 단어는 선택한 학생의 Box 1에 들어가요.</div>
       </div>
@@ -379,9 +401,8 @@ textarea{resize:none;height:80px;}
   </div>
   <div class="scnt" id="scnt"></div>
   <div class="sbot">
-    <div class="sbl">전체 몇 번 다 했나요? <strong style="color:var(--amd);">목표 5회</strong></div>
+    <div class="sbl">따라하기 횟수 <strong style="color:var(--amd);">목표 5회</strong> · <span id="shnt" style="font-size:10px;"></span></div>
     <div class="scir" id="scir"></div>
-    <div class="sh" id="shnt"></div>
   </div>
 </div>
 
@@ -396,7 +417,6 @@ let U=null,P=null,cY,cM,aM={},rM={},vc=[],tv=[],ci=0,fl=false,ses=null,ls=[],sts
 let todayRevItems=[];
 
 // ── AUTH ──
-function showSU(){document.getElementById('lbox').style.display='none';document.getElementById('subox').style.display='block';}
 function showLogin(){document.getElementById('subox').style.display='none';document.getElementById('lbox').style.display='block';}
 
 async function doSignup(){
@@ -407,7 +427,7 @@ async function doSignup(){
   const{data,error}=await sb.auth.signUp({email:e,password:p,options:{data:{name:n}}});
   if(error){er.textContent='가입 실패: '+error.message;return;}
   if(data?.user){
-    await sb.from('profiles').upsert({id:data.user.id,email:e,name:n,role:'student'});
+    await sb.from('profiles').upsert({id:data.user.id,email:e,name:n,role:'student',class_name:selectedClass||null});
     er.style.color='var(--g)';er.textContent='가입 완료! 로그인해주세요';
     setTimeout(()=>{showLogin();document.getElementById('le').value=e;er.textContent='';},1500);
   }
@@ -720,7 +740,7 @@ async function oSes(lid,title,url,round){
       </div>
       <div style="font-size:9px;color:rgba(255,255,255,.35);">${title}</div>
     </div>
-    <iframe src="${url}" style="width:100%;height:calc(100vh - 280px);border:none;border-radius:8px;" allowfullscreen></iframe>`;
+    <iframe src="${url}" style="width:100%;height:calc(100vh - 200px);border:none;border-radius:8px;" allowfullscreen></iframe>`;
   document.getElementById('rs').classList.add('on');
 }
 
@@ -728,11 +748,11 @@ function rSC(n){
   document.getElementById('scir').innerHTML=Array(5).fill(0).map((_,i)=>{
     const num=i+1,cls=num<=n?'dn':num===n+1?'ac':'';
     return`<div class="sc ${cls}" onclick="tpC(${num})">
-      ${num<=n?'<svg width="14" height="14" viewBox="0 0 14 14"><polyline points="2,7 5,11 12,3" fill="none" stroke="white" stroke-width="2"/></svg>':num}
+      ${num<=n?'<svg width="12" height="12" viewBox="0 0 12 12"><polyline points="2,6 5,10 10,2" fill="none" stroke="white" stroke-width="2"/></svg>':num}
     </div>`;
   }).join('');
-  if(n>=5){document.getElementById('shnt').textContent='5회 달성! 복습 완료!';document.getElementById('shnt').style.color='var(--gd)';}
-  else{document.getElementById('shnt').textContent=`${n} / 5회 · ${5-n}번 더!`;document.getElementById('shnt').style.color='var(--amd)';}
+  if(n>=5){document.getElementById('shnt').textContent='5회 달성!';document.getElementById('shnt').style.color='var(--gd)';}
+  else{document.getElementById('shnt').textContent=`${n}/5`;document.getElementById('shnt').style.color='var(--amd)';}
 }
 
 async function tpC(n){
@@ -774,14 +794,15 @@ async function lRec(){
 
 // ── ADMIN ──
 function adTab(t,b){
-  ['st','ls','at','vo'].forEach(x=>{
+  ['st','cl','ls','at','vo'].forEach(x=>{
     const el=document.getElementById(`ad-${x}`);if(el)el.style.display=x===t?'block':'none';
   });
   document.querySelectorAll('#pad .tbb .tbn').forEach(x=>x.classList.remove('on'));
   if(b)b.classList.add('on');
+  if(t==='cl')rClsList();
   if(t==='ls')rLsList();
   if(t==='at'){document.getElementById('atd').value=new Date().toISOString().slice(0,10);rAtCls();}
-  if(t==='vo')rVTgt();
+  if(t==='vo'){rVTgt();rExtractLessons();}
 }
 
 async function lAdm(){
@@ -940,6 +961,222 @@ async function admBulkV(){
 }
 
 // ── NAV ──
+// ── 반관리 ──
+let classes=[];
+
+async function rClsList(){
+  const{data}=await sb.from('profiles').select('class_name').eq('role','student');
+  const all=(data||[]).map(s=>s.class_name).filter(Boolean);
+  classes=[...new Set(all)].sort();
+  renderClsList();
+}
+
+function renderClsList(){
+  if(!classes.length){document.getElementById('cls-list').innerHTML='<div class="empty">아직 반이 없어요.<br>위에서 반을 추가해주세요.</div>';return;}
+  document.getElementById('cls-list').innerHTML=classes.map(cls=>{
+    const members=sts.filter(s=>s.class_name===cls);
+    const tags=members.map(s=>`
+      <div style="display:flex;align-items:center;gap:4px;background:#F9F6F0;border-radius:99px;padding:3px 9px;font-size:11px;">
+        ${s.name||s.email}
+        <div onclick="removeFromClass('${s.id}','${cls}')" style="width:14px;height:14px;border-radius:50%;background:#FCEBEB;display:flex;align-items:center;justify-content:center;cursor:pointer;margin-left:2px;">
+          <svg width="7" height="7" viewBox="0 0 7 7"><line x1="1" y1="1" x2="6" y2="6" stroke="#A32D2D" stroke-width="1.5"/><line x1="6" y1="1" x2="1" y2="6" stroke="#A32D2D" stroke-width="1.5"/></svg>
+        </div>
+      </div>`).join('');
+    const unassigned=sts.filter(s=>!s.class_name||s.class_name!==cls);
+    const opts=unassigned.map(s=>`<option value="${s.id}">${s.name||s.email}</option>`).join('');
+    return`<div class="card" style="margin-bottom:8px;">
+      <div class="row" style="margin-bottom:8px;">
+        <div style="font-size:13px;font-weight:600;">${cls}</div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span class="bdg bgr">${members.length}명</span>
+          <div onclick="deleteClass('${cls}')" style="font-size:11px;color:var(--rd);background:var(--rl);padding:3px 8px;border-radius:6px;cursor:pointer;">삭제</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px;min-height:24px;">${tags||'<div style="font-size:11px;color:var(--mu);">학생 없음</div>'}</div>
+      <div style="font-size:11px;color:var(--mu);margin-bottom:5px;">학생 추가</div>
+      <div style="display:flex;gap:6px;">
+        <select id="add-to-${cls.replace(/\s/g,'_')}" style="flex:1;margin-bottom:0;padding:8px 10px;font-size:12px;">
+          <option value="">학생 선택...</option>${opts}
+        </select>
+        <button onclick="addToClass('${cls}')" style="padding:0 12px;border-radius:var(--rs);background:var(--g);color:#fff;border:none;font-size:12px;font-weight:600;cursor:pointer;">추가</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function addClass(){
+  const name=document.getElementById('new-cls').value.trim();
+  if(!name){tst('반 이름을 입력해주세요');return;}
+  if(classes.includes(name)){tst('이미 있는 반 이름이에요');return;}
+  classes.push(name);
+  classes.sort();
+  document.getElementById('new-cls').value='';
+  renderClsList();
+  tst(`${name} 반이 추가됐어요!`);
+}
+
+async function addToClass(cls){
+  const key=`add-to-${cls.replace(/\s/g,'_')}`;
+  const sid=document.getElementById(key)?.value;
+  if(!sid){tst('학생을 선택해주세요');return;}
+  const{error}=await sb.from('profiles').update({class_name:cls}).eq('id',sid);
+  if(error){tst('추가 실패');return;}
+  const st=sts.find(s=>s.id===sid);
+  if(st)st.class_name=cls;
+  renderClsList();
+  tst('반에 추가됐어요!');
+}
+
+async function removeFromClass(sid,cls){
+  if(!confirm(`${cls}에서 제거할까요?`))return;
+  const{error}=await sb.from('profiles').update({class_name:null}).eq('id',sid);
+  if(error){tst('실패');return;}
+  const st=sts.find(s=>s.id===sid);
+  if(st)st.class_name=null;
+  renderClsList();
+  tst('제거됐어요');
+}
+
+async function deleteClass(cls){
+  if(!confirm(`${cls}을 삭제할까요?\n소속 학생들의 반 배정이 해제됩니다.`))return;
+  const members=sts.filter(s=>s.class_name===cls);
+  for(const s of members){
+    await sb.from('profiles').update({class_name:null}).eq('id',s.id);
+    s.class_name=null;
+  }
+  classes=classes.filter(c=>c!==cls);
+  renderClsList();
+  tst('삭제됐어요');
+}
+
+// ── 가입 반 선택 ──
+let selectedClass='';
+
+async function showSU(){
+  document.getElementById('lbox').style.display='none';
+  document.getElementById('subox').style.display='block';
+  selectedClass='';
+  // 반 목록 로드
+  const{data}=await sb.from('profiles').select('class_name').eq('role','student');
+  const clsList=[...new Set((data||[]).map(s=>s.class_name).filter(Boolean))].sort();
+  const el=document.getElementById('su-classes');
+  if(!clsList.length){el.innerHTML='<div style="font-size:11px;color:var(--mu);">등록된 반이 없어요</div>';return;}
+  el.innerHTML=clsList.map(c=>`
+    <div class="su-cls-btn" onclick="selectSUClass('${c}',this)"
+      style="font-size:12px;padding:7px 13px;border-radius:10px;border:1.5px solid #EDE8DF;color:var(--mu);background:#fff;cursor:pointer;">
+      ${c}
+    </div>`).join('');
+}
+
+function selectSUClass(cls,btn){
+  selectedClass=cls;
+  document.querySelectorAll('.su-cls-btn').forEach(b=>{
+    b.style.borderColor='#EDE8DF';b.style.color='var(--mu)';b.style.background='#fff';b.style.fontWeight='400';
+  });
+  btn.style.borderColor='#1D9E75';btn.style.color='#085041';btn.style.background='#E1F5EE';btn.style.fontWeight='600';
+}
+
+// ── AI 자동추출 ──
+function rExtractLessons(){
+  const sel=document.getElementById('extract-lesson');
+  sel.innerHTML='<option value="">레슨을 선택하세요</option>'+
+    ls.map(l=>`<option value="${l.id}" data-url="${l.url}">${l.title} (${l.lesson_date})</option>`).join('');
+}
+
+let extractedItems=[];
+
+async function extractVocab(){
+  const sel=document.getElementById('extract-lesson');
+  const opt=sel.options[sel.selectedIndex];
+  if(!opt||!opt.value){tst('레슨을 선택해주세요');return;}
+  const url=opt.dataset.url;
+  const title=opt.text;
+  const btn=document.getElementById('extract-btn');
+  btn.textContent='AI 분석 중...';btn.disabled=true;
+  document.getElementById('extract-result').innerHTML=`
+    <div style="text-align:center;padding:20px;color:var(--mu);">
+      <div style="font-size:13px;margin-bottom:4px;">자막 분석 중...</div>
+      <div style="font-size:11px;">잠시만 기다려주세요</div>
+    </div>`;
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-20250514',
+        max_tokens:1000,
+        messages:[{
+          role:'user',
+          content:`다음은 영어 말하기 수업 자료 "${title}"의 URL입니다: ${url}\n\n이 수업 자료에서 한국인 영어 학습자가 배우면 유용한 핵심 표현이나 구동사, 관용어, 자연스러운 영어 표현 6-8개를 추출해주세요.\n\n반드시 JSON 형식으로만 응답해주세요 (다른 텍스트 없이):\n{"expressions":[{"english":"표현","korean":"한국어 뜻"},...]}`
+        }]
+      })
+    });
+    const data=await res.json();
+    const text=data.content?.[0]?.text||'';
+    const clean=text.replace(/```json|```/g,'').trim();
+    const parsed=JSON.parse(clean);
+    extractedItems=parsed.expressions||[];
+    renderExtracted();
+  }catch(e){
+    document.getElementById('extract-result').innerHTML=`<div class="empty">추출 실패. 다시 시도해주세요.</div>`;
+  }
+  btn.textContent='AI로 표현 추출하기';btn.disabled=false;
+}
+
+function renderExtracted(){
+  if(!extractedItems.length){document.getElementById('extract-result').innerHTML='<div class="empty">추출된 표현이 없어요</div>';return;}
+  const checked=new Set(extractedItems.map((_,i)=>i));
+  document.getElementById('extract-result').innerHTML=`
+    <div style="background:#F0FAF6;border-radius:9px;padding:10px 12px;border:1px solid #C0E8D8;margin-bottom:8px;">
+      <div style="font-size:11px;font-weight:600;color:#085041;margin-bottom:8px;">추출된 표현 ${extractedItems.length}개</div>
+      ${extractedItems.map((v,i)=>`
+        <div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #C0E8D8;">
+          <div id="ec-${i}" onclick="toggleExtract(${i})" style="width:18px;height:18px;border-radius:4px;background:#1D9E75;border:1.5px solid #1D9E75;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+            <svg width="10" height="10" viewBox="0 0 10 10"><polyline points="2,5 4,8 8,2" fill="none" stroke="white" stroke-width="1.5"/></svg>
+          </div>
+          <div style="flex:1;">
+            <div style="font-size:12px;font-weight:600;">${v.english}</div>
+            <div style="font-size:11px;color:var(--mu);">${v.korean}</div>
+          </div>
+        </div>`).join('')}
+    </div>
+    <div style="font-size:11px;color:var(--mu);margin-bottom:6px;">대상 학생</div>
+    <select id="extract-target" style="margin-bottom:8px;">
+      <option value="all">전체 학생</option>
+      ${sts.map(s=>`<option value="${s.id}">${s.name||s.email}</option>`).join('')}
+    </select>
+    <button class="btn bp" onclick="addExtracted()">선택한 표현 추가</button>`;
+}
+
+const extractChecked=new Set();
+function toggleExtract(i){
+  if(extractChecked.has(i)){
+    extractChecked.delete(i);
+    const el=document.getElementById(`ec-${i}`);
+    el.style.background='#fff';el.style.borderColor='#EDE8DF';el.innerHTML='';
+  }else{
+    extractChecked.add(i);
+    const el=document.getElementById(`ec-${i}`);
+    el.style.background='#1D9E75';el.style.borderColor='#1D9E75';
+    el.innerHTML='<svg width="10" height="10" viewBox="0 0 10 10"><polyline points="2,5 4,8 8,2" fill="none" stroke="white" stroke-width="1.5"/></svg>';
+  }
+}
+
+async function addExtracted(){
+  const sel=document.getElementById('extract-target')?.value||'all';
+  const selected=extractedItems.filter((_,i)=>!document.getElementById(`ec-${i}`)?.style.background.includes('fff'));
+  if(!selected.length){tst('표현을 선택해주세요');return;}
+  const today=new Date().toISOString().slice(0,10);
+  const targets=sel==='all'?sts.map(s=>s.id):[sel];
+  const rows=[];
+  targets.forEach(sid=>selected.forEach(v=>rows.push({student_id:sid,english:v.english,korean:v.korean,box_level:1,next_review:today})));
+  const{error}=await sb.from('vocab_cards').insert(rows);
+  if(error){tst('추가 실패');return;}
+  document.getElementById('extract-result').innerHTML='';
+  extractedItems=[];
+  tst(`${selected.length}개 표현을 ${targets.length}명에게 추가했어요!`);
+}
+
 function gp(n){
   document.querySelectorAll('.pg').forEach(p=>p.classList.remove('on'));
   document.querySelectorAll('.bni').forEach(b=>b.classList.remove('on'));
