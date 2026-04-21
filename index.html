@@ -629,11 +629,21 @@ async function lRev(){
   const dates=(at||[]).map(a=>a.lesson_date).sort().reverse();
   const rounds=[1,2,3,5,7];
   const items=[];const seen=new Set();
+
+  // 출석일에서 가장 가까운 레슨 찾기 (당일 포함, 이전 날짜 중 가장 최근)
+  function findLesson(attDate){
+    const sorted=[...ls].sort((a,b)=>b.lesson_date.localeCompare(a.lesson_date));
+    return sorted.find(l=>l.lesson_date<=attDate);
+  }
+
   rounds.forEach(r=>{
     if(dates.length>=r){
-      const td=dates[r-1];
-      const lesson=ls.find(l=>l.lesson_date===td);
-      if(lesson&&!seen.has(lesson.id)){seen.add(lesson.id);items.push({lesson,round:r,date:td});}
+      const attDate=dates[r-1];
+      const lesson=findLesson(attDate);
+      if(lesson&&!seen.has(lesson.id)){
+        seen.add(lesson.id);
+        items.push({lesson,round:r,date:attDate});
+      }
     }
   });
   todayRevItems=items.slice(0,4);
