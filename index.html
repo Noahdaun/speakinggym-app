@@ -210,22 +210,63 @@ input:focus{border-color:var(--g);}
   </div>
 
   <div id="pad" class="pg">
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
-      <div style="background:var(--gl);border-radius:12px;padding:11px;border:1px solid #C0E8D8;"><div style="font-size:18px;font-weight:700;color:var(--gd);" id="att">-</div><div style="font-size:11px;color:var(--gm);margin-top:2px;">전체 학생</div></div>
-      <div style="background:var(--sf);border-radius:12px;padding:11px;border:1px solid var(--brd);"><div style="font-size:18px;font-weight:700;" id="adt">-</div><div style="font-size:11px;color:var(--mu);margin-top:2px;">오늘 완료</div></div>
+    <!-- 관리자 탭 -->
+    <div class="tbb" style="margin-bottom:12px;">
+      <button class="tbn on" onclick="admTab('students',this)">학생관리</button>
+      <button class="tbn" onclick="admTab('lessons',this)">레슨관리</button>
+      <button class="tbn" onclick="admTab('attendance',this)">출석</button>
+      <button class="tbn" onclick="admTab('vocab',this)">단어추가</button>
     </div>
-    <div class="cts" id="adtb"></div>
-    <div id="adsl"></div>
-    <div id="adcd" style="display:none;">
-      <div class="row" style="margin-bottom:12px;"><div style="font-size:14px;font-weight:600;" id="adcn"></div><button onclick="ccd()" style="font-size:12px;color:var(--mu);border:none;background:none;cursor:pointer;">← 전체</button></div>
-      <div style="font-size:12px;font-weight:600;margin-bottom:8px;">레슨 추가 <span style="font-weight:400;color:var(--mu);">· 반 전체 적용</span></div>
-      <input type="text" id="lt" placeholder="레슨 제목">
+
+    <!-- 학생관리 탭 -->
+    <div id="adm-students">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
+        <div style="background:var(--gl);border-radius:12px;padding:11px;border:1px solid #C0E8D8;"><div style="font-size:18px;font-weight:700;color:var(--gd);" id="att">-</div><div style="font-size:11px;color:var(--gm);margin-top:2px;">전체 학생</div></div>
+        <div style="background:var(--sf);border-radius:12px;padding:11px;border:1px solid var(--brd);"><div style="font-size:18px;font-weight:700;" id="adt">-</div><div style="font-size:11px;color:var(--mu);margin-top:2px;">오늘 리뷰완료</div></div>
+      </div>
+      <div class="cts" id="adtb"></div>
+      <div id="adsl"></div>
+    </div>
+
+    <!-- 레슨관리 탭 -->
+    <div id="adm-lessons" style="display:none;">
+      <div style="font-size:13px;font-weight:600;margin-bottom:10px;">레슨 추가</div>
+      <input type="text" id="lt" placeholder="레슨 제목 (예: KPop Demon Hunters)">
       <input type="url" id="lu" placeholder="GitHub URL">
       <input type="date" id="ld">
-      <button class="btn bp" onclick="addL()" style="margin-bottom:14px;">레슨 추가</button>
+      <div style="font-size:12px;color:var(--mu);margin-bottom:8px;">적용 대상</div>
+      <div class="cts" id="lesson-target-tabs"></div>
+      <button class="btn bp" onclick="addL()">레슨 추가</button>
       <div class="dv"></div>
-      <div style="font-size:12px;font-weight:600;margin-bottom:8px;">오늘 출석 체크</div>
+      <div style="font-size:13px;font-weight:600;margin-bottom:10px;">등록된 레슨</div>
+      <div id="lesson-list"><div class="loading">불러오는 중...</div></div>
+    </div>
+
+    <!-- 출석 탭 -->
+    <div id="adm-attendance" style="display:none;">
+      <div style="font-size:13px;font-weight:600;margin-bottom:4px;">출석 체크</div>
+      <div style="font-size:12px;color:var(--mu);margin-bottom:10px;">날짜 선택 후 출석/결석 입력</div>
+      <input type="date" id="att-date" style="margin-bottom:12px;">
+      <div class="cts" id="att-class-tabs"></div>
       <div id="adal"></div>
+    </div>
+
+    <!-- 단어추가 탭 -->
+    <div id="adm-vocab" style="display:none;">
+      <div style="font-size:13px;font-weight:600;margin-bottom:10px;">단어 추가</div>
+      <div style="font-size:12px;color:var(--mu);margin-bottom:8px;">대상 학생 선택</div>
+      <div style="display:flex;gap:8px;margin-bottom:10px;">
+        <select id="vocab-target" style="flex:1;padding:10px;border:1px solid var(--brd);border-radius:var(--rs);background:var(--sf);font-size:13px;">
+          <option value="all">전체 학생</option>
+        </select>
+      </div>
+      <input type="text" id="adm-eng" placeholder="영어 표현">
+      <input type="text" id="adm-kor" placeholder="한국어 뜻">
+      <button class="btn bp" onclick="admAddVocab()">단어 추가</button>
+      <div class="dv"></div>
+      <div style="font-size:13px;font-weight:600;margin-bottom:10px;">일괄 추가 <span style="font-size:11px;font-weight:400;color:var(--mu);">· 여러 단어를 한번에</span></div>
+      <textarea id="adm-bulk" placeholder="영어,한국어 형식으로 줄마다 입력&#10;예)&#10;I can't resist,~하지 않을 수가 없어&#10;hit differently,색다르게 느껴지다" style="width:100%;height:100px;padding:10px;border:1px solid var(--brd);border-radius:var(--rs);background:var(--sf);font-size:13px;resize:none;margin-bottom:8px;"></textarea>
+      <button class="btn bp" onclick="admBulkVocab()">일괄 추가</button>
     </div>
   </div>
 
@@ -344,8 +385,17 @@ async function lVoc(){
 }
 function rLei(){
   const bc=['#FCEBEB','#FAEEDA','#EAF3DE','#E6F1FB','#EEEDFE'],tc=['#791F1F','#633806','#27500A','#0C447C','#3C3489'],iv=['매일','2일','4일','8일','16일'];
-  document.getElementById('lbxs').innerHTML=[1,2,3,4,5].map((b,i)=>`<div class="lbx" style="background:${bc[i]};color:${tc[i]};"><div class="ln">${vc.filter(v=>v.box_level===b).length}</div><div class="ll2">Box ${b}<br>${iv[i]}</div></div>`).join('');
+  document.getElementById('lbxs').innerHTML=[1,2,3,4,5].map((b,i)=>`<div class="lbx" style="background:${bc[i]};color:${tc[i]};cursor:pointer;" onclick="startBoxStudy(${b})"><div class="ln">${vc.filter(v=>v.box_level===b).length}</div><div class="ll2">Box ${b}<br>${iv[i]}<br><span style="font-size:9px;opacity:.8;">탭해서 학습</span></div></div>`).join('');
   document.getElementById('ltd').textContent=`전체 ${vc.length}개 · 오늘 복습 ${tv.length}장`;
+}
+function startBoxStudy(box){
+  const td=new Date().toISOString().slice(0,10);
+  tv=vc.filter(v=>v.box_level===box);
+  if(!tv.length){tst(`Box ${box}에 단어가 없어요`);return;}
+  ci=0;fl=false;
+  document.getElementById('ltd').textContent=`Box ${box} 학습 중 · ${tv.length}장`;
+  rFC();
+  tst(`Box ${box} 학습 시작! ${tv.length}장`);
 }
 function sFC(){ci=0;fl=false;rFC();}
 function rFC(){
@@ -487,63 +537,177 @@ async function lRec(){
   }).join('')||'<div class="empty">기록이 없어요</div>';
 }
 
+function admTab(tab,btn){
+  ['students','lessons','attendance','vocab'].forEach(t=>{
+    const el=document.getElementById(`adm-${t}`);if(el)el.style.display=t===tab?'block':'none';
+  });
+  document.querySelectorAll('#pad .tbb .tbn').forEach(b=>b.classList.remove('on'));
+  if(btn)btn.classList.add('on');
+  if(tab==='lessons')lLessons();
+  if(tab==='attendance'){
+    document.getElementById('att-date').value=new Date().toISOString().slice(0,10);
+    rAttClasses();
+  }
+  if(tab==='vocab')rVocabTargets();
+}
+
 async function lAdm(){
   const{data:st}=await sb.from('profiles').select('*').eq('role','student').order('name');sts=st||[];
   document.getElementById('att').textContent=sts.length;
   const td=new Date().toISOString().slice(0,10);
   const{data:lg}=await sb.from('review_logs').select('student_id').eq('completed',true).gte('completed_at',td);
-  const ds=new Set((lg||[]).map(l=>l.student_id));document.getElementById('adt').textContent=ds.size;
+  const ds=new Set((lg||[]).map(l=>l.student_id));
+  document.getElementById('adt').textContent=ds.size;
   const cls=['all',...new Set(sts.map(s=>s.class_name).filter(Boolean))];
-  document.getElementById('adtb').innerHTML=cls.map(c=>`<div class="ct ${c==='all'?'on':''}" onclick="sCls('${c}')">${c==='all'?'전체':c}</div>`).join('');
+  document.getElementById('adtb').innerHTML=cls.map(c=>`<div class="ct ${c==='all'?'on':''}" onclick="sAdmCls('${c}',this)">${c==='all'?'전체':c}</div>`).join('');
   rSL('all',ds);
 }
+
 function rSL(cls,ds){
   const filt=cls==='all'?sts:sts.filter(s=>s.class_name===cls);
   const av=['#EEEDFE','#E1F5EE','#FAEEDA','#FCEBEB','#F3F0FC'],tc=['#3C3489','#085041','#633806','#791F1F','#534AB7'];
-  document.getElementById('adsl').innerHTML=filt.map((s,i)=>{
+  document.getElementById('adsl').innerHTML=filt.length?filt.map((s,i)=>{
     const ini=(s.name||s.email).slice(0,2).toUpperCase(),done=ds?.has(s.id);
-    return`<div class="csm row"><div style="display:flex;align-items:center;gap:8px;"><div class="sa" style="background:${av[i%5]};color:${tc[i%5]};">${ini}</div><div><div style="font-size:12px;font-weight:600;">${s.name||s.email}</div><div class="mu" style="font-size:10px;">${s.class_name||'-'}</div></div></div>
-    <span class="bd ${done?'bg':'bgr'}" style="font-size:9px;">${done?'리뷰완료':'미완료'}</span></div>`;
-  }).join('')||'<div class="empty">학생이 없어요</div>';
+    return`<div class="csm row">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div class="sa" style="background:${av[i%5]};color:${tc[i%5]};">${ini}</div>
+        <div><div style="font-size:12px;font-weight:600;">${s.name||s.email}</div>
+        <div class="mu" style="font-size:10px;">${s.class_name||'반 없음'}</div></div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
+        <span class="bd ${done?'bg':'bgr'}" style="font-size:9px;">${done?'리뷰완료':'미완료'}</span>
+      </div>
+    </div>`;
+  }).join(''):'<div class="empty">학생이 없어요</div>';
 }
-function sCls(cls){
-  sc=cls;document.querySelectorAll('.ct').forEach(t=>t.classList.toggle('on',t.textContent===(cls==='all'?'전체':cls)));
-  if(cls==='all'){document.getElementById('adcd').style.display='none';document.getElementById('adsl').style.display='block';rSL('all');}
-  else{
-    document.getElementById('adcd').style.display='block';document.getElementById('adsl').style.display='none';
-    document.getElementById('adcn').textContent=cls;document.getElementById('ld').value=new Date().toISOString().slice(0,10);rAL(cls);
-  }
+
+function sAdmCls(cls,btn){
+  sc=cls;
+  document.querySelectorAll('#adtb .ct').forEach(t=>t.classList.remove('on'));
+  if(btn)btn.classList.add('on');
+  const td=new Date().toISOString().slice(0,10);
+  sb.from('review_logs').select('student_id').eq('completed',true).gte('completed_at',td).then(({data:lg})=>{
+    rSL(cls,new Set((lg||[]).map(l=>l.student_id)));
+  });
 }
-function ccd(){sCls('all');}
-function rAL(cls){
-  const st=sts.filter(s=>s.class_name===cls),td=new Date().toISOString().slice(0,10);
-  document.getElementById('adal').innerHTML=st.map(s=>{
+
+async function lLessons(){
+  const{data}=await sb.from('lessons').select('*').order('lesson_date',{ascending:false});
+  ls=data||[];
+  const tgt=['all',...new Set(sts.map(s=>s.class_name).filter(Boolean))];
+  document.getElementById('lesson-target-tabs').innerHTML=tgt.map((c,i)=>`<div class="ct ${i===0?'on':''}" onclick="selLT('${c}',this)">${c==='all'?'전체 학생':c}</div>`).join('');
+  document.getElementById('ld').value=new Date().toISOString().slice(0,10);
+  document.getElementById('lesson-list').innerHTML=!ls.length?'<div class="empty">등록된 레슨이 없어요</div>':ls.map(l=>`
+    <div class="csm row">
+      <div><div style="font-size:12px;font-weight:600;">${l.title}</div><div class="mu" style="font-size:11px;">${l.lesson_date}</div></div>
+      <button onclick="delLesson('${l.id}')" style="font-size:11px;color:var(--rd);border:none;background:var(--rl);padding:4px 8px;border-radius:6px;cursor:pointer;">삭제</button>
+    </div>`).join('');
+}
+
+let lessonTarget='all';
+function selLT(v,btn){
+  lessonTarget=v;
+  document.querySelectorAll('#lesson-target-tabs .ct').forEach(t=>t.classList.remove('on'));
+  if(btn)btn.classList.add('on');
+}
+
+async function addL(){
+  const t=document.getElementById('lt').value.trim(),u=document.getElementById('lu').value.trim(),d=document.getElementById('ld').value;
+  if(!t||!u||!d){tst('모든 항목을 입력해주세요');return;}
+  const{data,error}=await sb.from('lessons').insert({title:t,url:u,lesson_date:d,created_by:U.id}).select().single();
+  if(error){tst('추가 실패: '+error.message);return;}
+  ls.push(data);
+  document.getElementById('lt').value='';document.getElementById('lu').value='';
+  tst('레슨 추가됐어요!');lLessons();
+}
+
+async function delLesson(id){
+  if(!confirm('이 레슨을 삭제할까요?'))return;
+  await sb.from('lessons').delete().eq('id',id);
+  ls=ls.filter(l=>l.id!==id);tst('삭제됐어요');lLessons();
+}
+
+function rAttClasses(){
+  const cls=['all',...new Set(sts.map(s=>s.class_name).filter(Boolean))];
+  document.getElementById('att-class-tabs').innerHTML=cls.map((c,i)=>`<div class="ct ${i===0?'on':''}" onclick="selAttCls('${c}',this)">${c==='all'?'전체':c}</div>`).join('');
+  rAttList('all');
+}
+
+function selAttCls(cls,btn){
+  document.querySelectorAll('#att-class-tabs .ct').forEach(t=>t.classList.remove('on'));
+  if(btn)btn.classList.add('on');
+  rAttList(cls);
+}
+
+function rAttList(cls){
+  const date=document.getElementById('att-date').value||new Date().toISOString().slice(0,10);
+  const st=cls==='all'?sts:sts.filter(s=>s.class_name===cls);
+  document.getElementById('adal').innerHTML=st.length?st.map(s=>{
     const ini=(s.name||s.email).slice(0,2).toUpperCase();
-    return`<div class="csm row"><div style="display:flex;align-items:center;gap:8px;"><div class="sa">${ini}</div><div style="font-size:12px;font-weight:600;">${s.name||s.email}</div></div>
-    <div style="display:flex;gap:6px;"><button class="atb" id="ap${s.id}" onclick="sAt('${s.id}','present','${td}')">출석</button><button class="atb" id="aa${s.id}" onclick="sAt('${s.id}','absent','${td}')">결석</button></div></div>`;
-  }).join('')||'<div class="empty">학생이 없어요</div>';
+    return`<div class="csm row">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div class="sa">${ini}</div>
+        <div style="font-size:12px;font-weight:600;">${s.name||s.email}</div>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button class="atb" id="ap${s.id}" onclick="sAt('${s.id}','present','${date}')">출석</button>
+        <button class="atb" id="aa${s.id}" onclick="sAt('${s.id}','absent','${date}')">결석</button>
+      </div>
+    </div>`;
+  }).join(''):'<div class="empty">학생이 없어요</div>';
   st.forEach(async s=>{
-    const{data}=await sb.from('attendance').select('status').eq('student_id',s.id).eq('lesson_date',td).single();
+    const{data}=await sb.from('attendance').select('status').eq('student_id',s.id).eq('lesson_date',date).single();
     if(data){
       const pb=document.getElementById(`ap${s.id}`),ab=document.getElementById(`aa${s.id}`);
-      if(pb)pb.className=`atb ${data.status==='present'?'p':''}`;if(ab)ab.className=`atb ${data.status==='absent'?'a':''}`;
+      if(pb)pb.className=`atb ${data.status==='present'?'p':''}`;
+      if(ab)ab.className=`atb ${data.status==='absent'?'a':''}`;
     }
   });
 }
+
 async function sAt(sid,status,date){
   const{data:ex}=await sb.from('attendance').select('id').eq('student_id',sid).eq('lesson_date',date).single();
   if(ex)await sb.from('attendance').update({status}).eq('id',ex.id);
   else await sb.from('attendance').insert({student_id:sid,lesson_date:date,status});
   const pb=document.getElementById(`ap${sid}`),ab=document.getElementById(`aa${sid}`);
-  if(pb)pb.className=`atb ${status==='present'?'p':''}`;if(ab)ab.className=`atb ${status==='absent'?'a':''}`;
+  if(pb)pb.className=`atb ${status==='present'?'p':''}`;
+  if(ab)ab.className=`atb ${status==='absent'?'a':''}`;
   tst(status==='present'?'출석 체크!':'결석 처리');
 }
-async function addL(){
-  const t=document.getElementById('lt').value.trim(),u=document.getElementById('lu').value.trim(),d=document.getElementById('ld').value;
-  if(!t||!u||!d){tst('모든 항목을 입력해주세요');return;}
-  const{data,error}=await sb.from('lessons').insert({title:t,url:u,lesson_date:d,created_by:U.id}).select().single();
-  if(error){tst('추가 실패');return;}
-  ls.push(data);document.getElementById('lt').value='';document.getElementById('lu').value='';tst('레슨이 추가됐어요!');
+
+function rVocabTargets(){
+  const sel=document.getElementById('vocab-target');
+  sel.innerHTML='<option value="all">전체 학생</option>'+sts.map(s=>`<option value="${s.id}">${s.name||s.email}</option>`).join('');
+}
+
+async function admAddVocab(){
+  const e=document.getElementById('adm-eng').value.trim(),k=document.getElementById('adm-kor').value.trim();
+  const target=document.getElementById('vocab-target').value;
+  if(!e||!k){tst('영어와 한국어를 입력해주세요');return;}
+  const today=new Date().toISOString().slice(0,10);
+  const targets=target==='all'?sts.map(s=>s.id):[target];
+  const rows=targets.map(sid=>({student_id:sid,english:e,korean:k,box_level:1,next_review:today}));
+  const{error}=await sb.from('vocab_cards').insert(rows);
+  if(error){tst('추가 실패: '+error.message);return;}
+  document.getElementById('adm-eng').value='';document.getElementById('adm-kor').value='';
+  tst(`${targets.length}명에게 단어 추가됐어요!`);
+}
+
+async function admBulkVocab(){
+  const bulk=document.getElementById('adm-bulk').value.trim();
+  const target=document.getElementById('vocab-target').value;
+  if(!bulk){tst('단어를 입력해주세요');return;}
+  const lines=bulk.split('\n').filter(l=>l.trim());
+  const pairs=lines.map(l=>{const p=l.split(',');return p.length>=2?{eng:p[0].trim(),kor:p.slice(1).join(',').trim()}:null;}).filter(Boolean);
+  if(!pairs.length){tst('영어,한국어 형식으로 입력해주세요');return;}
+  const today=new Date().toISOString().slice(0,10);
+  const targets=target==='all'?sts.map(s=>s.id):[target];
+  const rows=[];
+  targets.forEach(sid=>pairs.forEach(p=>rows.push({student_id:sid,english:p.eng,korean:p.kor,box_level:1,next_review:today})));
+  const{error}=await sb.from('vocab_cards').insert(rows);
+  if(error){tst('추가 실패: '+error.message);return;}
+  document.getElementById('adm-bulk').value='';
+  tst(`${pairs.length}개 단어를 ${targets.length}명에게 추가했어요!`);
 }
 
 function gp(n){
