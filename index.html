@@ -321,13 +321,19 @@ textarea{resize:none;height:80px;}
 
     <!-- 레슨 -->
     <div id="ad-ls" style="display:none;">
-      <div style="font-size:12px;font-weight:600;margin-bottom:8px;">새 레슨 등록</div>
-      <input type="text" id="lt" placeholder="레슨 제목 (예: KPop Demon Hunters)">
-      <input type="url" id="lu" placeholder="GitHub URL (noahdaun.github.io/...)">
-      <input type="date" id="ld">
-      <button class="btn bp" onclick="addL()">레슨 추가</button>
+      <!-- 등록 폼 -->
+      <div id="ls-form">
+        <div style="font-size:12px;font-weight:600;margin-bottom:8px;" id="ls-form-title">새 토픽 등록</div>
+        <input type="text" id="lt" placeholder="토픽 제목 (예: KPop Demon Hunters)">
+        <input type="url" id="lu" placeholder="GitHub URL (noahdaun.github.io/...)">
+        <div style="font-size:11px;font-weight:600;margin-bottom:7px;">반별 수업 날짜</div>
+        <div id="ls-cls-rows"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:8px;" id="ls-form-btns">
+          <button class="btn bp" onclick="saveLesson()" style="margin-bottom:0;">토픽 등록</button>
+        </div>
+      </div>
       <div class="dv"></div>
-      <div style="font-size:12px;font-weight:600;margin-bottom:8px;">등록된 레슨</div>
+      <div style="font-size:12px;font-weight:600;margin-bottom:8px;">등록된 토픽</div>
       <div id="lslist"><div class="loading">로딩중...</div></div>
     </div>
 
@@ -643,17 +649,34 @@ async function delV(id){
 
 // ── REVIEW ──
 async function lRev(){
-  const{data:lss}=await sb.from('lessons').select('*').order('lesson_date',{ascending:false});
+  const[{data:lss},{data:schs},{data:at}]=await Promise.all([
+    sb.from('lessons').select('*').order('created_at',{ascending:false}),
+    sb.from('lesson_schedules').select('*'),
+    sb.from('attendance').select('lesson_date').eq('student_id',U.id).eq('status','present').order('lesson_date',{ascending:false})
+  ]);
   ls=lss||[];
-  const{data:at}=await sb.from('attendance').select('lesson_date').eq('student_id',U.id).eq('status','present').order('lesson_date',{ascending:false});
+  // 학생 반 이름
+  const myClass=P?.class_name;
+  // lesson_schedules를 lesson에 붙이기
+  const schMap={};
+  (schs||[]).forEach(s=>{if(!schMap[s.lesson_id])schMap[s.lesson_id]=[];schMap[s.lesson_id].push(s);});
+  // 학생 반에 해당하는 스케줄만 포함한 레슨 목록
+  // 날짜: 내 반의 수업 날짜 기준
+  const myLessons=ls.map(l=>{
+    const mySchs=(schMap[l.id]||[]).filter(s=>!myClass||s.class_name===myClass);
+    if(!mySchs.length){
+      // 반 배정 없는 경우 기존 lesson_date 사용
+      return{...l,myDate:l.lesson_date};
+    }
+    return{...l,myDate:mySchs[0].lesson_date};
+  }).sort((a,b)=>b.myDate.localeCompare(a.myDate));
+
   const dates=(at||[]).map(a=>a.lesson_date).sort().reverse();
   const rounds=[1,2,3,5,7];
   const items=[];const seen=new Set();
 
-  // 출석일에서 가장 가까운 레슨 찾기 (당일 포함, 이전 날짜 중 가장 최근)
   function findLesson(attDate){
-    const sorted=[...ls].sort((a,b)=>b.lesson_date.localeCompare(a.lesson_date));
-    return sorted.find(l=>l.lesson_date<=attDate);
+    return myLessons.find(l=>l.myDate<=attDate);
   }
 
   rounds.forEach(r=>{
@@ -847,33 +870,143 @@ function sAdCls(cls,btn){
   });
 }
 
+let editingLessonId=null;
+let lsSchedules={};// lesson_id -> [{class_name,lesson_date,id}]
+
 async function rLsList(){
-  const{data}=await sb.from('lessons').select('*').order('lesson_date',{ascending:false});
-  ls=data||[];
-  document.getElementById('lslist').innerHTML=!ls.length?'<div class="empty">등록된 레슨이 없어요</div>':
-    ls.map(l=>`<div class="csm row">
-      <div>
-        <div style="font-size:12px;font-weight:600;">${l.title}</div>
-        <div class="mu" style="font-size:11px;">${l.lesson_date}</div>
-      </div>
-      <button onclick="delL('${l.id}')" style="font-size:11px;color:var(--rd);border:none;background:var(--rl);padding:4px 8px;border-radius:6px;cursor:pointer;flex-shrink:0;">삭제</button>
-    </div>`).join('');
+  const{data:lss}=await sb.from('lessons').select('*').order('created_at',{ascending:false});
+  ls=lss||[];
+  const{data:schs}=await sb.from('lesson_schedules').select('*');
+  lsSchedules={};
+  (schs||[]).forEach(s=>{
+    if(!lsSchedules[s.lesson_id])lsSchedules[s.lesson_id]=[];
+    lsSchedules[s.lesson_id].push(s);
+  });
+  const bdgColors=['bg','ba','bp2','bgr'];
+  document.getElementById('lslist').innerHTML=!ls.length?'<div class="empty">등록된 토픽이 없어요</div>':
+    ls.map(l=>{
+      const schs2=lsSchedules[l.id]||[];
+      const tags=schs2.map((s,i)=>`<span class="bdg ${bdgColors[i%4]}" style="font-size:9px;">${s.class_name} · ${s.lesson_date.slice(5).replace('-','/')}</span>`).join(' ');
+      return`<div class="card" style="margin-bottom:8px;">
+        <div class="row" style="margin-bottom:6px;">
+          <div style="font-size:13px;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${l.title}</div>
+          <div style="display:flex;gap:5px;flex-shrink:0;">
+            <div onclick="editLesson('${l.id}')" style="font-size:11px;color:var(--gd);background:var(--gl);padding:3px 8px;border-radius:6px;cursor:pointer;">수정</div>
+            <div onclick="delL('${l.id}')" style="font-size:11px;color:var(--rd);background:var(--rl);padding:3px 8px;border-radius:6px;cursor:pointer;">삭제</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:5px;">${tags||'<span style="font-size:11px;color:var(--mu);">반 배정 없음</span>'}</div>
+        <div class="mu" style="font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${l.url}</div>
+      </div>`;
+    }).join('');
+  // 등록 폼 반 rows 렌더
+  renderLsClsRows();
 }
 
-async function addL(){
-  const t=document.getElementById('lt').value.trim(),u=document.getElementById('lu').value.trim(),d=document.getElementById('ld').value;
-  if(!t||!u||!d){tst('모든 항목을 입력해주세요');return;}
-  const{data,error}=await sb.from('lessons').insert({title:t,url:u,lesson_date:d,created_by:U.id}).select().single();
-  if(error){tst('추가 실패: '+error.message);return;}
-  ls.push(data);document.getElementById('lt').value='';document.getElementById('lu').value='';
-  tst('레슨 추가됐어요!');rLsList();
+function renderLsClsRows(){
+  const clsList=[...new Set(sts.map(s=>s.class_name).filter(Boolean))].sort();
+  if(!clsList.length){
+    document.getElementById('ls-cls-rows').innerHTML='<div class="mu" style="margin-bottom:8px;">먼저 반을 만들어주세요 (반관리 탭)</div>';
+    return;
+  }
+  document.getElementById('ls-cls-rows').innerHTML=clsList.map(cls=>{
+    const schs=editingLessonId?(lsSchedules[editingLessonId]||[]).find(s=>s.class_name===cls):null;
+    const isOn=!!schs;
+    const dateVal=schs?schs.lesson_date:'';
+    return`<div class="ls-cls-row" id="lr-${cls.replace(/\s/g,'_')}" style="background:${isOn?'#F0FAF6':'#F9F6F0'};border-radius:10px;padding:10px 12px;border:1px solid ${isOn?'#C0E8D8':'#EDE8DF'};margin-bottom:7px;">
+      <div class="row" style="margin-bottom:${isOn?'7px':'0'};">
+        <div style="display:flex;align-items:center;gap:7px;">
+          <div onclick="toggleLsCls('${cls}')" style="width:36px;height:20px;border-radius:99px;background:${isOn?'var(--g)':'#EDE8DF'};position:relative;cursor:pointer;flex-shrink:0;">
+            <div style="position:absolute;width:14px;height:14px;border-radius:50%;background:#fff;top:3px;left:${isOn?'19px':'3px'};transition:left .15s;"></div>
+          </div>
+          <span style="font-size:12px;font-weight:${isOn?'600':'400'};color:${isOn?'#085041':'var(--mu)'};">${cls}</span>
+        </div>
+        <span class="bdg ${isOn?'bg':'bgr'}" style="font-size:9px;">${sts.filter(s=>s.class_name===cls).length}명</span>
+      </div>
+      ${isOn?`<input type="date" id="ld-${cls.replace(/\s/g,'_')}" value="${dateVal}" style="background:#fff;border:1px solid #C0E8D8;border-radius:8px;padding:7px 10px;font-size:12px;width:100%;margin-bottom:0;">`:''} 
+    </div>`;
+  }).join('');
+}
+
+const lsClsToggles=new Set();
+function toggleLsCls(cls){
+  const key=cls.replace(/\s/g,'_');
+  const row=document.getElementById(`lr-${key}`);
+  const dateInput=document.getElementById(`ld-${key}`);
+  if(dateInput){
+    // 끄기
+    lsClsToggles.delete(cls);
+    row.style.background='#F9F6F0';row.style.borderColor='#EDE8DF';
+    renderLsClsRows();
+  }else{
+    // 켜기
+    lsClsToggles.add(cls);
+    row.style.background='#F0FAF6';row.style.borderColor='#C0E8D8';
+    renderLsClsRows();
+  }
+}
+
+async function saveLesson(){
+  const t=document.getElementById('lt').value.trim(),u=document.getElementById('lu').value.trim();
+  if(!t||!u){tst('제목과 URL을 입력해주세요');return;}
+  const clsList=[...new Set(sts.map(s=>s.class_name).filter(Boolean))].sort();
+  const schedules=[];
+  for(const cls of clsList){
+    const key=cls.replace(/\s/g,'_');
+    const di=document.getElementById(`ld-${key}`);
+    if(di&&di.value){schedules.push({class_name:cls,lesson_date:di.value});}
+  }
+  if(!schedules.length){tst('최소 하나의 반과 날짜를 선택해주세요');return;}
+
+  if(editingLessonId){
+    // 수정
+    await sb.from('lessons').update({title:t,url:u}).eq('id',editingLessonId);
+    await sb.from('lesson_schedules').delete().eq('lesson_id',editingLessonId);
+    await sb.from('lesson_schedules').insert(schedules.map(s=>({...s,lesson_id:editingLessonId})));
+    tst('수정됐어요!');
+  }else{
+    // 신규
+    const{data,error}=await sb.from('lessons').insert({title:t,url:u,lesson_date:schedules[0].lesson_date,created_by:U.id}).select().single();
+    if(error){tst('추가 실패: '+error.message);return;}
+    await sb.from('lesson_schedules').insert(schedules.map(s=>({...s,lesson_id:data.id})));
+    tst('토픽 등록됐어요!');
+  }
+  // 폼 초기화
+  document.getElementById('lt').value='';document.getElementById('lu').value='';
+  editingLessonId=null;
+  document.getElementById('ls-form-title').textContent='새 토픽 등록';
+  document.getElementById('ls-form-btns').innerHTML='<button class="btn bp" onclick="saveLesson()" style="margin-bottom:0;">토픽 등록</button>';
+  await rLsList();
+}
+
+function editLesson(id){
+  editingLessonId=id;
+  const lesson=ls.find(l=>l.id===id);
+  if(!lesson)return;
+  document.getElementById('lt').value=lesson.title;
+  document.getElementById('lu').value=lesson.url;
+  document.getElementById('ls-form-title').textContent='토픽 수정';
+  document.getElementById('ls-form-btns').innerHTML=`
+    <button onclick="cancelEdit()" style="padding:10px;border-radius:9px;border:1px solid #EDE8DF;background:transparent;font-size:13px;font-weight:600;cursor:pointer;">취소</button>
+    <button class="btn bp" onclick="saveLesson()" style="margin-bottom:0;">저장</button>`;
+  renderLsClsRows();
+  document.getElementById('ls-form').scrollIntoView({behavior:'smooth'});
+}
+
+function cancelEdit(){
+  editingLessonId=null;
+  document.getElementById('lt').value='';document.getElementById('lu').value='';
+  document.getElementById('ls-form-title').textContent='새 토픽 등록';
+  document.getElementById('ls-form-btns').innerHTML='<button class="btn bp" onclick="saveLesson()" style="margin-bottom:0;">토픽 등록</button>';
+  renderLsClsRows();
 }
 
 async function delL(id){
-  if(!confirm('이 레슨을 삭제할까요?'))return;
+  if(!confirm('이 토픽을 삭제할까요?'))return;
   await sb.from('lessons').delete().eq('id',id);
   ls=ls.filter(l=>l.id!==id);tst('삭제됐어요');rLsList();
 }
+
 
 function rAtCls(){
   const cls=['all',...new Set(sts.map(s=>s.class_name).filter(Boolean))];
