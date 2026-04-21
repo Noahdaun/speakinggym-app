@@ -118,7 +118,19 @@ input:focus{border-color:var(--g);}
     <input type="email" id="le" placeholder="이메일" autocomplete="email">
     <input type="password" id="lp" placeholder="비밀번호" autocomplete="current-password">
     <button class="btn bp" onclick="doLogin()">로그인</button>
+    <button class="btn bo" onclick="showSignup()">처음이에요 — 가입하기</button>
     <div id="lerr" class="err"></div>
+  </div>
+  <div id="signup-box" style="display:none;width:100%;max-width:360px;">
+    <div class="ll" style="margin-bottom:20px;">
+      <h1>Speaking Gym</h1><p>계정 만들기</p>
+    </div>
+    <input type="text" id="su-name" placeholder="이름">
+    <input type="email" id="su-email" placeholder="이메일">
+    <input type="password" id="su-pw" placeholder="비밀번호 (6자 이상)">
+    <button class="btn bp" onclick="doSignup()">가입하기</button>
+    <button class="btn bo" onclick="showLogin()" style="margin-top:8px;">로그인으로 돌아가기</button>
+    <div id="su-err" class="err"></div>
   </div>
 </div>
 
@@ -245,6 +257,30 @@ const SK='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6I
 const sb=supabase.createClient(SU,SK);
 let U=null,P=null,cY,cM,aM={},rM={},vc=[],tv=[],ci=0,fl=false,ses=null,ls=[],sts=[],sc='all';
 
+function showSignup(){
+  document.getElementById('lb').style.display='none';
+  document.getElementById('signup-box').style.display='block';
+}
+function showLogin(){
+  document.getElementById('signup-box').style.display='none';
+  document.getElementById('lb').style.display='block';
+}
+async function doSignup(){
+  const name=document.getElementById('su-name').value.trim();
+  const email=document.getElementById('su-email').value.trim();
+  const pw=document.getElementById('su-pw').value;
+  const err=document.getElementById('su-err');
+  err.textContent='';
+  if(!name||!email||!pw){err.textContent='모든 항목을 입력해주세요';return;}
+  if(pw.length<6){err.textContent='비밀번호는 6자 이상이어야 해요';return;}
+  const{data,error}=await sb.auth.signUp({email,password:pw,options:{data:{name}}});
+  if(error){err.textContent='가입 실패: '+error.message;return;}
+  if(data?.user){
+    await sb.from('profiles').upsert({id:data.user.id,email,name,role:'student'});
+    err.style.color='var(--g)';err.textContent='가입 완료! 로그인해주세요';
+    setTimeout(()=>{showLogin();document.getElementById('le').value=email;},1500);
+  }
+}
 async function doLogin(){
   const e=document.getElementById('le').value.trim(),p=document.getElementById('lp').value,er=document.getElementById('lerr');
   er.textContent='';if(!e||!p){er.textContent='이메일과 비밀번호를 입력해주세요';return;}
