@@ -17,7 +17,7 @@
 }
 body{font-family:-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:#1a1a1a;min-height:100vh;}
 .scr{display:none;min-height:100vh;}.scr.on{display:block;}
-#ls{display:flex;align-items:center;justify-content:center;padding:24px;}
+#ls.on{display:flex!important;align-items:center;justify-content:center;padding:24px;}
 .lb{width:100%;max-width:360px;}
 .ll{text-align:center;margin-bottom:32px;}
 .lic{width:56px;height:56px;border-radius:14px;background:var(--gl);border:1px solid #9FE1CB;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;}
@@ -109,7 +109,7 @@ input:focus{border-color:var(--g);}
 </style>
 </head>
 <body>
-<div id="ls" class="scr on" style="display:flex;align-items:center;justify-content:center;padding:24px;min-height:100vh;">
+<div id="ls" class="scr on">
   <div class="lb" id="login-box" style="width:100%;max-width:360px;">
     <div class="ll">
       <div class="lic"><svg width="28" height="28" viewBox="0 0 28 28" fill="none"><rect x="3" y="7" width="22" height="15" rx="2.5" stroke="#1D9E75" stroke-width="1.8"/><path d="M3 11h22" stroke="#1D9E75" stroke-width="1.8"/><circle cx="9" cy="17.5" r="2" fill="#1D9E75"/></svg></div>
@@ -209,7 +209,7 @@ input:focus{border-color:var(--g);}
     <div id="rcl"><div class="loading">로딩중...</div></div>
   </div>
 
-  <div id="pad" class="pg" style="display:none;">
+  <div id="pad" class="pg">
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
       <div style="background:var(--gl);border-radius:12px;padding:11px;border:1px solid #C0E8D8;"><div style="font-size:18px;font-weight:700;color:var(--gd);" id="att">-</div><div style="font-size:11px;color:var(--gm);margin-top:2px;">전체 학생</div></div>
       <div style="background:var(--sf);border-radius:12px;padding:11px;border:1px solid var(--brd);"><div style="font-size:18px;font-weight:700;" id="adt">-</div><div style="font-size:11px;color:var(--mu);margin-top:2px;">오늘 완료</div></div>
@@ -549,7 +549,8 @@ async function addL(){
 function gp(n){
   document.querySelectorAll('.pg').forEach(p=>p.classList.remove('on'));
   document.querySelectorAll('.bni').forEach(b=>b.classList.remove('on'));
-  const pg=document.getElementById(`p${n[0]+(n==='record'?'rc':n==='review'?'r':n==='vocab'?'v':n==='admin'?'ad':'h')}`);
+  const ids={home:'ph',vocab:'pv',review:'pr',record:'prc',admin:'pad'};
+  const pg=document.getElementById(ids[n]);
   if(pg)pg.classList.add('on');
   const ord=['home','vocab','review','record','admin'],idx=ord.indexOf(n);
   const btns=document.querySelectorAll('.bni');if(btns[idx])btns[idx].classList.add('on');
