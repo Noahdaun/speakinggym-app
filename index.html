@@ -110,7 +110,7 @@ input:focus{border-color:var(--g);}
 </head>
 <body>
 <div id="ls" class="scr on">
-  <div class="lb">
+  <div class="lb" id="login-box">
     <div class="ll">
       <div class="lic"><svg width="28" height="28" viewBox="0 0 28 28" fill="none"><rect x="3" y="7" width="22" height="15" rx="2.5" stroke="#1D9E75" stroke-width="1.8"/><path d="M3 11h22" stroke="#1D9E75" stroke-width="1.8"/><circle cx="9" cy="17.5" r="2" fill="#1D9E75"/></svg></div>
       <h1>Speaking Gym</h1><p>with Noah</p>
@@ -258,12 +258,12 @@ const sb=supabase.createClient(SU,SK);
 let U=null,P=null,cY,cM,aM={},rM={},vc=[],tv=[],ci=0,fl=false,ses=null,ls=[],sts=[],sc='all';
 
 function showSignup(){
-  document.getElementById('lb').style.display='none';
+  document.getElementById('login-box').style.display='none';
   document.getElementById('signup-box').style.display='block';
 }
 function showLogin(){
   document.getElementById('signup-box').style.display='none';
-  document.getElementById('lb').style.display='block';
+  document.getElementById('login-box').style.display='block';
 }
 async function doSignup(){
   const name=document.getElementById('su-name').value.trim();
