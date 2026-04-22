@@ -2,7 +2,13 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Speaking Gym">
+<meta name="theme-color" content="#1D9E75">
+<link rel="manifest" href="manifest.json">
 <title>Speaking Gym</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
@@ -15,7 +21,8 @@
   --bg:#FFFDF9;--card:#fff;--brd:#EDE8DF;--mu:#888780;--sf:#F9F6F0;
   --r:12px;--rs:8px;
 }
-body{font-family:-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:#1a1a1a;min-height:100vh;}
+body{font-family:-apple-system,'Segoe UI',sans-serif;background:#E8E4DC;color:#1a1a1a;min-height:100vh;display:flex;justify-content:center;}
+#app-root{background:var(--bg);width:100%;max-width:480px;min-height:100vh;position:relative;}
 
 /* SCREENS */
 .scr{display:none;min-height:100vh;}
@@ -154,6 +161,7 @@ textarea{resize:none;height:80px;}
 </style>
 </head>
 <body>
+<div id="app-root">
 
 <!-- LOGIN -->
 <div id="ls" class="scr on">
@@ -412,7 +420,6 @@ textarea{resize:none;height:80px;}
   </div>
 </div>
 
-<div id="tst" class="toast"></div>
 
 <script>
 const SU='https://hrmiyejhhzptwjzbrzvv.supabase.co';
@@ -1255,21 +1262,24 @@ async function admBulkV(){
 let classes=[];
 
 async function rClsList(){
-  // classes는 app_data 테이블에서 가져옴 (없으면 profiles에서 유추)
-  const{data:appData}=await sb.from('app_data').select('*').eq('key','classes').single().catch(()=>({data:null}));
-  if(appData?.value){
-    try{classes=JSON.parse(appData.value);}catch{classes=[];}
-  } else {
-    // 기존 profiles에서 유추
-    const{data}=await sb.from('profiles').select('class_name').eq('role','student');
-    classes=[...new Set((data||[]).map(s=>s.class_name).filter(Boolean))].sort();
+  const{data}=await sb.from('classes').select('name').order('name');
+  classes=(data||[]).map(c=>c.name);
+  // profiles에서 유추한 반도 없으면 추가
+  const{data:pr}=await sb.from('profiles').select('class_name').eq('role','student');
+  const fromProfiles=[...new Set((pr||[]).map(s=>s.class_name).filter(Boolean))];
+  for(const c of fromProfiles){
+    if(!classes.includes(c)){
+      await sb.from('classes').insert({name:c}).catch(()=>{});
+      classes.push(c);
+    }
   }
+  classes.sort();
   renderClsList();
   renderLsClsRows();
 }
 
 async function saveClasses(){
-  await sb.from('app_data').upsert({key:'classes',value:JSON.stringify(classes)},{onConflict:'key'}).catch(()=>{});
+  // classes 테이블에 전체 sync (없는 것만 추가, 삭제는 deleteClass에서 처리)
 }
 
 function renderClsList(){
@@ -1309,8 +1319,9 @@ async function addClass(){
   const name=document.getElementById('new-cls').value.trim();
   if(!name){tst('반 이름을 입력해주세요');return;}
   if(classes.includes(name)){tst('이미 있는 반 이름이에요');return;}
+  const{error}=await sb.from('classes').insert({name}).catch(e=>({error:e}));
+  if(error&&!error.message?.includes('duplicate')){tst('추가 실패: '+error.message);return;}
   classes.push(name);classes.sort();
-  await saveClasses();
   document.getElementById('new-cls').value='';
   renderClsList();
   renderLsClsRows();
@@ -1346,8 +1357,8 @@ async function deleteClass(cls){
     await sb.from('profiles').update({class_name:null}).eq('id',s.id);
     s.class_name=null;
   }
+  await sb.from('classes').delete().eq('name',cls).catch(()=>{});
   classes=classes.filter(c=>c!==cls);
-  await saveClasses();
   renderClsList();
   renderLsClsRows();
   tst('삭제됐어요');
@@ -1510,5 +1521,7 @@ function tst(msg){
   document.getElementById('lp').addEventListener('keydown',e=>e.key==='Enter'&&doLogin());
 })();
 </script>
+</div><!-- app-root -->
+<div id="tst" class="toast"></div>
 </body>
 </html>
