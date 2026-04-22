@@ -467,8 +467,12 @@ async function iApp(u){
       `<button class="bni" onclick="gp('admin')"><svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="7" r="3" stroke="#1D9E75" stroke-width="1.5"/><path d="M4 17c0-3.314 2.686-6 6-6s6 2.686 6 6" stroke="#1D9E75" stroke-width="1.5" stroke-linecap="round"/></svg><span>관리</span></button>`);
   }
   const n=new Date();cY=n.getFullYear();cM=n.getMonth();
-  await Promise.all([lCal(),lVoc(),lRev(),lRec()]);
-  if(P?.role==='admin')lAdm();
+  if(P?.role==='admin'){
+    await lAdm();
+    gp('admin');
+  } else {
+    await Promise.all([lCal(),lVoc(),lRev(),lRec()]);
+  }
 }
 
 // ── CALENDAR ──
@@ -848,18 +852,156 @@ function rSL(cls,ds){
   const tc=['#3C3489','#085041','#633806','#791F1F','#534AB7'];
   document.getElementById('adsl').innerHTML=filt.length?filt.map((s,i)=>{
     const ini=(s.name||s.email).slice(0,2).toUpperCase(),done=ds?.has(s.id);
-    return`<div class="csm row">
-      <div style="display:flex;align-items:center;gap:8px;">
-        <div class="sav" style="background:${av[i%5]};color:${tc[i%5]};">${ini}</div>
-        <div>
-          <div style="font-size:12px;font-weight:600;">${s.name||s.email}</div>
-          <div class="mu" style="font-size:10px;">${s.class_name||'반 없음'}</div>
+    return`<div class="card" style="cursor:pointer;margin-bottom:8px;" onclick="openStudentDetail('${s.id}','${s.name||s.email}','${s.class_name||''}')">
+      <div class="row" style="margin-bottom:7px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div class="sav" style="background:${av[i%5]};color:${tc[i%5]};">${ini}</div>
+          <div>
+            <div style="font-size:12px;font-weight:600;">${s.name||s.email}</div>
+            <div class="mu" style="font-size:10px;">${s.class_name||'반 없음'}</div>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;">
+          <span class="bdg ${done?'bg':'bgr'}" style="font-size:9px;">${done?'리뷰완료':'미완료'}</span>
+          <svg width="11" height="11" viewBox="0 0 11 11"><polyline points="3.5,1 8,5.5 3.5,10" fill="none" stroke="#C8C4BA" stroke-width="1.5"/></svg>
         </div>
       </div>
-      <span class="bdg ${done?'bg':'bgr'}" style="font-size:9px;">${done?'리뷰완료':'미완료'}</span>
+      <div id="stat-${s.id}" style="font-size:10px;color:var(--mu);">로딩중...</div>
     </div>`;
   }).join(''):'<div class="empty">학생이 없어요</div>';
+  // 각 학생 통계 비동기 로드
+  filt.forEach(s=>loadStudentStat(s.id));
 }
+
+async function loadStudentStat(sid){
+  const el=document.getElementById(`stat-${sid}`);
+  if(!el)return;
+  const now=new Date();
+  const y=now.getFullYear(),m=now.getMonth();
+  const f=`${y}-${String(m+1).padStart(2,'0')}-01`;
+  const l=new Date(y,m+1,0).toISOString().slice(0,10);
+  const[{data:at},{data:rv}]=await Promise.all([
+    sb.from('attendance').select('lesson_date,status').eq('student_id',sid).gte('lesson_date',f).lte('lesson_date',l),
+    sb.from('review_logs').select('student_id').eq('student_id',sid).eq('completed',true).gte('completed_at',f).lte('completed_at',l+'T23:59:59')
+  ]);
+  const total=(at||[]).length,present=(at||[]).filter(a=>a.status==='present').length;
+  const attPct=total?Math.round(present/total*100):0;
+  const hwPct=present?Math.round((rv||[]).length/present*100):0;
+  if(!el)return;
+  el.innerHTML=`<div style="display:flex;gap:7px;align-items:center;margin-bottom:3px;">
+    <div style="font-size:10px;color:var(--mu);width:36px;">출석</div>
+    <div style="flex:1;background:#EDE8DF;border-radius:99px;height:4px;"><div style="width:${attPct}%;background:var(--g);border-radius:99px;height:4px;"></div></div>
+    <div style="font-size:10px;font-weight:600;color:var(--gd);width:28px;">${attPct}%</div>
+  </div>
+  <div style="display:flex;gap:7px;align-items:center;">
+    <div style="font-size:10px;color:var(--mu);width:36px;">숙제</div>
+    <div style="flex:1;background:#EDE8DF;border-radius:99px;height:4px;"><div style="width:${hwPct}%;background:var(--pu);border-radius:99px;height:4px;"></div></div>
+    <div style="font-size:10px;font-weight:600;color:var(--pud);width:28px;">${hwPct}%</div>
+  </div>`;
+}
+
+// 학생 상세 달력 팝업
+let detailY,detailM,detailSid,detailName;
+async function openStudentDetail(sid,name,cls){
+  detailSid=sid;detailName=name;
+  const now=new Date();detailY=now.getFullYear();detailM=now.getMonth();
+  // 팝업 생성
+  let popup=document.getElementById('student-detail-popup');
+  if(!popup){
+    popup=document.createElement('div');
+    popup.id='student-detail-popup';
+    popup.style.cssText='position:fixed;inset:0;background:var(--bg);z-index:400;overflow-y:auto;';
+    document.body.appendChild(popup);
+  }
+  popup.style.display='block';
+  await renderDetailPopup(sid,name,cls);
+}
+
+async function renderDetailPopup(sid,name,cls){
+  const y=detailY,m=detailM;
+  const f=`${y}-${String(m+1).padStart(2,'0')}-01`;
+  const l=new Date(y,m+1,0).toISOString().slice(0,10);
+  const[{data:at},{data:rv}]=await Promise.all([
+    sb.from('attendance').select('lesson_date,status').eq('student_id',sid).gte('lesson_date',f).lte('lesson_date',l),
+    sb.from('review_logs').select('completed_at').eq('student_id',sid).eq('completed',true).gte('completed_at',f).lte('completed_at',l+'T23:59:59')
+  ]);
+  const atMap={};(at||[]).forEach(a=>atMap[a.lesson_date]=a.status);
+  const rvMap={};(rv||[]).forEach(r=>{const d=r.completed_at?.slice(0,10);if(d)rvMap[d]=true;});
+  const total=Object.keys(atMap).length;
+  const present=Object.values(atMap).filter(s=>s==='present').length;
+  const attPct=total?Math.round(present/total*100):0;
+  const hwPct=present?Math.round(Object.keys(rvMap).length/present*100):0;
+  const mn=['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+  const fd=new Date(y,m,1).getDay(),dim=new Date(y,m+1,0).getDate();
+  const today=new Date().toISOString().slice(0,10);
+  const dw=['일','월','화','수','목','금','토'];
+  let calH=dw.map(d=>`<div style="text-align:center;font-size:10px;font-weight:600;color:var(--mu);padding:2px 0;">${d}</div>`).join('');
+  const pd=new Date(y,m,0).getDate();
+  for(let i=fd-1;i>=0;i--)calH+=`<div style="aspect-ratio:1;font-size:10px;color:#D3D1C7;display:flex;align-items:center;justify-content:center;">${pd-i}</div>`;
+  for(let d=1;d<=dim;d++){
+    const ds=`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const ia=atMap[ds]==='present',iab=atMap[ds]==='absent',ir=rvMap[ds],it=ds===today;
+    let bg='transparent',color='inherit',fw='400',outline='';
+    if(it&&!ia&&!iab)outline='border:2px solid var(--g);';
+    else if(ia&&ir){bg='var(--g)';color='#fff';fw='600';outline='outline:2.5px solid var(--pu);outline-offset:1px;';}
+    else if(ia){bg='var(--g)';color='#fff';fw='600';}
+    else if(iab){bg='var(--rl)';color='var(--rd)';fw='600';}
+    else if(ir){bg='var(--pul)';color='var(--pud)';fw='600';}
+    calH+=`<div style="aspect-ratio:1;border-radius:5px;background:${bg};color:${color};font-weight:${fw};font-size:11px;display:flex;align-items:center;justify-content:center;${outline}">${d}</div>`;
+  }
+  document.getElementById('student-detail-popup').innerHTML=`
+    <div style="background:var(--bg);padding:13px 15px 9px;border-bottom:1px solid var(--brd);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div onclick="closeDetail()" style="width:26px;height:26px;border-radius:7px;background:var(--sf);display:flex;align-items:center;justify-content:center;cursor:pointer;">
+          <svg width="10" height="10" viewBox="0 0 10 10"><polyline points="7,1 2,5 7,9" fill="none" stroke="#888" stroke-width="1.8"/></svg>
+        </div>
+        <span style="font-size:15px;font-weight:600;">${name}</span>
+      </div>
+      <span class="bdg bgr" style="font-size:10px;">${cls||'반 없음'}</span>
+    </div>
+    <div style="padding:14px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
+        <div style="background:var(--gl);border-radius:11px;padding:11px;border:1px solid #C0E8D8;">
+          <div style="font-size:18px;font-weight:700;color:var(--gd);">${attPct}%</div>
+          <div style="font-size:11px;color:var(--gm);margin-top:2px;">출석률</div>
+        </div>
+        <div style="background:#F3F0FC;border-radius:11px;padding:11px;border:1px solid #AFA9EC;">
+          <div style="font-size:18px;font-weight:700;color:var(--pud);">${hwPct}%</div>
+          <div style="font-size:11px;color:var(--pu);margin-top:2px;">숙제달성</div>
+        </div>
+      </div>
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;">
+          <button onclick="detailMove(-1)" style="width:27px;height:27px;border-radius:7px;background:var(--sf);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;">
+            <svg width="10" height="10" viewBox="0 0 10 10"><polyline points="7,1 2,5 7,9" fill="none" stroke="#888" stroke-width="1.8"/></svg>
+          </button>
+          <span style="font-size:13px;font-weight:600;">${y}년 ${mn[m]}</span>
+          <button onclick="detailMove(1)" style="width:27px;height:27px;border-radius:7px;background:var(--sf);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;">
+            <svg width="10" height="10" viewBox="0 0 10 10"><polyline points="3,1 8,5 3,9" fill="none" stroke="#888" stroke-width="1.8"/></svg>
+          </button>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:8px;">${calH}</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <div style="display:flex;align-items:center;gap:3px;font-size:10px;color:var(--mu);"><div style="width:10px;height:10px;border-radius:3px;background:var(--g);"></div>출석</div>
+          <div style="display:flex;align-items:center;gap:3px;font-size:10px;color:var(--mu);"><div style="width:10px;height:10px;border-radius:3px;background:var(--rl);border:1px solid #F09595;"></div>결석</div>
+          <div style="display:flex;align-items:center;gap:3px;font-size:10px;color:var(--mu);"><div style="width:10px;height:10px;border-radius:3px;background:var(--g);outline:2px solid var(--pu);outline-offset:1px;"></div>출석+숙제</div>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function detailMove(d){
+  detailM+=d;
+  if(detailM>11){detailM=0;detailY++;}
+  if(detailM<0){detailM=11;detailY--;}
+  await renderDetailPopup(detailSid,detailName,'');
+}
+
+function closeDetail(){
+  const popup=document.getElementById('student-detail-popup');
+  if(popup)popup.style.display='none';
+}
+
 
 function sAdCls(cls,btn){
   document.querySelectorAll('#adcp .cpill').forEach(t=>t.classList.remove('on'));
@@ -903,77 +1045,83 @@ async function rLsList(){
   renderLsClsRows();
 }
 
+// 레슨 폼 토글 상태: {cls: {on: bool, date: string}}
+let lsClsState={};
+
 function renderLsClsRows(){
-  const clsList=[...new Set(sts.map(s=>s.class_name).filter(Boolean))].sort();
+  const clsList=[...classes].sort();
   if(!clsList.length){
-    document.getElementById('ls-cls-rows').innerHTML='<div class="mu" style="margin-bottom:8px;">먼저 반을 만들어주세요 (반관리 탭)</div>';
+    document.getElementById('ls-cls-rows').innerHTML='<div class="mu" style="margin-bottom:8px;">먼저 반관리 탭에서 반을 만들어주세요</div>';
     return;
   }
+  // 수정 모드면 기존 스케줄로 초기화
+  if(editingLessonId&&Object.keys(lsClsState).length===0){
+    const schs=lsSchedules[editingLessonId]||[];
+    clsList.forEach(cls=>{
+      const sch=schs.find(s=>s.class_name===cls);
+      lsClsState[cls]={on:!!sch,date:sch?.lesson_date||''};
+    });
+  } else {
+    // 없는 반은 기본 off로 추가
+    clsList.forEach(cls=>{
+      if(!(cls in lsClsState))lsClsState[cls]={on:false,date:''};
+    });
+  }
   document.getElementById('ls-cls-rows').innerHTML=clsList.map(cls=>{
-    const schs=editingLessonId?(lsSchedules[editingLessonId]||[]).find(s=>s.class_name===cls):null;
-    const isOn=!!schs;
-    const dateVal=schs?schs.lesson_date:'';
-    return`<div class="ls-cls-row" id="lr-${cls.replace(/\s/g,'_')}" style="background:${isOn?'#F0FAF6':'#F9F6F0'};border-radius:10px;padding:10px 12px;border:1px solid ${isOn?'#C0E8D8':'#EDE8DF'};margin-bottom:7px;">
-      <div class="row" style="margin-bottom:${isOn?'7px':'0'};">
+    const st=lsClsState[cls]||{on:false,date:''};
+    const cnt=sts.filter(s=>s.class_name===cls).length;
+    return`<div style="background:${st.on?'#F0FAF6':'#F9F6F0'};border-radius:10px;padding:10px 12px;border:1px solid ${st.on?'#C0E8D8':'#EDE8DF'};margin-bottom:7px;">
+      <div class="row" style="margin-bottom:${st.on?'7px':'0'};">
         <div style="display:flex;align-items:center;gap:7px;">
-          <div onclick="toggleLsCls('${cls}')" style="width:36px;height:20px;border-radius:99px;background:${isOn?'var(--g)':'#EDE8DF'};position:relative;cursor:pointer;flex-shrink:0;">
-            <div style="position:absolute;width:14px;height:14px;border-radius:50%;background:#fff;top:3px;left:${isOn?'19px':'3px'};transition:left .15s;"></div>
+          <div onclick="toggleLsCls('${cls}')" style="width:36px;height:20px;border-radius:99px;background:${st.on?'var(--g)':'#EDE8DF'};position:relative;cursor:pointer;flex-shrink:0;">
+            <div style="position:absolute;width:14px;height:14px;border-radius:50%;background:#fff;top:3px;left:${st.on?'19px':'3px'};"></div>
           </div>
-          <span style="font-size:12px;font-weight:${isOn?'600':'400'};color:${isOn?'#085041':'var(--mu)'};">${cls}</span>
+          <span style="font-size:12px;font-weight:${st.on?'600':'400'};color:${st.on?'#085041':'var(--mu)'};">${cls}</span>
         </div>
-        <span class="bdg ${isOn?'bg':'bgr'}" style="font-size:9px;">${sts.filter(s=>s.class_name===cls).length}명</span>
+        <span class="bdg ${st.on?'bg':'bgr'}" style="font-size:9px;">${cnt}명</span>
       </div>
-      ${isOn?`<input type="date" id="ld-${cls.replace(/\s/g,'_')}" value="${dateVal}" style="background:#fff;border:1px solid #C0E8D8;border-radius:8px;padding:7px 10px;font-size:12px;width:100%;margin-bottom:0;">`:''} 
+      ${st.on?`<input type="date" id="ld-${cls.replace(/\s/g,'_')}" value="${st.date}" onchange="lsClsState['${cls}'].date=this.value" style="background:#fff;border:1px solid #C0E8D8;border-radius:8px;padding:7px 10px;font-size:12px;width:100%;margin-bottom:0;">`:``}
     </div>`;
   }).join('');
 }
 
-const lsClsToggles=new Set();
 function toggleLsCls(cls){
+  if(!lsClsState[cls])lsClsState[cls]={on:false,date:''};
+  lsClsState[cls].on=!lsClsState[cls].on;
+  // 현재 date input 값 보존
   const key=cls.replace(/\s/g,'_');
-  const row=document.getElementById(`lr-${key}`);
-  const dateInput=document.getElementById(`ld-${key}`);
-  if(dateInput){
-    // 끄기
-    lsClsToggles.delete(cls);
-    row.style.background='#F9F6F0';row.style.borderColor='#EDE8DF';
-    renderLsClsRows();
-  }else{
-    // 켜기
-    lsClsToggles.add(cls);
-    row.style.background='#F0FAF6';row.style.borderColor='#C0E8D8';
-    renderLsClsRows();
-  }
+  const di=document.getElementById(`ld-${key}`);
+  if(di)lsClsState[cls].date=di.value;
+  renderLsClsRows();
 }
 
 async function saveLesson(){
   const t=document.getElementById('lt').value.trim(),u=document.getElementById('lu').value.trim();
   if(!t||!u){tst('제목과 URL을 입력해주세요');return;}
-  const clsList=[...new Set(sts.map(s=>s.class_name).filter(Boolean))].sort();
-  const schedules=[];
-  for(const cls of clsList){
-    const key=cls.replace(/\s/g,'_');
-    const di=document.getElementById(`ld-${key}`);
-    if(di&&di.value){schedules.push({class_name:cls,lesson_date:di.value});}
-  }
+  // 현재 date input 값 수집
+  Object.keys(lsClsState).forEach(cls=>{
+    const di=document.getElementById(`ld-${cls.replace(/\s/g,'_')}`);
+    if(di)lsClsState[cls].date=di.value;
+  });
+  const schedules=Object.entries(lsClsState)
+    .filter(([,st])=>st.on&&st.date)
+    .map(([cls,st])=>({class_name:cls,lesson_date:st.date}));
   if(!schedules.length){tst('최소 하나의 반과 날짜를 선택해주세요');return;}
 
   if(editingLessonId){
-    // 수정
     await sb.from('lessons').update({title:t,url:u}).eq('id',editingLessonId);
     await sb.from('lesson_schedules').delete().eq('lesson_id',editingLessonId);
     await sb.from('lesson_schedules').insert(schedules.map(s=>({...s,lesson_id:editingLessonId})));
     tst('수정됐어요!');
   }else{
-    // 신규
     const{data,error}=await sb.from('lessons').insert({title:t,url:u,lesson_date:schedules[0].lesson_date,created_by:U.id}).select().single();
     if(error){tst('추가 실패: '+error.message);return;}
     await sb.from('lesson_schedules').insert(schedules.map(s=>({...s,lesson_id:data.id})));
     tst('토픽 등록됐어요!');
   }
-  // 폼 초기화
   document.getElementById('lt').value='';document.getElementById('lu').value='';
   editingLessonId=null;
+  lsClsState={};
   document.getElementById('ls-form-title').textContent='새 토픽 등록';
   document.getElementById('ls-form-btns').innerHTML='<button class="btn bp" onclick="saveLesson()" style="margin-bottom:0;">토픽 등록</button>';
   await rLsList();
@@ -981,6 +1129,7 @@ async function saveLesson(){
 
 function editLesson(id){
   editingLessonId=id;
+  lsClsState={};// 수정 모드 진입 시 리셋 → renderLsClsRows에서 기존 스케줄로 채움
   const lesson=ls.find(l=>l.id===id);
   if(!lesson)return;
   document.getElementById('lt').value=lesson.title;
@@ -995,6 +1144,7 @@ function editLesson(id){
 
 function cancelEdit(){
   editingLessonId=null;
+  lsClsState={};
   document.getElementById('lt').value='';document.getElementById('lu').value='';
   document.getElementById('ls-form-title').textContent='새 토픽 등록';
   document.getElementById('ls-form-btns').innerHTML='<button class="btn bp" onclick="saveLesson()" style="margin-bottom:0;">토픽 등록</button>';
@@ -1058,21 +1208,27 @@ async function sAt(sid,status,date){
 }
 
 function rVTgt(){
-  document.getElementById('vtgt').innerHTML='<option value="all">전체 학생</option>'+
-    sts.map(s=>`<option value="${s.id}">${s.name||s.email}</option>`).join('');
+  const clsOpts=classes.map(c=>`<option value="cls:${c}">${c} 전체</option>`).join('');
+  const stOpts=sts.map(s=>`<option value="${s.id}">${s.name||s.email} (${s.class_name||'반없음'})</option>`).join('');
+  document.getElementById('vtgt').innerHTML=`<option value="all">전체 학생 (${sts.length}명)</option>${clsOpts}${stOpts}`;
 }
+
+
+
+
 
 async function admAddV(){
   const e=document.getElementById('ae2').value.trim(),k=document.getElementById('ak2').value.trim();
   const tgt=document.getElementById('vtgt').value;
   if(!e||!k){tst('영어와 한국어를 입력해주세요');return;}
   const today=new Date().toISOString().slice(0,10);
-  const targets=tgt==='all'?sts.map(s=>s.id):[tgt];
+  const targets=tgt==='all'?sts.map(s=>s.id):tgt.startsWith('cls:')?sts.filter(s=>s.class_name===tgt.slice(4)).map(s=>s.id):[tgt];
+  if(!targets.length){tst('대상 학생이 없어요');return;}
   const rows=targets.map(sid=>({student_id:sid,english:e,korean:k,box_level:1,next_review:today}));
   const{error}=await sb.from('vocab_cards').insert(rows);
-  if(error){tst('추가 실패');return;}
+  if(error){tst('추가 실패: '+error.message);console.error(error);return;}
   document.getElementById('ae2').value='';document.getElementById('ak2').value='';
-  tst(`${targets.length}명에게 단어 추가됐어요!`);
+  tst(`${targets.length}명에게 "${e}" 추가됐어요!`);
 }
 
 async function admBulkV(){
@@ -1084,11 +1240,12 @@ async function admBulkV(){
   }).filter(Boolean);
   if(!pairs.length){tst('영어,한국어 형식으로 입력해주세요');return;}
   const today=new Date().toISOString().slice(0,10);
-  const targets=tgt==='all'?sts.map(s=>s.id):[tgt];
+  const targets=tgt==='all'?sts.map(s=>s.id):tgt.startsWith('cls:')?sts.filter(s=>s.class_name===tgt.slice(4)).map(s=>s.id):[tgt];
+  if(!targets.length){tst('대상 학생이 없어요');return;}
   const rows=[];
   targets.forEach(sid=>pairs.forEach(p=>rows.push({student_id:sid,english:p.eng,korean:p.kor,box_level:1,next_review:today})));
   const{error}=await sb.from('vocab_cards').insert(rows);
-  if(error){tst('추가 실패');return;}
+  if(error){tst('추가 실패: '+error.message);console.error(error);return;}
   document.getElementById('vbulk').value='';
   tst(`${pairs.length}개 단어를 ${targets.length}명에게 추가했어요!`);
 }
@@ -1098,10 +1255,21 @@ async function admBulkV(){
 let classes=[];
 
 async function rClsList(){
-  const{data}=await sb.from('profiles').select('class_name').eq('role','student');
-  const all=(data||[]).map(s=>s.class_name).filter(Boolean);
-  classes=[...new Set(all)].sort();
+  // classes는 app_data 테이블에서 가져옴 (없으면 profiles에서 유추)
+  const{data:appData}=await sb.from('app_data').select('*').eq('key','classes').single().catch(()=>({data:null}));
+  if(appData?.value){
+    try{classes=JSON.parse(appData.value);}catch{classes=[];}
+  } else {
+    // 기존 profiles에서 유추
+    const{data}=await sb.from('profiles').select('class_name').eq('role','student');
+    classes=[...new Set((data||[]).map(s=>s.class_name).filter(Boolean))].sort();
+  }
   renderClsList();
+  renderLsClsRows();
+}
+
+async function saveClasses(){
+  await sb.from('app_data').upsert({key:'classes',value:JSON.stringify(classes)},{onConflict:'key'}).catch(()=>{});
 }
 
 function renderClsList(){
@@ -1122,10 +1290,10 @@ function renderClsList(){
         <div style="font-size:13px;font-weight:600;">${cls}</div>
         <div style="display:flex;align-items:center;gap:6px;">
           <span class="bdg bgr">${members.length}명</span>
-          <div onclick="deleteClass('${cls}')" style="font-size:11px;color:var(--rd);background:var(--rl);padding:3px 8px;border-radius:6px;cursor:pointer;">삭제</div>
+          <div onclick="deleteClass('${cls}')" style="font-size:11px;color:var(--rd);background:var(--rl);padding:3px 8px;border-radius:6px;cursor:pointer;">반 삭제</div>
         </div>
       </div>
-      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px;min-height:24px;">${tags||'<div style="font-size:11px;color:var(--mu);">학생 없음</div>'}</div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px;min-height:24px;">${tags||'<div style="font-size:11px;color:var(--mu);">학생 없음 — 아래서 추가해주세요</div>'}</div>
       <div style="font-size:11px;color:var(--mu);margin-bottom:5px;">학생 추가</div>
       <div style="display:flex;gap:6px;">
         <select id="add-to-${cls.replace(/\s/g,'_')}" style="flex:1;margin-bottom:0;padding:8px 10px;font-size:12px;">
@@ -1141,10 +1309,11 @@ async function addClass(){
   const name=document.getElementById('new-cls').value.trim();
   if(!name){tst('반 이름을 입력해주세요');return;}
   if(classes.includes(name)){tst('이미 있는 반 이름이에요');return;}
-  classes.push(name);
-  classes.sort();
+  classes.push(name);classes.sort();
+  await saveClasses();
   document.getElementById('new-cls').value='';
   renderClsList();
+  renderLsClsRows();
   tst(`${name} 반이 추가됐어요!`);
 }
 
@@ -1178,7 +1347,9 @@ async function deleteClass(cls){
     s.class_name=null;
   }
   classes=classes.filter(c=>c!==cls);
+  await saveClasses();
   renderClsList();
+  renderLsClsRows();
   tst('삭제됐어요');
 }
 
