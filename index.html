@@ -1269,7 +1269,7 @@ async function rClsList(){
   const fromProfiles=[...new Set((pr||[]).map(s=>s.class_name).filter(Boolean))];
   for(const c of fromProfiles){
     if(!classes.includes(c)){
-      await sb.from('classes').insert({name:c}).catch(()=>{});
+      try{await sb.from('classes').insert({name:c});}catch{}
       classes.push(c);
     }
   }
@@ -1319,8 +1319,9 @@ async function addClass(){
   const name=document.getElementById('new-cls').value.trim();
   if(!name){tst('반 이름을 입력해주세요');return;}
   if(classes.includes(name)){tst('이미 있는 반 이름이에요');return;}
-  const{error}=await sb.from('classes').insert({name}).catch(e=>({error:e}));
-  if(error&&!error.message?.includes('duplicate')){tst('추가 실패: '+error.message);return;}
+  let clsErr=null;
+try{const r=await sb.from('classes').insert({name});clsErr=r.error;}catch(e){clsErr=e;}
+  if(clsErr&&!clsErr.message?.includes('duplicate')){tst('추가 실패: '+clsErr.message);return;}
   classes.push(name);classes.sort();
   document.getElementById('new-cls').value='';
   renderClsList();
@@ -1357,7 +1358,7 @@ async function deleteClass(cls){
     await sb.from('profiles').update({class_name:null}).eq('id',s.id);
     s.class_name=null;
   }
-  await sb.from('classes').delete().eq('name',cls).catch(()=>{});
+  try{await sb.from('classes').delete().eq('name',cls);}catch{}
   classes=classes.filter(c=>c!==cls);
   renderClsList();
   renderLsClsRows();
