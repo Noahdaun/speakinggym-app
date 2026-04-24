@@ -242,14 +242,39 @@ textarea{resize:none;height:80px;}
       <button class="tbn on" onclick="vtab('s',this)">오늘 학습</button>
       <button class="tbn" onclick="vtab('l',this)">단어 목록</button>
     </div>
+
+    <!-- 학습 모드 -->
     <div id="vs">
-      <div class="card" style="margin-bottom:10px;">
-        <div style="font-size:11px;color:var(--mu);margin-bottom:6px;">라이트너 박스 — 탭하면 해당 박스 학습 시작</div>
-        <div class="lrow" id="lbxs"></div>
-        <div style="font-size:11px;color:var(--mu);text-align:center;margin-top:3px;" id="ltd"></div>
+      <!-- 오늘 진행 상태 헤더 -->
+      <div style="background:var(--g);border-radius:14px;padding:15px;margin-bottom:12px;color:#fff;" id="v-header">
+        <div style="font-size:11px;opacity:.8;margin-bottom:4px;">오늘의 단어 공부</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div>
+            <div style="font-size:28px;font-weight:700;line-height:1;" id="v-remain">-</div>
+            <div style="font-size:11px;opacity:.8;margin-top:2px;">장 남았어요</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:13px;font-weight:600;opacity:.9;" id="v-progress-txt">-</div>
+            <div style="background:rgba(255,255,255,.25);border-radius:99px;height:5px;width:90px;margin-top:5px;">
+              <div class="pf" id="v-prog-bar" style="background:#fff;width:0%;"></div>
+            </div>
+            <div style="font-size:10px;opacity:.7;margin-top:3px;" id="v-pct">0%</div>
+          </div>
+        </div>
       </div>
+
+      <!-- 박스 현황 -->
+      <div style="background:var(--sf);border-radius:12px;padding:11px 12px;margin-bottom:12px;border:1px solid var(--brd);">
+        <div style="font-size:11px;color:var(--mu);margin-bottom:7px;">내 단어 박스 현황 — 탭하면 해당 박스 집중 학습</div>
+        <div class="lrow" id="lbxs"></div>
+        <div style="font-size:10px;color:var(--mu);text-align:center;margin-top:4px;" id="ltd"></div>
+      </div>
+
+      <!-- 플래시카드 영역 -->
       <div id="fca"><div class="loading">불러오는 중...</div></div>
     </div>
+
+    <!-- 목록 모드 -->
     <div id="vl" style="display:none;">
       <div class="tbb">
         <button class="tbn on" onclick="vf('a',this)">전체</button>
@@ -475,6 +500,7 @@ async function iApp(u){
   }
   const n=new Date();cY=n.getFullYear();cM=n.getMonth();
   if(P?.role==='admin'){
+    await rClsList();// classes 먼저 로드
     await lAdm();
     gp('admin');
   } else {
@@ -535,74 +561,162 @@ async function cm(d){
 }
 
 // ── VOCAB ──
+let doneCount=0;
+
 async function lVoc(){
   const td=new Date().toISOString().slice(0,10);
   const{data}=await sb.from('vocab_cards').select('*').eq('student_id',U.id).order('next_review');
   vc=data||[];
   tv=vc.filter(v=>v.next_review<=td);
-  const done=tv.filter(v=>v._done).length;
+  doneCount=0;
+  updateVHeader();
+  rLei();sFC();rVL('a');
   document.getElementById('hvs').textContent=`오늘 복습 ${tv.length}장`;
   if(tv.length>0){
-    document.getElementById('hvp').style.width=Math.round(done/tv.length*100)+'%';
-    document.getElementById('hvpct').textContent=`${done} / ${tv.length}장 완료`;
+    document.getElementById('hvp').style.width='0%';
+    document.getElementById('hvpct').textContent=`0 / ${tv.length}장 완료`;
   }
-  rLei();sFC();rVL('a');
+}
+
+function updateVHeader(){
+  const total=tv.length,left=Math.max(total-doneCount,0);
+  const pct=total>0?Math.round(doneCount/total*100):0;
+  const el=document.getElementById('v-remain');
+  const pt=document.getElementById('v-progress-txt');
+  const pb=document.getElementById('v-prog-bar');
+  const pp=document.getElementById('v-pct');
+  if(el)el.textContent=left;
+  if(pt)pt.textContent=`${doneCount} / ${total} 완료`;
+  if(pb)pb.style.width=pct+'%';
+  if(pp)pp.textContent=pct+'%';
+  const hvp=document.getElementById('hvp');
+  const hvpct=document.getElementById('hvpct');
+  if(hvp)hvp.style.width=pct+'%';
+  if(hvpct)hvpct.textContent=`${doneCount} / ${total}장 완료`;
 }
 
 function rLei(){
   const bc=['#FCEBEB','#FAEEDA','#EAF3DE','#E6F1FB','#EEEDFE'];
   const tc=['#791F1F','#633806','#27500A','#0C447C','#3C3489'];
   const iv=['매일','2일','4일','8일','16일'];
-  document.getElementById('lbxs').innerHTML=[1,2,3,4,5].map((b,i)=>
-    `<div class="lb" style="background:${bc[i]};color:${tc[i]};" onclick="startBox(${b})">
-      <div class="ln">${vc.filter(v=>v.box_level===b).length}</div>
+  document.getElementById('lbxs').innerHTML=[1,2,3,4,5].map((b,i)=>{
+    const cnt=vc.filter(v=>v.box_level===b).length;
+    return`<div class="lb" style="background:${bc[i]};color:${tc[i]};cursor:pointer;" onclick="startBox(${b})">
+      <div class="ln">${cnt}</div>
       <div class="ll2">Box ${b}<br>${iv[i]}</div>
-    </div>`).join('');
-  document.getElementById('ltd').textContent=`전체 ${vc.length}개 · 오늘 복습 ${tv.length}장`;
+    </div>`;
+  }).join('');
+  document.getElementById('ltd').textContent=`전체 ${vc.length}개 · 오늘 ${tv.length}장`;
 }
 
 function startBox(box){
-  const td=new Date().toISOString().slice(0,10);
   const boxCards=vc.filter(v=>v.box_level===box);
   if(!boxCards.length){tst(`Box ${box}에 단어가 없어요`);return;}
-  tv=boxCards;ci=0;fl=false;
-  tst(`Box ${box} 학습 시작! ${tv.length}장`);
+  tv=boxCards;ci=0;fl=false;doneCount=0;
+  updateVHeader();
+  tst(`Box ${box} 학습! ${tv.length}장`);
   rFC();
 }
 
-function sFC(){ci=0;fl=false;rFC();}
+function sFC(){
+  const td=new Date().toISOString().slice(0,10);
+  tv=vc.filter(v=>v.next_review<=td);
+  ci=0;fl=false;doneCount=0;
+  updateVHeader();
+  rFC();
+}
 
 function rFC(){
   const a=document.getElementById('fca');
   if(!tv.length){
-    a.innerHTML='<div class="empty">오늘 복습할 단어가 없어요!<br><small style="margin-top:4px;display:block;">단어 목록에서 추가해보세요</small></div>';
-    return;
-  }
-  if(ci>=tv.length){
-    a.innerHTML=`<div class="empty" style="padding:36px 16px;">
-      <div style="font-size:28px;margin-bottom:10px;">🎉</div>
-      <div style="font-size:15px;font-weight:600;">학습 완료!</div>
-      <div style="font-size:12px;color:var(--mu);margin-top:5px;">${tv.length}장 완료</div>
-      <button class="btn bp" style="margin-top:12px;" onclick="sFC()">다시 시작</button>
+    a.innerHTML=`<div style="text-align:center;padding:28px 16px;">
+      <div style="font-size:32px;margin-bottom:10px;">📚</div>
+      <div style="font-size:14px;font-weight:600;margin-bottom:5px;">오늘 복습할 단어가 없어요!</div>
+      <div style="font-size:12px;color:var(--mu);margin-bottom:14px;">단어 목록 탭에서 추가해보세요</div>
     </div>`;
     return;
   }
-  const c=tv[ci],p=Math.round(ci/tv.length*100);
+  if(ci>=tv.length){
+    const streak=3;
+    a.innerHTML=`<div style="text-align:center;padding:20px 14px;">
+      <div style="width:72px;height:72px;border-radius:50%;background:var(--gl);border:3px solid var(--g);display:flex;align-items:center;justify-content:center;margin:0 auto 12px;">
+        <svg width="32" height="32" viewBox="0 0 32 32"><polyline points="4,16 12,24 28,8" fill="none" stroke="#1D9E75" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div style="font-size:19px;font-weight:700;margin-bottom:3px;">오늘 완료!</div>
+      <div style="font-size:12px;color:var(--mu);margin-bottom:14px;">${tv.length}장 다 했어요. 내일 또 만나요!</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin-bottom:12px;">
+        <div style="background:var(--gl);border-radius:10px;padding:10px 6px;border:1px solid #C0E8D8;text-align:center;">
+          <div style="font-size:16px;font-weight:700;color:var(--gd);">${tv.length}</div>
+          <div style="font-size:10px;color:var(--gm);margin-top:2px;">오늘 학습</div>
+        </div>
+        <div style="background:var(--pul);border-radius:10px;padding:10px 6px;border:1px solid #AFA9EC;text-align:center;">
+          <div style="font-size:16px;font-weight:700;color:var(--pud);">${doneCount}</div>
+          <div style="font-size:10px;color:var(--pu);margin-top:2px;">맞힌 개수</div>
+        </div>
+        <div style="background:var(--aml);border-radius:10px;padding:10px 6px;border:1px solid #FAC775;text-align:center;">
+          <div style="font-size:16px;font-weight:700;color:var(--amd);">${streak}일</div>
+          <div style="font-size:10px;color:#854F0B;margin-top:2px;">연속 학습</div>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--mu);background:var(--sf);border-radius:9px;padding:9px 12px;margin-bottom:12px;">
+        ${vc.filter(v=>v.box_level===1).length > 0 ? `Box 1이 ${vc.filter(v=>v.box_level===1).length}개예요. 꾸준히 하면 금방 올라가요!` : '훌륭해요! Box 1 단어를 다 마스터했어요 🎉'}
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <button onclick="sFC()" style="padding:11px;border-radius:10px;border:1px solid var(--brd);background:var(--sf);font-size:12px;font-weight:600;cursor:pointer;color:var(--text);">다시 학습</button>
+        <button onclick="gp('review')" style="padding:11px;border-radius:10px;background:var(--g);color:#fff;border:none;font-size:12px;font-weight:600;cursor:pointer;">리뷰 하러가기 →</button>
+      </div>
+    </div>`;
+    return;
+  }
+  const c=tv[ci];
+  const boxColors=['','#FCEBEB','#FAEEDA','#EAF3DE','#E6F1FB','#EEEDFE'];
+  const boxTextColors=['','#791F1F','#633806','#27500A','#0C447C','#3C3489'];
+  const nextBox=Math.min(c.box_level+1,5);
+  const total=tv.length,pct=Math.round(ci/total*100);
+  const circumference=2*Math.PI*19;
+  const dashoffset=circumference*(1-ci/total);
   a.innerHTML=`
-    <div style="font-size:11px;color:var(--mu);text-align:right;margin-bottom:5px;">${ci+1} / ${tv.length}</div>
-    <div class="pb" style="margin-bottom:11px;"><div class="pf" style="width:${p}%;"></div></div>
-    <div class="fc" onclick="flFC()">
-      <div class="ft">${fl?c.lesson_title||'탭해서 접기':'탭해서 뜻 확인'}</div>
-      <div class="fw">${c.english}</div>
-      ${fl?`<div class="fm">${c.korean}</div>${c.example?`<div class="fex">${c.example}</div>`:'`'}`:``}
+    <div style="background:var(--sf);border-radius:12px;padding:11px 13px;margin-bottom:10px;border:1px solid var(--brd);display:flex;align-items:center;gap:10px;">
+      <div style="position:relative;width:46px;height:46px;flex-shrink:0;">
+        <svg width="46" height="46" viewBox="0 0 46 46">
+          <circle cx="23" cy="23" r="19" fill="none" stroke="#C0E8D8" stroke-width="3.5"/>
+          <circle cx="23" cy="23" r="19" fill="none" stroke="#1D9E75" stroke-width="3.5"
+            stroke-dasharray="${circumference.toFixed(1)}"
+            stroke-dashoffset="${dashoffset.toFixed(1)}"
+            stroke-linecap="round" transform="rotate(-90 23 23)"/>
+        </svg>
+        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--gd);">${ci+1}/${total}</div>
+      </div>
+      <div style="flex:1;">
+        <div style="font-size:12px;font-weight:600;color:var(--gd);">${total-ci}장 남았어요</div>
+        <div style="font-size:10px;color:var(--mu);margin-top:1px;">${pct}% 완료</div>
+      </div>
+      <span style="font-size:10px;font-weight:600;padding:3px 8px;border-radius:99px;background:${boxColors[c.box_level]};color:${boxTextColors[c.box_level]};">Box ${c.box_level}</span>
     </div>
-    <div class="fca" style="${!fl?'opacity:.3;pointer-events:none;':''}">
-      <button class="fcb fcbw" onclick="anFC(false)">몰랐어요 → Box 1</button>
-      <button class="fcb fcbr" onclick="anFC(true)">알았어요 → Box ${Math.min(c.box_level+1,5)}</button>
+    <div class="fc" onclick="flFC()" style="min-height:160px;">
+      <div class="ft">${fl?'탭해서 접기':'탭해서 뜻 확인'}</div>
+      <div class="fw">${c.english}</div>
+      ${fl?`<div class="fm">${c.korean}</div>${c.example?`<div class="fex">${c.example}</div>`:''}`:``}
+    </div>
+    <div class="fca" style="${!fl?'opacity:.35;pointer-events:none;':''}">
+      <button class="fcb fcbw" onclick="anFC(false)" style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+        <span>몰랐어요</span>
+        <span style="font-size:10px;font-weight:400;opacity:.8;">→ Box 1 유지</span>
+      </button>
+      <button class="fcb fcbr" onclick="anFC(true)" style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+        <span>알았어요</span>
+        <span style="font-size:10px;font-weight:400;opacity:.85;">→ Box ${nextBox}로 승급</span>
+      </button>
+    </div>
+    <div style="display:flex;gap:7px;margin-top:8px;">
+      <button onclick="skipCard()" style="flex:1;padding:9px;border-radius:9px;border:1px solid var(--brd);background:var(--sf);font-size:12px;color:var(--mu);cursor:pointer;font-family:inherit;">건너뛰기</button>
+      <button onclick="vtab('l',document.querySelectorAll('#pv .tbb .tbn')[1])" style="flex:1;padding:9px;border-radius:9px;border:1px solid var(--brd);background:var(--sf);font-size:12px;color:var(--mu);cursor:pointer;font-family:inherit;">단어 목록</button>
     </div>`;
 }
 
 function flFC(){fl=!fl;rFC();}
+
+function skipCard(){ci++;fl=false;rFC();}
 
 async function anFC(ok){
   const c=tv[ci];
@@ -612,7 +726,10 @@ async function anFC(ok){
   nr.setDate(nr.getDate()+iv[nb]);
   await sb.from('vocab_cards').update({box_level:nb,next_review:nr.toISOString().slice(0,10)}).eq('id',c.id);
   c.box_level=nb;
-  ci++;fl=false;rFC();
+  if(ok)doneCount++;
+  ci++;fl=false;
+  updateVHeader();
+  rFC();
 }
 
 function vtab(t,b){
@@ -847,7 +964,7 @@ async function lAdm(){
   const{data:lg}=await sb.from('review_logs').select('student_id').eq('completed',true).gte('completed_at',td);
   const ds=new Set((lg||[]).map(l=>l.student_id));
   document.getElementById('adn').textContent=ds.size;
-  const cls=['all',...new Set(sts.map(s=>s.class_name).filter(Boolean))];
+  const cls=['all',...classes];
   document.getElementById('adcp').innerHTML=cls.map((c,i)=>
     `<div class="cpill ${i===0?'on':''}" onclick="sAdCls('${c}',this)">${c==='all'?'전체':c}</div>`).join('');
   rSL('all',ds);
@@ -1166,7 +1283,7 @@ async function delL(id){
 
 
 function rAtCls(){
-  const cls=['all',...new Set(sts.map(s=>s.class_name).filter(Boolean))];
+  const cls=['all',...classes];
   document.getElementById('atcp').innerHTML=cls.map((c,i)=>
     `<div class="cpill ${i===0?'on':''}" onclick="sAtCls('${c}',this)">${c==='all'?'전체':c}</div>`).join('');
   rAtList('all');
@@ -1372,9 +1489,8 @@ async function showSU(){
   document.getElementById('lbox').style.display='none';
   document.getElementById('subox').style.display='block';
   selectedClass='';
-  // 반 목록 로드
-  const{data}=await sb.from('profiles').select('class_name').eq('role','student');
-  const clsList=[...new Set((data||[]).map(s=>s.class_name).filter(Boolean))].sort();
+  // 반 목록 로드 (classes 테이블 기준)
+  const clsList=[...classes];
   const el=document.getElementById('su-classes');
   if(!clsList.length){el.innerHTML='<div style="font-size:11px;color:var(--mu);">등록된 반이 없어요</div>';return;}
   el.innerHTML=clsList.map(c=>`
@@ -1505,7 +1621,7 @@ function gp(n){
   if(btns[idx])btns[idx].classList.add('on');
   const tt={home:'홈',vocab:'단어 학습',review:'리뷰',record:'기록',admin:'관리자'};
   document.getElementById('ptit').textContent=tt[n]||'';
-  if(n==='admin')lAdm();
+  if(n==='admin'){if(!classes.length)rClsList().then(()=>lAdm());else lAdm();}
 }
 
 function tst(msg){
