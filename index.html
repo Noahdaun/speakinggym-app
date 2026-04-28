@@ -989,9 +989,71 @@ async function lAdm(){
   const cls=['all',...classes];
   const adcp=document.getElementById('adcp');
   if(adcp)adcp.innerHTML=cls.map((c,i)=>`<div class="pill ${i===0?'on':''}" onclick="sAdCls('${c}',this)">${c==='all'?'전체':c}</div>`).join('');
+  // 반별 완료율 바
+  renderClassBars(doneSet);
+  // 미완료 알림 섹션
+  renderMissingAlert(doneSet);
   renderSList('all',doneSet);
-  // 레슨 목록 미리 로드
   if(!les.length){const{data:lss}=await sb.from('lessons').select('*').order('created_at',{ascending:false});les=lss||[];}
+}
+
+function renderClassBars(doneSet){
+  const el=document.getElementById('adcp');
+  if(!el)return;
+  // 반별 완료율 바를 adcp 밑에 삽입
+  const barEl=document.getElementById('class-bars');
+  if(!barEl){
+    el.insertAdjacentHTML('afterend','<div id="class-bars" style="margin-bottom:11px;"></div>');
+  }
+  const barDiv=document.getElementById('class-bars');
+  if(!barDiv)return;
+  if(!classes.length){barDiv.innerHTML='';return;}
+  barDiv.innerHTML=`<div style="font-size:11px;font-weight:700;margin-bottom:7px;">반별 오늘 완료율</div>`+
+  classes.map(cls=>{
+    const clsStus=sts.filter(s=>s.class_name===cls);
+    const clsDone=clsStus.filter(s=>doneSet.has(s.id)).length;
+    const pct=clsStus.length?Math.round(clsDone/clsStus.length*100):0;
+    const color=pct>=80?'var(--g)':pct>=50?'var(--am)':'var(--rd)';
+    return`<div style="margin-bottom:7px;">
+      <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
+        <div style="font-size:11px;font-weight:600;">${cls}</div>
+        <div style="font-size:11px;font-weight:700;color:${color};">${clsDone} / ${clsStus.length}명</div>
+      </div>
+      <div style="background:var(--brd);border-radius:99px;height:7px;">
+        <div style="background:${color};border-radius:99px;height:7px;width:${pct}%;transition:width .4s;"></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderMissingAlert(doneSet){
+  const missing=sts.filter(s=>!doneSet.has(s.id));
+  const el=document.getElementById('missing-alert');
+  if(!el){
+    const adsl=document.getElementById('adsl');
+    if(adsl)adsl.insertAdjacentHTML('beforebegin','<div id="missing-alert" style="margin-bottom:10px;"></div>');
+  }
+  const alertDiv=document.getElementById('missing-alert');
+  if(!alertDiv)return;
+  if(!missing.length){
+    alertDiv.innerHTML=`<div style="background:var(--gl);border-radius:11px;padding:11px 13px;border:1.5px solid #C0E8D8;display:flex;align-items:center;gap:8px;">
+      <div style="font-size:20px;">🎉</div>
+      <div><div style="font-size:12px;font-weight:700;color:var(--gd);">전원 완료!</div><div style="font-size:11px;color:var(--gm);margin-top:1px;">오늘 모든 학생이 리뷰를 완료했어요</div></div>
+    </div>`;
+    return;
+  }
+  alertDiv.innerHTML=`<div style="background:#FFF8F0;border-radius:11px;padding:11px 13px;border:1.5px solid #FAC775;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;">
+      <div style="font-size:12px;font-weight:700;color:var(--amd);">⚠️ 미완료 학생 ${missing.length}명</div>
+      <div onclick="openNotify(null)" style="font-size:11px;color:#854F0B;background:var(--aml);padding:4px 10px;border-radius:8px;cursor:pointer;font-weight:600;">전체 알림</div>
+    </div>
+    <div style="display:flex;gap:5px;flex-wrap:wrap;">
+      ${missing.map(s=>`<div style="background:#fff;border-radius:99px;padding:4px 11px;font-size:11px;border:1px solid #FAC775;display:flex;align-items:center;gap:5px;">
+        ${s.name||s.email}
+        <div onclick="openNotify('${s.id}')" style="font-size:10px;color:#854F0B;background:var(--aml);padding:1px 7px;border-radius:99px;cursor:pointer;font-weight:600;">알림</div>
+      </div>`).join('')}
+    </div>
+  </div>`;
 }
 function renderSList(cls,doneSet){
   const filt=cls==='all'?sts:sts.filter(s=>s.class_name===cls);
@@ -1101,29 +1163,192 @@ async function renderSD(){
         <div style="background:var(--gl);border-radius:12px;padding:12px;border:1.5px solid #C0E8D8;text-align:center;"><div style="font-size:20px;font-weight:700;color:var(--gd);">${attP}%</div><div style="font-size:11px;color:var(--gm);margin-top:2px;">출석률</div></div>
         <div style="background:#F3F0FC;border-radius:12px;padding:12px;border:1.5px solid #BDB8EF;text-align:center;"><div style="font-size:20px;font-weight:700;color:var(--pud);">${hwP}%</div><div style="font-size:11px;color:var(--pu);margin-top:2px;">숙제달성</div></div>
       </div>
-      <div class="card">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-          <button onclick="sdMv(-1)" style="width:28px;height:28px;border-radius:8px;background:var(--sf);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;">
-            <svg width="10" height="10" viewBox="0 0 10 10"><polyline points="7,1 2,5 7,9" fill="none" stroke="#888" stroke-width="1.8"/></svg>
-          </button>
-          <span style="font-size:13px;font-weight:700;">${y}년 ${mn[m]}</span>
-          <button onclick="sdMv(1)" style="width:28px;height:28px;border-radius:8px;background:var(--sf);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;">
-            <svg width="10" height="10" viewBox="0 0 10 10"><polyline points="3,1 8,5 3,9" fill="none" stroke="#888" stroke-width="1.8"/></svg>
-          </button>
-        </div>
-        <div class="cal-grid">${calH}</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;">
-          <div style="display:flex;align-items:center;gap:3px;font-size:10px;color:var(--mu);"><div style="width:10px;height:10px;border-radius:3px;background:var(--g);"></div>출석</div>
-          <div style="display:flex;align-items:center;gap:3px;font-size:10px;color:var(--mu);"><div style="width:10px;height:10px;border-radius:3px;background:var(--rl);border:1px solid #F09595;"></div>결석</div>
-          <div style="display:flex;align-items:center;gap:3px;font-size:10px;color:var(--mu);"><div style="width:10px;height:10px;border-radius:3px;background:var(--g);outline:2px solid var(--pu);outline-offset:1px;"></div>출석+숙제</div>
+      <!-- 탭 -->
+      <div class="tbb" style="margin-bottom:12px;">
+        <button class="tbn on" onclick="sdTab('cal',this)">달력</button>
+        <button class="tbn" onclick="sdTab('rev',this)">리뷰 기록</button>
+        <button class="tbn" onclick="sdTab('notify',this)">알림</button>
+      </div>
+      <!-- 달력 탭 -->
+      <div id="sd-cal">
+        <div class="card">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+            <button onclick="sdMv(-1)" style="width:28px;height:28px;border-radius:8px;background:var(--sf);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;">
+              <svg width="10" height="10" viewBox="0 0 10 10"><polyline points="7,1 2,5 7,9" fill="none" stroke="#888" stroke-width="1.8"/></svg>
+            </button>
+            <span style="font-size:13px;font-weight:700;">${y}년 ${mn[m]}</span>
+            <button onclick="sdMv(1)" style="width:28px;height:28px;border-radius:8px;background:var(--sf);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;">
+              <svg width="10" height="10" viewBox="0 0 10 10"><polyline points="3,1 8,5 3,9" fill="none" stroke="#888" stroke-width="1.8"/></svg>
+            </button>
+          </div>
+          <div class="cal-grid">${calH}</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;">
+            <div style="display:flex;align-items:center;gap:3px;font-size:10px;color:var(--mu);"><div style="width:10px;height:10px;border-radius:3px;background:var(--g);"></div>출석</div>
+            <div style="display:flex;align-items:center;gap:3px;font-size:10px;color:var(--mu);"><div style="width:10px;height:10px;border-radius:3px;background:var(--rl);border:1px solid #F09595;"></div>결석</div>
+            <div style="display:flex;align-items:center;gap:3px;font-size:10px;color:var(--mu);"><div style="width:10px;height:10px;border-radius:3px;background:var(--g);outline:2px solid var(--pu);outline-offset:1px;"></div>출석+숙제</div>
+          </div>
         </div>
       </div>
+      <!-- 리뷰 기록 탭 -->
+      <div id="sd-rev" style="display:none;">
+        <div id="sd-rev-content"><div class="loading">로딩중...</div></div>
+      </div>
+      <!-- 알림 탭 -->
+      <div id="sd-notify" style="display:none;" class="sd-notify-wrap"></div>
     </div>`;
+  // 리뷰 기록 미리 로드
+  loadSDRev();
+  // 알림 탭 세팅
+  renderSDNotify([stu]);
 }
 async function sdMv(d){sdM+=d;if(sdM>11){sdM=0;sdY++;}if(sdM<0){sdM=11;sdY--;}await renderSD();}
 function closeSD(){document.getElementById('sdp').classList.remove('on');}
 
-// ── ADMIN TABS ──
+function sdTab(t,b){
+  ['cal','rev','notify'].forEach(x=>{const el=document.getElementById(`sd-${x}`);if(el)el.style.display=x===t?'block':'none';});
+  document.querySelectorAll('#sdp .tbb .tbn').forEach(x=>x.classList.remove('on'));
+  if(b)b.classList.add('on');
+}
+
+async function loadSDRev(){
+  const el=document.getElementById('sd-rev-content');if(!el)return;
+  const{data:logs}=await sb.from('review_logs').select('*').eq('student_id',sdSid).order('completed_at',{ascending:false});
+  if(!logs?.length){el.innerHTML='<div class="empty">리뷰 기록이 없어요</div>';return;}
+  // 성실도 점수 계산
+  const done=logs.filter(l=>l.completed);
+  const totalCount=logs.reduce((s,l)=>s+(l.count||0),0);
+  const avgCount=logs.length?Math.round(totalCount/logs.length*10)/10:0;
+  const doneRate=logs.length?Math.round(done.length/logs.length*100):0;
+  const score=Math.round(doneRate*0.6+Math.min(avgCount/5*100,100)*0.4);
+  const scoreLabel=score>=80?'🏆 최우수':score>=60?'👍 우수':score>=40?'📖 보통':'💪 노력중';
+  const scoreColor=score>=80?'var(--gd)':score>=60?'var(--gm)':score>=40?'var(--amd)':'var(--rd)';
+  // 레슨별 그룹
+  const byLesson={};
+  logs.forEach(l=>{if(!byLesson[l.lesson_id])byLesson[l.lesson_id]=[];byLesson[l.lesson_id].push(l);});
+  const lessonHtml=Object.entries(byLesson).map(([lid,lgs])=>{
+    const lesson=les.find(x=>x.id===lid);if(!lesson)return'';
+    const allDone=lgs.every(l=>l.completed);
+    const sorted=lgs.sort((a,b)=>a.review_round-b.review_round);
+    return`<div class="card" style="margin-bottom:8px;">
+      <div class="row" style="margin-bottom:7px;">
+        <div style="font-size:12px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${lesson.title}</div>
+        <span class="bdg ${allDone?'bg':'br'}">${allDone?'완료':'진행중'}</span>
+      </div>
+      ${sorted.map(l=>`<div style="display:flex;align-items:center;gap:7px;padding:5px 0;border-bottom:1px solid var(--brd);">
+        <div style="font-size:10px;color:var(--mu);min-width:44px;">${l.review_round}회차</div>
+        <div style="display:flex;gap:2px;">${Array(5).fill(0).map((_,i)=>`<div style="width:13px;height:13px;border-radius:50%;background:${i<(l.count||0)?'var(--g)':'var(--brd)'};"></div>`).join('')}</div>
+        <div style="font-size:10px;font-weight:700;margin-left:auto;color:${l.completed?'var(--gd)':'var(--amd)'};">${l.count||0}/5${l.completed?' ✓':''}</div>
+      </div>`).join('')}
+    </div>`;
+  }).join('');
+  el.innerHTML=`
+    <div style="background:var(--gl);border-radius:11px;padding:12px;border:1.5px solid #C0E8D8;margin-bottom:12px;display:flex;align-items:center;gap:11px;">
+      <div style="text-align:center;flex-shrink:0;">
+        <div style="font-size:26px;font-weight:700;color:${scoreColor};">${score}</div>
+        <div style="font-size:9px;color:var(--mu);">성실도</div>
+      </div>
+      <div>
+        <div style="font-size:12px;font-weight:700;color:${scoreColor};margin-bottom:3px;">${scoreLabel}</div>
+        <div style="font-size:10px;color:var(--mu);line-height:1.7;">리뷰 완료율 ${doneRate}% · 평균 ${avgCount}회 따라하기</div>
+      </div>
+    </div>
+    <div style="font-size:11px;font-weight:700;margin-bottom:8px;">레슨별 리뷰 현황</div>
+    ${lessonHtml||'<div class="empty">레슨 기록이 없어요</div>'}`;
+}
+
+function renderSDNotify(stuList){
+  const el=document.querySelector('.sd-notify-wrap');if(!el)return;
+  const names=(stuList||[]).filter(Boolean).map(s=>s?.name||s?.email||'').filter(Boolean);
+  renderNotifyForm(el,names,(stuList||[]).filter(Boolean).map(s=>s?.id).filter(Boolean));
+}
+
+function renderNotifyForm(container,names,ids){
+  const defaultMsg=`안녕하세요! Speaking Gym Noah 선생님입니다. 😊\n오늘 리뷰 아직 안 하셨죠? 딱 10분이면 되니까 오늘 안에 완료해주세요! 💪\nhttps://noahdaun.github.io/speakinggym-app`;
+  const templates=[
+    {label:'📚 리뷰 독려',msg:`안녕하세요! Speaking Gym Noah 선생님입니다. 😊\n오늘 리뷰 아직 안 하셨죠? 딱 10분이면 되니까 오늘 안에 완료해주세요! 💪\nhttps://noahdaun.github.io/speakinggym-app`},
+    {label:'✏️ 숙제 알림',msg:`안녕하세요! Noah 선생님입니다. 📚\n단어 복습 잊지 마세요! 매일 조금씩 하면 영어 근육이 만들어집니다. 화이팅! 💪`},
+    {label:'📅 수업 공지',msg:`안녕하세요! Noah 선생님입니다. 📅\n다음 수업 잊지 마세요! Speaking Gym 앱에서 지난 수업 리뷰도 미리 해오시면 좋아요. 🙂`},
+  ];
+  container.innerHTML=`
+    <div style="font-size:12px;font-weight:600;margin-bottom:8px;">받는 사람</div>
+    <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:12px;">
+      ${names.map(n=>`<div style="background:var(--rl);border-radius:99px;padding:4px 11px;font-size:11px;border:1px solid #F09595;color:var(--rd);font-weight:600;">${n}</div>`).join('')}
+    </div>
+    <div style="font-size:12px;font-weight:600;margin-bottom:7px;">메시지 템플릿</div>
+    <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px;">
+      ${templates.map((t,i)=>`<div onclick="setTemplate(${i})" style="font-size:10px;padding:4px 10px;border-radius:99px;background:${i===0?'var(--gl)':'var(--sf)'};border:1.5px solid ${i===0?'#C0E8D8':'var(--brd)'};color:${i===0?'var(--gd)':'var(--mu)'};cursor:pointer;font-weight:${i===0?'700':'500'};">${t.label}</div>`).join('')}
+    </div>
+    <textarea id="notify-msg" style="height:100px;margin-bottom:9px;font-size:12px;line-height:1.7;">${templates[0].msg}</textarea>
+    <div style="font-size:11px;color:var(--mu);margin-bottom:10px;">* 카카오 오픈채팅이나 문자로 직접 발송하세요</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <button onclick="copyNotify()" style="padding:12px;border-radius:10px;border:1.5px solid #C0E8D8;background:var(--gl);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;color:var(--gd);">📋 메시지 복사</button>
+      <button onclick="kakaoNotify()" style="padding:12px;border-radius:10px;background:#FEE500;border:none;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;color:#3A1D1D;">💬 카카오 열기</button>
+    </div>`;
+  window._notifyTemplates=templates;
+}
+
+function setTemplate(i){
+  const el=document.getElementById('notify-msg');if(el)el.value=window._notifyTemplates[i].msg;
+  document.querySelectorAll('.sd-notify-wrap div[onclick^="setTemplate"],.notify-popup div[onclick^="setTemplate"]').forEach((b,idx)=>{
+    b.style.background=idx===i?'var(--gl)':'var(--sf)';
+    b.style.borderColor=idx===i?'#C0E8D8':'var(--brd)';
+    b.style.color=idx===i?'var(--gd)':'var(--mu)';
+    b.style.fontWeight=idx===i?'700':'500';
+  });
+}
+function copyNotify(){
+  const el=document.getElementById('notify-msg');if(!el)return;
+  navigator.clipboard.writeText(el.value).then(()=>tst('메시지 복사됐어요! 카카오/문자에 붙여넣기 하세요'));
+}
+function kakaoNotify(){
+  const el=document.getElementById('notify-msg');if(!el)return;
+  const msg=encodeURIComponent(el.value);
+  window.open(`https://open.kakao.com/`,'_blank');
+  navigator.clipboard.writeText(el.value).then(()=>tst('메시지 복사됐어요! 카카오에 붙여넣기 하세요'));
+}
+
+function openNotify(sid){
+  // 전체 미완료 또는 특정 학생 알림
+  const td=new Date().toISOString().slice(0,10);
+  let targets;
+  if(sid){
+    const s=sts.find(x=>x.id===sid);
+    targets=s?[s]:[];
+  }else{
+    // 미완료 전체
+    sb.from('review_logs').select('student_id').eq('completed',true).gte('completed_at',td).then(({data:lg})=>{
+      const doneSet=new Set((lg||[]).map(l=>l.student_id));
+      targets=sts.filter(s=>!doneSet.has(s.id));
+      showNotifyPopup(targets);
+    });
+    return;
+  }
+  showNotifyPopup(targets);
+}
+
+function showNotifyPopup(targets){
+  let popup=document.getElementById('notify-popup');
+  if(!popup){
+    popup=document.createElement('div');
+    popup.id='notify-popup';
+    popup.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:600;display:flex;align-items:flex-end;max-width:480px;margin:0 auto;';
+    document.body.appendChild(popup);
+  }
+  const names=targets.map(s=>s.name||s.email);
+  popup.innerHTML=`<div style="background:var(--bg);border-radius:20px 20px 0 0;padding:20px 16px 32px;width:100%;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <div style="font-size:15px;font-weight:700;">알림 보내기</div>
+      <div onclick="closeNotifyPopup()" style="width:28px;height:28px;border-radius:50%;background:var(--sf);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px;">✕</div>
+    </div>
+    <div class="notify-popup"></div>
+  </div>`;
+  const container=popup.querySelector('.notify-popup');
+  renderNotifyForm(container,names,targets.map(s=>s.id));
+  popup.style.display='flex';
+}
+function closeNotifyPopup(){const p=document.getElementById('notify-popup');if(p)p.style.display='none';}
+
+
 function adTab(t,b){
   ['st','cl','ls','at','vo'].forEach(x=>{const el=document.getElementById(`ad-${x}`);if(el)el.style.display=x===t?'block':'none';});
   document.querySelectorAll('#pad>.tbb .tbn').forEach(x=>x.classList.remove('on'));
@@ -1219,10 +1444,41 @@ async function rLsList(){
           <div onclick="delLesson('${l.id}')" style="font-size:11px;color:var(--rd);background:var(--rl);padding:3px 9px;border-radius:7px;cursor:pointer;">삭제</div>
         </div>
       </div>
-      <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:4px;">${tags||'<span style="font-size:11px;color:var(--mu);">반 배정 없음</span>'}</div>
-      <div style="font-size:10px;color:var(--mu);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${l.url}</div>
+      <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px;">${tags||'<span style="font-size:11px;color:var(--mu);">반 배정 없음</span>'}</div>
+      <div style="font-size:10px;color:var(--mu);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:8px;">${l.url}</div>
+      <div id="ls-stat-${l.id}"><div style="font-size:10px;color:var(--mu);">완료율 로딩중...</div></div>
     </div>`;
   }).join('');
+  // 레슨별 완료율 비동기 로드
+  les.forEach(l=>loadLsStat(l.id));
+}
+
+async function loadLsStat(lid){
+  const el=document.getElementById(`ls-stat-${lid}`);if(!el)return;
+  const{data:logs}=await sb.from('review_logs').select('student_id,count').eq('lesson_id',lid).eq('completed',true);
+  const doneIds=new Set((logs||[]).map(l=>l.student_id));
+  const totalStudents=sts.length;
+  if(!totalStudents){el.innerHTML='';return;}
+  const doneCnt=doneIds.size;
+  const pct=Math.round(doneCnt/totalStudents*100);
+  const avgCount=logs?.length?Math.round(logs.reduce((s,l)=>s+(l.count||0),0)/logs.length*10)/10:0;
+  const color=pct>=80?'var(--g)':pct>=50?'var(--am)':'var(--rd)';
+  const notDone=sts.filter(s=>!doneIds.has(s.id));
+  el.innerHTML=`
+    <div style="background:var(--brd);border-radius:99px;height:6px;margin-bottom:5px;">
+      <div style="background:${color};border-radius:99px;height:6px;width:${pct}%;transition:width .4s;"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;margin-bottom:7px;">
+      <div style="font-size:10px;font-weight:700;color:${color};">${doneCnt} / ${totalStudents}명 완료 (${pct}%)</div>
+      <div style="font-size:10px;color:var(--mu);">평균 ${avgCount}회</div>
+    </div>
+    <div style="display:flex;gap:4px;flex-wrap:wrap;">
+      ${sts.slice(0,10).map(s=>`<div style="display:flex;align-items:center;gap:2px;">
+        <div style="width:9px;height:9px;border-radius:50%;background:${doneIds.has(s.id)?'var(--g)':'var(--brd)'};"></div>
+        <div style="font-size:9px;color:${doneIds.has(s.id)?'var(--gd)':'var(--mu)'};">${(s.name||s.email).slice(0,2)}</div>
+      </div>`).join('')}
+      ${sts.length>10?`<div style="font-size:9px;color:var(--mu);">+${sts.length-10}</div>`:''}
+    </div>`;
 }
 function renderLsRows(){
   const el=document.getElementById('ls-cls-rows');if(!el)return;
