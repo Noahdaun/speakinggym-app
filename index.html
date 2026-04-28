@@ -363,7 +363,7 @@ select:focus{border-color:var(--g);}
       <!-- 출석 -->
       <div id="ad-at" style="display:none;">
         <div style="font-size:13px;font-weight:600;margin-bottom:6px;">출석 날짜</div>
-        <input class="inp" type="date" id="atd" style="margin-bottom:12px;">
+        <input class="inp" type="date" id="atd" style="margin-bottom:12px;" onchange="rAtList(document.querySelector('#atcp .pill.on')?.textContent==='전체'?'all':document.querySelector('#atcp .pill.on')?.textContent||'all')">
         <div class="pills" id="atcp"></div>
         <div id="atlist"><div class="loading">로딩중...</div></div>
         <div style="background:var(--gl);border-radius:10px;padding:10px 13px;margin-top:10px;border:1.5px solid #C0E8D8;">
@@ -523,7 +523,12 @@ async function initApp(u){
     await lAdm();
     gp('admin');
   } else {
+    // 최초 로드 — 모든 데이터 한 번에 로드하고 loaded 상태 세팅
+    loaded={vocab:false,review:false,record:false};
     await Promise.all([lCal(),lVoc(),lRev(),lRec()]);
+    loaded.vocab=true;
+    loaded.review=true;
+    loaded.record=true;
     buildHomeTodo();
   }
 }
@@ -667,7 +672,7 @@ function renderFC(){
         ${vc.filter(v=>v.box_level===1).length>0?`처음 단어가 ${vc.filter(v=>v.box_level===1).length}개 남았어요. 꾸준히 하면 금방 올라가요!`:'훌륭해요! 처음 단어가 없어요 🎉'}
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-        <button onclick="startVocab()" style="padding:12px;border-radius:10px;border:1.5px solid var(--brd);background:var(--sf);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;color:var(--text);">다시 학습</button>
+        <button onclick="resetVocab()" style="padding:12px;border-radius:10px;border:1.5px solid var(--brd);background:var(--sf);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;color:var(--text);">다시 학습</button>
         <button onclick="gp('review')" style="padding:12px;border-radius:10px;background:var(--g);color:#fff;border:none;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">리뷰 하러가기 →</button>
       </div>
     </div>`;
@@ -862,7 +867,7 @@ async function tapRSC(n){
   if(ex)await sb.from('review_logs').update({count:n,completed:done,completed_at:done?now:null}).eq('id',ex.id);
   else await sb.from('review_logs').insert({student_id:U.id,lesson_id:ses.lid,review_round:ses.round,count:n,completed:done,completed_at:done?now:null});
   renderRSC(n);
-  if(done){tst('5회 달성! 복습 완료!');setTimeout(()=>{cses();lRev();lCal();lRec();buildHomeTodo();},1200);}
+  if(done){tst('5회 달성! 복습 완료!');setTimeout(()=>{cses();refreshReview();lCal();lRec();buildHomeTodo();},1200);}
 }
 function cses(){document.getElementById('rs').classList.remove('on');ses=null;}
 
@@ -1706,6 +1711,9 @@ async function addExtracted(){
 }
 
 // ── NAV ──
+// 각 페이지 최초 로드 여부 추적
+let loaded={vocab:false,review:false,record:false};
+
 function gp(n){
   document.querySelectorAll('.pg').forEach(p=>p.classList.remove('on'));
   document.querySelectorAll('.bni').forEach(b=>b.classList.remove('on'));
@@ -1716,11 +1724,49 @@ function gp(n){
   const btns=document.querySelectorAll('.bni');if(btns[idx])btns[idx].classList.add('on');
   const tt={home:'홈',vocab:'단어 학습',review:'리뷰',record:'기록',admin:'관리자'};
   document.getElementById('ptit').textContent=tt[n]||'';
-  // 페이지 진입 시 데이터 새로고침
-  if(n==='vocab')startVocab();
-  if(n==='review')lRev();
-  if(n==='record')lRec();
-  if(n==='admin'){if(!classes.length)loadClasses().then(()=>loadStudents().then(()=>lAdm()));else lAdm();}
+
+  // 처음 진입할 때만 로드 — 이후엔 상태 유지
+  if(n==='vocab'){
+    if(!loaded.vocab){
+      loaded.vocab=true;
+      startVocab();
+    }
+    // 이미 로드됐으면 현재 상태 그대로 표시 (renderFC만 호출해서 UI 갱신)
+    else{
+      renderVHead();
+      renderVDist();
+      renderFC();
+    }
+  }
+  if(n==='review'){
+    if(!loaded.review){
+      loaded.review=true;
+      lRev();
+    }
+    // 이미 로드됐으면 유지 (리뷰 완료 시엔 lRev 재호출)
+  }
+  if(n==='record'){
+    if(!loaded.record){
+      loaded.record=true;
+      lRec();
+    }
+  }
+  if(n==='admin'){
+    if(!classes.length)loadClasses().then(()=>loadStudents().then(()=>lAdm()));
+    else lAdm();
+  }
+}
+
+// 리뷰 완료 후 강제 새로고침용 (tapRSC에서 호출)
+function refreshReview(){
+  loaded.review=false;
+  lRev();
+}
+
+// 단어 완료 후 다시 학습 시 리셋용
+function resetVocab(){
+  loaded.vocab=false;
+  startVocab();
 }
 
 // ── TOAST ──
