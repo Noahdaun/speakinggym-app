@@ -181,7 +181,7 @@ select:focus{border-color:var(--g);}
   </div>
   <div class="lbx" id="subox" style="display:none;">
     <div class="logo-wrap"><h1>Speaking Gym</h1><p>계정 만들기</p></div>
-    <input class="inp" type="text" id="sun" placeholder="이름">
+    <input class="inp" type="text" id="sun" placeholder="이름 (예: 김지수 / Jane Kim)">
     <input class="inp" type="email" id="sue" placeholder="이메일">
     <input class="inp" type="password" id="sup" placeholder="비밀번호 (6자 이상)">
     <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px;">수강 중인 반 <span style="font-weight:400;color:var(--mu);">(선택)</span></div>
@@ -511,7 +511,8 @@ async function initApp(u){
     await sb.from('profiles').insert({id:u.id,email:u.email,name:u.email.split('@')[0],role:'student'});
     const{data:pr2}=await sb.from('profiles').select('*').eq('id',u.id).single();P=pr2;
   }
-  document.getElementById('uav').textContent=(P?.name||u.email).slice(0,2).toUpperCase();
+  document.getElementById('uav').textContent=dispInitial(P?.name,u.email);
+  document.getElementById('uav').title=dispName(P?.name,u.email);
   document.getElementById('ls').classList.remove('on');
   document.getElementById('as').classList.add('on');
   const n=new Date();cY=n.getFullYear();cM=n.getMonth();
@@ -690,7 +691,7 @@ function renderFC(){
       <div style="font-size:11px;font-weight:600;padding:3px 9px;border-radius:99px;background:${['','#FCEBEB','#FAEEDA','#EAF3DE','#E6F1FB','#EEEDFE'][c.box_level]};color:${['','#791F1F','#633806','#27500A','#0C447C','#3C3489'][c.box_level]};">${boxLabels[c.box_level]}</div>
     </div>
     <div style="background:var(--brd);border-radius:99px;height:4px;margin-bottom:14px;"><div style="background:var(--g);border-radius:99px;height:4px;width:${pct}%;transition:width .3s;"></div></div>
-    <div class="fc ${fl?'flipped':''}" onclick="flFC()" style="min-height:160px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;">
+    <div class="fc ${fl?'flipped':''}" id="fc-card" onclick="flFC()" style="min-height:160px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;">
       <div style="font-size:11px;color:var(--mu);margin-bottom:12px;">${fl?'탭해서 접기':'탭해서 뜻 보기'}</div>
       <div class="fc-word">${c.english}</div>
       ${fl?`<div class="fc-mean">${c.korean}</div>${c.example?`<div class="fc-ex">${c.example}</div>`:''}`:''}
@@ -708,7 +709,13 @@ function renderFC(){
     <div style="display:flex;gap:7px;margin-top:8px;">
       <button onclick="ci++;fl=false;renderFC();" style="flex:1;padding:9px;border-radius:9px;border:1.5px solid var(--brd);background:var(--sf);font-size:12px;color:var(--mu);cursor:pointer;font-family:inherit;">건너뛰기</button>
       <button onclick="vtab('l',document.querySelectorAll('#pv .tbb .tbn')[1])" style="flex:1;padding:9px;border-radius:9px;border:1.5px solid var(--brd);background:var(--sf);font-size:12px;color:var(--mu);cursor:pointer;font-family:inherit;">단어 목록</button>
-    </div>`;
+    </div>
+    ${fl?`<div style="display:flex;justify-content:space-between;margin-top:6px;padding:0 2px;">
+      <div style="font-size:10px;color:var(--mu);display:flex;align-items:center;gap:3px;">← 스와이프 <span style="color:var(--rd);font-weight:600;">다시 볼게요</span></div>
+      <div style="font-size:10px;color:var(--mu);display:flex;align-items:center;gap:3px;"><span style="color:var(--gd);font-weight:600;">외웠어요</span> 스와이프 →</div>
+    </div>`:''}`;
+  // 스와이프 제스처 등록
+  setTimeout(()=>regSwipe(),50);
 }
 function flFC(){fl=!fl;renderFC();}
 async function anFC(ok){
@@ -867,7 +874,23 @@ async function tapRSC(n){
   if(ex)await sb.from('review_logs').update({count:n,completed:done,completed_at:done?now:null}).eq('id',ex.id);
   else await sb.from('review_logs').insert({student_id:U.id,lesson_id:ses.lid,review_round:ses.round,count:n,completed:done,completed_at:done?now:null});
   renderRSC(n);
-  if(done){tst('5회 달성! 복습 완료!');setTimeout(()=>{cses();refreshReview();lCal();lRec();buildHomeTodo();},1200);}
+  if(done){
+    tst('5회 달성! 복습 완료!');
+    setTimeout(()=>{
+      cses();
+      refreshReview().then(()=>{
+        // 다음 미완료 리뷰 자동 이동
+        const next=todayRevItems.find(it=>it.lesson.id!==ses?.lid);
+        if(next){
+          setTimeout(()=>{
+            tst(`다음 리뷰: ${next.lesson.title}`);
+            oSes(next.lesson.id,next.lesson.title,next.lesson.url,next.round);
+          },800);
+        }
+      });
+      lCal();lRec();buildHomeTodo();
+    },1200);
+  }
 }
 function cses(){document.getElementById('rs').classList.remove('on');ses=null;}
 
@@ -1054,7 +1077,7 @@ function renderMissingAlert(doneSet){
     </div>
     <div style="display:flex;gap:5px;flex-wrap:wrap;">
       ${missing.map(s=>`<div style="background:#fff;border-radius:99px;padding:4px 11px;font-size:11px;border:1px solid #FAC775;display:flex;align-items:center;gap:5px;">
-        ${s.name||s.email}
+        ${dispName(s.name,s.email)}
         <div onclick="openNotify('${s.id}')" style="font-size:10px;color:#854F0B;background:var(--aml);padding:1px 7px;border-radius:99px;cursor:pointer;font-weight:600;">알림</div>
       </div>`).join('')}
     </div>
@@ -1067,12 +1090,12 @@ function renderSList(cls,doneSet){
   const el=document.getElementById('adsl');
   if(!el)return;
   el.innerHTML=filt.length?filt.map((s,i)=>{
-    const ini=(s.name||s.email).slice(0,2).toUpperCase(),done=doneSet?.has(s.id);
+    const ini=dispInitial(s.name,s.email),done=doneSet?.has(s.id);
     return`<div class="card" style="cursor:pointer;margin-bottom:8px;" onclick="openSD('${s.id}','${(s.name||s.email).replace(/'/g,"\\'")}','${s.class_name||''}')">
       <div class="row" style="margin-bottom:7px;">
         <div style="display:flex;align-items:center;gap:9px;">
           <div class="sa" style="background:${av[i%5]};color:${tc[i%5]};">${ini}</div>
-          <div><div style="font-size:13px;font-weight:600;">${s.name||s.email}</div><div class="mu">${s.class_name||'반 없음'}</div></div>
+          <div><div style="font-size:13px;font-weight:600;">${dispName(s.name,s.email)}</div><div class="mu">${s.class_name||'반 없음'}</div></div>
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
           <span class="bdg ${done?'bg':'bgr'}">${done?'리뷰완료':'미완료'}</span>
@@ -1377,7 +1400,7 @@ function renderClsList(){
     const members=sts.filter(s=>s.class_name===cls);
     const tags=members.map(s=>`<div style="display:flex;align-items:center;gap:4px;background:var(--sf);border-radius:99px;padding:3px 10px;font-size:11px;">${s.name||s.email}<div onclick="rmFromCls('${s.id}','${cls}')" style="width:14px;height:14px;border-radius:50%;background:var(--rl);display:flex;align-items:center;justify-content:center;cursor:pointer;margin-left:2px;"><svg width="7" height="7" viewBox="0 0 7 7"><line x1="1" y1="1" x2="6" y2="6" stroke="#A32D2D" stroke-width="1.5"/><line x1="6" y1="1" x2="1" y2="6" stroke="#A32D2D" stroke-width="1.5"/></svg></div></div>`).join('');
     const unassigned=sts.filter(s=>!s.class_name||s.class_name!==cls);
-    const opts=unassigned.map(s=>`<option value="${s.id}">${s.name||s.email}</option>`).join('');
+    const opts=unassigned.map(s=>`<option value="${s.id}">${dispName(s.name,s.email)}</option>`).join('');
     return`<div class="card" style="margin-bottom:9px;">
       <div class="row" style="margin-bottom:8px;">
         <div style="font-size:13px;font-weight:700;">${cls}</div>
@@ -1583,11 +1606,11 @@ function rAtList(cls){
   const st=cls==='all'?sts:sts.filter(s=>s.class_name===cls);
   const el=document.getElementById('atlist');if(!el)return;
   el.innerHTML=st.length?st.map(s=>{
-    const ini=(s.name||s.email).slice(0,2).toUpperCase();
+    const ini=dispInitial(s.name,s.email);
     return`<div class="csm row">
       <div style="display:flex;align-items:center;gap:8px;">
         <div class="sa">${ini}</div>
-        <div style="font-size:13px;font-weight:600;">${s.name||s.email}</div>
+        <div style="font-size:13px;font-weight:600;">${dispName(s.name,s.email)}</div>
       </div>
       <div style="display:flex;gap:7px;">
         <button class="atb" id="ap-${s.id}" onclick="sAt('${s.id}','present','${date}')">출석</button>
@@ -1618,7 +1641,7 @@ async function sAt(sid,status,date){
 function rVTgt(){
   const el=document.getElementById('vtgt');if(!el)return;
   const clsOpts=classes.map(c=>`<option value="cls:${c}">${c} 전체</option>`).join('');
-  const stOpts=sts.map(s=>`<option value="${s.id}">${s.name||s.email} (${s.class_name||'반없음'})</option>`).join('');
+  const stOpts=sts.map(s=>`<option value="${s.id}">${dispName(s.name,s.email)} (${s.class_name||'반없음'})</option>`).join('');
   el.innerHTML=`<option value="all">전체 학생 (${sts.length}명)</option>${clsOpts}${stOpts}`;
 }
 async function admAddV(){
@@ -1758,9 +1781,9 @@ function gp(n){
 }
 
 // 리뷰 완료 후 강제 새로고침용 (tapRSC에서 호출)
-function refreshReview(){
+async function refreshReview(){
   loaded.review=false;
-  lRev();
+  await lRev();
 }
 
 // 단어 완료 후 다시 학습 시 리셋용
@@ -1769,8 +1792,40 @@ function resetVocab(){
   startVocab();
 }
 
+// ── SWIPE ──
+function regSwipe(){
+  const el=document.getElementById('fc-card');
+  if(!el)return;
+  let sx=0,sy=0;
+  el.addEventListener('touchstart',e=>{sx=e.touches[0].clientX;sy=e.touches[0].clientY;},{passive:true});
+  el.addEventListener('touchend',e=>{
+    const dx=e.changedTouches[0].clientX-sx;
+    const dy=e.changedTouches[0].clientY-sy;
+    if(Math.abs(dx)<Math.abs(dy)*1.5)return;// 세로 스크롤이면 무시
+    if(Math.abs(dx)<40)return;// 너무 짧으면 무시
+    if(!fl){flFC();return;}// 앞면이면 뒤집기
+    if(dx<0)anFC(true); // 왼쪽 → 외웠어요
+    else anFC(false);   // 오른쪽 → 다시 볼게요
+  },{passive:true});
+}
+
 // ── TOAST ──
 function tst(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('on');setTimeout(()=>t.classList.remove('on'),2200);}
+
+// ── 이름 표시 유틸 ──
+// name 필드에 "김지수 / Jane Kim" 형식으로 저장됨
+// 표시: 풀네임 / 이니셜(앞 2자)
+function dispName(name,email){
+  return name||email?.split('@')[0]||'?';
+}
+function dispInitial(name,email){
+  const n=name||email||'?';
+  // 한글+영어 혼합이면 한글 첫 2자 우선
+  const kor=n.match(/[가-힣]+/);
+  if(kor)return kor[0].slice(0,2);
+  return n.slice(0,2).toUpperCase();
+}
+
 
 // ── INIT ──
 (async()=>{
