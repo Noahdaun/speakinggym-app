@@ -162,6 +162,61 @@ select:focus{border-color:var(--g);}
 .toast.on{opacity:1;transform:translateX(-50%) translateY(0);}
 </style>
 </head>
+<script>
+if('serviceWorker' in navigator){
+  window.addEventListener('load', async () => {
+    try {
+      const reg = await navigator.serviceWorker.register('/speakinggym-app/sw.js');
+      // 업데이트 감지
+      reg.addEventListener('updatefound', () => {
+        const newSW = reg.installing;
+        newSW.addEventListener('statechange', () => {
+          if(newSW.state === 'installed' && navigator.serviceWorker.controller){
+            // 새 버전 발견 — 업데이트 배너 표시
+            showUpdateBanner();
+          }
+        });
+      });
+    } catch(e) {
+      console.log('SW 등록 실패:', e);
+    }
+  });
+}
+
+function showUpdateBanner(){
+  const banner = document.createElement('div');
+  banner.id = 'update-banner';
+  banner.style.cssText = `
+    position:fixed;top:0;left:50%;transform:translateX(-50%);
+    width:100%;max-width:480px;
+    background:#1D9E75;color:#fff;
+    padding:14px 20px;
+    display:flex;align-items:center;justify-content:space-between;
+    z-index:99999;
+    box-shadow:0 4px 16px rgba(0,0,0,.2);
+    font-family:-apple-system,sans-serif;
+  `;
+  banner.innerHTML = `
+    <div>
+      <div style="font-size:13px;font-weight:700;">새 버전이 있어요! 🎉</div>
+      <div style="font-size:11px;opacity:.85;margin-top:2px;">업데이트하면 최신 기능을 쓸 수 있어요</div>
+    </div>
+    <button onclick="doUpdate()" style="
+      padding:8px 16px;border-radius:99px;
+      background:#fff;color:#085041;
+      border:none;font-size:12px;font-weight:700;
+      cursor:pointer;font-family:inherit;
+      white-space:nowrap;margin-left:12px;
+    ">지금 업데이트</button>
+  `;
+  document.body.appendChild(banner);
+}
+
+function doUpdate(){
+  navigator.serviceWorker.controller?.postMessage('SKIP_WAITING');
+  window.location.reload();
+}
+</script>
 <body>
 <div id="root">
 
