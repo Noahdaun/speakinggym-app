@@ -414,6 +414,18 @@ function doUpdate(){
         <input class="inp" type="url" id="lu" placeholder="GitHub URL">
         <div style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--text);">반별 수업 날짜</div>
         <div id="ls-cls-rows"></div>
+
+        <!-- 스크립트 + 빈칸 설정 -->
+        <div class="dv"></div>
+        <div style="font-size:12px;font-weight:600;margin-bottom:4px;">📖 3회차 암기 스크립트 <span style="font-size:11px;font-weight:400;color:var(--mu);">(선택)</span></div>
+        <div style="font-size:11px;color:var(--mu);margin-bottom:7px;">학생이 빈칸을 채워서 암기를 확인해요. ___ 로 빈칸 표시</div>
+        <textarea id="ls-script" placeholder="예: I can't ___ singing along whenever I hear this song. It just hits ___.&#10;(빈칸: resist, differently)"></textarea>
+        <div style="font-size:11px;color:var(--mu);margin-bottom:7px;margin-top:6px;">정답 (쉼표로 구분, 순서대로)</div>
+        <input class="inp" type="text" id="ls-answers" placeholder="예: resist, differently">
+
+        <div style="font-size:12px;font-weight:600;margin-bottom:4px;margin-top:4px;">✍️ 5·7회차 응용 가이드 <span style="font-size:11px;font-weight:400;color:var(--mu);">(선택)</span></div>
+        <input class="inp" type="text" id="ls-guide" placeholder="예: I can't resist ___ 로 나만의 문장을 만들어보세요">
+
         <div id="ls-form-btns">
           <button class="btn btn-p" onclick="saveLesson()">토픽 등록</button>
         </div>
@@ -949,12 +961,13 @@ async function oSes(lid,title,url,round){
     <iframe src="${url}" style="width:100%;height:calc(100vh - ${type==='follow'?200:320}px);border:none;border-radius:9px;" allowfullscreen></iframe>`;
 
   // 하단 UI — 타입별 분기
+  const lessonObj=les.find(x=>x.id===lid);
   if(type==='follow'){
     renderBotFollow(lg?.count||0);
   } else if(type==='memorize'){
-    renderBotMemorize(sub?.completed||false, lg?.url||url, title);
+    renderBotMemorize(lessonObj, sub||null);
   } else {
-    renderBotApply(sub?.content||'', sub?.completed||false);
+    renderBotApply(lessonObj, sub||null);
   }
   document.getElementById('rs').classList.add('on');
 }
@@ -996,89 +1009,146 @@ async function tapRSC(n){
 }
 
 // ── 3회차: 내용 암기 ──
-function renderBotMemorize(done){
+// ── 3회차: 빈칸 채우기 암기 ──
+function renderBotMemorize(lesson, existingSub){
   const bot=document.getElementById('rs-bot');
-  if(done){
-    bot.innerHTML=`
-      <div style="display:flex;align-items:center;gap:10px;padding:4px 0;">
-        <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#FFB347,#E8940A);display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 3px 10px rgba(255,179,71,.4);">
+  if(!lesson?.blanks){
+    if(existingSub?.completed){
+      bot.innerHTML=`<div style="display:flex;align-items:center;gap:10px;padding:4px 0;">
+        <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#FFB347,#E8940A);display:flex;align-items:center;justify-content:center;box-shadow:0 3px 10px rgba(255,179,71,.4);">
           <svg width="16" height="16" viewBox="0 0 16 16"><polyline points="2,8 6,13 14,3" fill="none" stroke="white" stroke-width="2.5"/></svg>
         </div>
-        <div><div style="font-size:13px;font-weight:700;color:#854F0B;">암기 완료!</div><div style="font-size:10px;color:#A0622E;margin-top:1px;">다음 복습 때 응용 단계로 넘어가요</div></div>
+        <div><div style="font-size:13px;font-weight:700;color:#854F0B;">암기 완료!</div><div style="font-size:10px;color:#A0622E;margin-top:1px;">선생님이 확인할 거예요</div></div>
       </div>`;
+      return;
+    }
+    bot.innerHTML=`<div style="background:#FFF8F0;border-radius:12px;padding:11px 13px;border:1.5px solid #FAC775;">
+      <div style="font-size:11px;color:#854F0B;font-weight:600;">📌 스크립트가 아직 등록되지 않았어요</div>
+      <div style="font-size:10px;color:#A0622E;margin-top:3px;">선생님이 레슨 탭에서 스크립트를 등록하면 빈칸 채우기가 활성화돼요</div>
+    </div>`;
     return;
   }
-  bot.innerHTML=`
-    <div style="font-size:11px;color:var(--mu);text-align:center;margin-bottom:10px;font-weight:500;">
-      영상 보지 않고 <strong style="color:#854F0B;">말할 수 있나요?</strong>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px;">
-      <button onclick="tapMemorize(false)" style="padding:13px;border-radius:13px;background:#FFF0F0;border:none;cursor:pointer;font-family:inherit;">
-        <div style="font-size:13px;font-weight:700;color:#C0392B;">아직 못해요</div>
-        <div style="font-size:10px;color:#E0837B;margin-top:2px;">내일 다시 도전</div>
-      </button>
-      <button onclick="tapMemorize(true)" style="padding:13px;border-radius:13px;background:linear-gradient(135deg,#FFB347,#E8940A);border:none;cursor:pointer;font-family:inherit;box-shadow:0 4px 14px rgba(255,179,71,.35);">
-        <div style="font-size:13px;font-weight:700;color:#fff;">외웠어요! 🎉</div>
-        <div style="font-size:10px;color:rgba(255,255,255,.8);margin-top:2px;">다음 단계로</div>
-      </button>
+  let blanks;
+  try{blanks=JSON.parse(lesson.blanks);}catch{blanks=null;}
+  if(!blanks){bot.innerHTML='<div class="empty">스크립트 오류</div>';return;}
+  if(existingSub?.completed){
+    const score=existingSub.score||0;
+    bot.innerHTML=`<div style="background:${score>=60?'#F0FAF6':'#FFF8F0'};border-radius:12px;padding:12px 13px;border:1.5px solid ${score>=60?'#C0E8D8':'#FAC775'};">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">
+        <div style="font-size:13px;font-weight:700;color:${score>=60?'#085041':'#854F0B'};">${score>=60?'✅ 암기 완료!':'📝 제출 완료'}</div>
+        <div style="font-size:16px;font-weight:800;color:${score>=60?'#085041':'#854F0B'};">${score}점</div>
+      </div>
+      <div style="font-size:10px;color:${score>=60?'#0F6E56':'#A0622E'};">${score>=60?'훌륭해요! 선생님이 확인할 거예요':'조금 더 연습해봐요!'}</div>
+      ${score<60?`<button onclick="retryMemorize()" style="margin-top:9px;width:100%;padding:9px;border-radius:9px;background:linear-gradient(135deg,#FFB347,#E8940A);color:#fff;border:none;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">다시 도전하기</button>`:''}
     </div>`;
-}
-async function tapMemorize(ok){
-  if(!ses)return;
-  const now=new Date().toISOString();
-  // review_logs 완료 처리
-  const{data:ex}=await sb.from('review_logs').select('id').eq('student_id',U.id).eq('lesson_id',ses.lid).eq('review_round',ses.round).single();
-  if(ex)await sb.from('review_logs').update({count:ok?5:0,completed:ok,completed_at:ok?now:null}).eq('id',ex.id);
-  else await sb.from('review_logs').insert({student_id:U.id,lesson_id:ses.lid,review_round:ses.round,count:ok?5:0,completed:ok,completed_at:ok?now:null});
-  // hw_submissions 저장
-  const{data:exS}=await sb.from('hw_submissions').select('id').eq('student_id',U.id).eq('lesson_id',ses.lid).eq('review_round',ses.round).single();
-  const subData={student_id:U.id,lesson_id:ses.lid,review_round:ses.round,hw_type:'memorize',completed:ok,submitted_at:now};
-  if(exS)await sb.from('hw_submissions').update(subData).eq('id',exS.id);
-  else await sb.from('hw_submissions').insert(subData);
-  if(ok){
-    tst('암기 완료! 💪');
-    renderBotMemorize(true);
-    setTimeout(()=>{cses();refreshReview();lCal();lRec();buildHomeTodo();},1400);
-  } else {
-    tst('괜찮아요! 내일 다시 도전해요');
-    renderBotMemorize(false);
+    return;
   }
+  const script=blanks.script||'';
+  const answers=blanks.answers||[];
+  let qNum=0;
+  const rendered=script.replace(/___/g,()=>{
+    const n=qNum++;
+    return `<input id="blank-${n}" type="text" placeholder="${n+1}번" style="display:inline-block;width:90px;padding:4px 8px;border:1.5px solid #FAC775;border-radius:7px;font-size:13px;text-align:center;font-family:inherit;background:#fff;">`;
+  });
+  const answersJson=JSON.stringify(answers).replace(/"/g,'\"');
+  bot.innerHTML=`
+    <div style="font-size:11px;color:var(--mu);text-align:center;margin-bottom:9px;font-weight:500;">빈칸을 <strong style="color:#854F0B;">채워보세요</strong> — 영상 없이!</div>
+    <div style="background:#FFF8F0;border-radius:12px;padding:13px;border:1.5px solid #FAC775;margin-bottom:10px;font-size:13px;line-height:2.2;color:#1a1a1a;">${rendered}</div>
+    <button onclick='submitMemorize(${answersJson})' style="width:100%;padding:12px;border-radius:12px;background:linear-gradient(135deg,#FFB347,#E8940A);color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 4px 14px rgba(255,179,71,.35);">제출하기</button>`;
 }
 
-// ── 5,7회차: 표현 응용 ──
-function renderBotApply(existing, done){
+function retryMemorize(){
+  if(!ses)return;
+  const l=les.find(x=>x.id===ses.lid);
+  renderBotMemorize(l,null);
+}
+
+async function submitMemorize(answers){
+  if(!ses)return;
+  const total=answers.length;
+  let correct=0;
+  const results=answers.map((ans,i)=>{
+    const input=document.getElementById(`blank-${i}`)?.value?.trim()?.toLowerCase()||'';
+    const isOk=input===ans.toLowerCase()||(ans.toLowerCase().includes(input)&&input.length>=3);
+    if(isOk)correct++;
+    return{input,answer:ans,ok:isOk};
+  });
+  const score=total?Math.round(correct/total*100):0;
+  const now=new Date().toISOString();
+  const subData={student_id:U.id,lesson_id:ses.lid,review_round:ses.round,hw_type:'memorize',content:JSON.stringify(results),score,completed:score>=60,submitted_at:now};
+  const{data:exS}=await sb.from('hw_submissions').select('id').eq('student_id',U.id).eq('lesson_id',ses.lid).eq('review_round',ses.round).single();
+  if(exS)await sb.from('hw_submissions').update(subData).eq('id',exS.id);
+  else await sb.from('hw_submissions').insert(subData);
+  const done=score>=60;
+  const{data:exL}=await sb.from('review_logs').select('id').eq('student_id',U.id).eq('lesson_id',ses.lid).eq('review_round',ses.round).single();
+  if(exL)await sb.from('review_logs').update({count:done?5:correct,completed:done,completed_at:done?now:null}).eq('id',exL.id);
+  else await sb.from('review_logs').insert({student_id:U.id,lesson_id:ses.lid,review_round:ses.round,count:done?5:correct,completed:done,completed_at:done?now:null});
+  tst(done?`${score}점! 암기 완료! 🎉`:`${score}점. ${correct}/${total} 맞았어요. 다시 도전!`);
+  renderBotMemorize(les.find(x=>x.id===ses.lid),subData);
+  if(done){setTimeout(()=>{refreshReview();lCal();lRec();buildHomeTodo();},1400);}
+}
+
+// ── 5·7회차: 표현 응용 + AI 채점 ──
+function renderBotApply(lesson, existingSub){
   const bot=document.getElementById('rs-bot');
-  if(done){
-    bot.innerHTML=`
-      <div style="background:#F0FAF6;border-radius:12px;padding:11px 13px;border:1.5px solid #C0E8D8;">
-        <div style="font-size:11px;font-weight:700;color:#085041;margin-bottom:5px;">✅ 제출 완료</div>
-        <div style="font-size:12px;color:#0F6E56;font-style:italic;line-height:1.6;">"${existing}"</div>
-      </div>`;
+  const guide=lesson?.guide||'배운 표현으로 나만의 문장을 만들어보세요';
+  if(existingSub?.completed){
+    const content=existingSub.content||'';
+    const feedback=existingSub.feedback||'';
+    const score=existingSub.score||0;
+    bot.innerHTML=`<div style="background:#F0FAF6;border-radius:12px;padding:12px 13px;border:1.5px solid #C0E8D8;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;">
+        <div style="font-size:12px;font-weight:700;color:#085041;">✅ 제출 완료</div>
+        <div style="font-size:14px;font-weight:800;color:${score>=70?'#085041':'#854F0B'};">${score}점</div>
+      </div>
+      <div style="font-size:12px;color:#1a1a1a;font-style:italic;line-height:1.7;margin-bottom:${feedback?'7px':'0'};">"${content}"</div>
+      ${feedback?`<div style="background:#E1F5EE;border-radius:8px;padding:8px 10px;font-size:11px;color:#085041;line-height:1.7;">${feedback}</div>`:''}
+    </div>`;
     return;
   }
   bot.innerHTML=`
-    <div style="font-size:11px;color:var(--mu);text-align:center;margin-bottom:8px;font-weight:500;">
-      배운 표현으로 <strong style="color:var(--gd);">나만의 문장</strong>을 만들어보세요
-    </div>
-    <textarea id="apply-input" placeholder="예: I can't resist eating snacks while watching Netflix..." style="height:72px;margin-bottom:8px;font-size:13px;line-height:1.6;">${existing}</textarea>
-    <button onclick="tapApply()" style="width:100%;padding:12px;border-radius:12px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 4px 14px rgba(29,158,117,.3);">제출하기</button>`;
+    <div style="font-size:11px;color:var(--mu);text-align:center;margin-bottom:8px;font-weight:500;">✍️ <strong style="color:var(--gd);">나만의 문장</strong>을 영어로 써보세요</div>
+    <div style="background:#F0FAF6;border-radius:10px;padding:9px 12px;border:1.5px solid #C0E8D8;margin-bottom:8px;font-size:11px;color:#085041;font-weight:600;">💡 ${guide}</div>
+    <textarea id="apply-input" placeholder="여기에 영어 문장을 써보세요..." style="height:68px;margin-bottom:8px;font-size:13px;line-height:1.6;"></textarea>
+    <button onclick="tapApply()" style="width:100%;padding:12px;border-radius:12px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 4px 14px rgba(29,158,117,.3);">AI 채점 받기 →</button>`;
 }
+
 async function tapApply(){
   if(!ses)return;
   const txt=document.getElementById('apply-input')?.value?.trim();
-  if(!txt){tst('문장을 입력해주세요');return;}
-  const now=new Date().toISOString();
-  const{data:ex}=await sb.from('review_logs').select('id').eq('student_id',U.id).eq('lesson_id',ses.lid).eq('review_round',ses.round).single();
-  if(ex)await sb.from('review_logs').update({count:5,completed:true,completed_at:now}).eq('id',ex.id);
-  else await sb.from('review_logs').insert({student_id:U.id,lesson_id:ses.lid,review_round:ses.round,count:5,completed:true,completed_at:now});
-  const{data:exS}=await sb.from('hw_submissions').select('id').eq('student_id',U.id).eq('lesson_id',ses.lid).eq('review_round',ses.round).single();
-  const subData={student_id:U.id,lesson_id:ses.lid,review_round:ses.round,hw_type:'apply',content:txt,completed:true,submitted_at:now};
-  if(exS)await sb.from('hw_submissions').update(subData).eq('id',exS.id);
-  else await sb.from('hw_submissions').insert(subData);
-  tst('제출 완료! 훌륭해요 🎉');
-  renderBotApply(txt, true);
-  setTimeout(()=>{cses();refreshReview();lCal();lRec();buildHomeTodo();},1400);
+  if(!txt||txt.length<3){tst('문장을 입력해주세요');return;}
+  const lesson=les.find(x=>x.id===ses.lid);
+  const guide=lesson?.guide||'배운 표현 사용';
+  const btn=document.querySelector('#rs-bot button:last-child');
+  if(btn){btn.textContent='AI 채점 중...';btn.disabled=true;}
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:300,
+        messages:[{role:'user',content:`영어 말하기 과제 평가\n가이드: ${guide}\n레슨: ${lesson?.title||''} \n제출: "${txt}"\n\nJSON으로만: {"score":0-100,"feedback":"한국어 2문장 이내 격려 포함"}`}]})
+    });
+    const data=await res.json();
+    const result=JSON.parse((data.content?.[0]?.text||'{"score":60,"feedback":"잘 했어요!"}').replace(/```json|```/g,'').trim());
+    const score=result.score||60;
+    const feedback=result.feedback||'잘 했어요!';
+    const now=new Date().toISOString();
+    const subData={student_id:U.id,lesson_id:ses.lid,review_round:ses.round,hw_type:'apply',content:txt,score,feedback,completed:true,ai_checked:true,submitted_at:now};
+    const{data:exS}=await sb.from('hw_submissions').select('id').eq('student_id',U.id).eq('lesson_id',ses.lid).eq('review_round',ses.round).single();
+    if(exS)await sb.from('hw_submissions').update(subData).eq('id',exS.id);
+    else await sb.from('hw_submissions').insert(subData);
+    const{data:exL}=await sb.from('review_logs').select('id').eq('student_id',U.id).eq('lesson_id',ses.lid).eq('review_round',ses.round).single();
+    if(exL)await sb.from('review_logs').update({count:5,completed:true,completed_at:now}).eq('id',exL.id);
+    else await sb.from('review_logs').insert({student_id:U.id,lesson_id:ses.lid,review_round:ses.round,count:5,completed:true,completed_at:now});
+    tst(`${score}점! 제출 완료 🎉`);
+    renderBotApply(lesson,subData);
+    refreshReview();lCal();lRec();buildHomeTodo();
+  }catch(e){
+    tst('채점 실패. 다시 시도해주세요');
+    const btn2=document.querySelector('#rs-bot button:last-child');
+    if(btn2){btn2.textContent='AI 채점 받기 →';btn2.disabled=false;}
+  }
 }
+
 
 function autoNextReview(){
   const next=todayRevItems.find(it=>it.lesson.id!==ses?.lid);
@@ -1469,9 +1539,11 @@ function sdTab(t,b){
 
 async function loadSDRev(){
   const el=document.getElementById('sd-rev-content');if(!el)return;
-  const{data:logs}=await sb.from('review_logs').select('*').eq('student_id',sdSid).order('completed_at',{ascending:false});
+  const[{data:logs},{data:subs}]=await Promise.all([
+    sb.from('review_logs').select('*').eq('student_id',sdSid).order('completed_at',{ascending:false}),
+    sb.from('hw_submissions').select('*').eq('student_id',sdSid).order('submitted_at',{ascending:false})
+  ]);
   if(!logs?.length){el.innerHTML='<div class="empty">리뷰 기록이 없어요</div>';return;}
-  // 성실도 점수 계산
   const done=logs.filter(l=>l.completed);
   const totalCount=logs.reduce((s,l)=>s+(l.count||0),0);
   const avgCount=logs.length?Math.round(totalCount/logs.length*10)/10:0;
@@ -1491,11 +1563,28 @@ async function loadSDRev(){
         <div style="font-size:12px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${lesson.title}</div>
         <span class="bdg ${allDone?'bg':'br'}">${allDone?'완료':'진행중'}</span>
       </div>
-      ${sorted.map(l=>`<div style="display:flex;align-items:center;gap:7px;padding:5px 0;border-bottom:1px solid var(--brd);">
-        <div style="font-size:10px;color:var(--mu);min-width:44px;">${l.review_round}회차</div>
-        <div style="display:flex;gap:2px;">${Array(5).fill(0).map((_,i)=>`<div style="width:13px;height:13px;border-radius:50%;background:${i<(l.count||0)?'var(--g)':'var(--brd)'};"></div>`).join('')}</div>
-        <div style="font-size:10px;font-weight:700;margin-left:auto;color:${l.completed?'var(--gd)':'var(--amd)'};">${l.count||0}/5${l.completed?' ✓':''}</div>
-      </div>`).join('')}
+      ${sorted.map(l=>{
+        const rtype2=getRoundType(l.review_round);
+        const sub=(subs||[]).find(s=>s.lesson_id===lid&&s.review_round===l.review_round);
+        const dots=rtype2==='follow'
+          ?Array(5).fill(0).map((_,i)=>`<div style="width:13px;height:13px;border-radius:50%;background:${i<(l.count||0)?'var(--g)':'var(--brd)'};"></div>`).join('')
+          :'';
+        const subContent=sub?.content?`<div style="background:#F5F3F0;border-radius:8px;padding:8px 10px;margin-top:5px;font-size:11px;color:#1a1a1a;font-style:italic;line-height:1.6;">"${rtype2==='memorize'?'빈칸 제출':sub.content}"</div>`:'';
+        const aiFeedback=sub?.feedback?`<div style="background:#E1F5EE;border-radius:8px;padding:7px 10px;margin-top:4px;font-size:10px;color:#085041;line-height:1.6;">🤖 ${sub.feedback}</div>`:'';
+        const scoreTag=sub?.score!=null?`<span style="font-size:10px;font-weight:800;color:${sub.score>=60?'var(--gd)':'var(--rd)'};">${sub.score}점</span>`:'';
+        return`<div style="padding:7px 0;border-bottom:1px solid var(--brd);">
+          <div style="display:flex;align-items:center;gap:7px;">
+            <div style="font-size:10px;color:var(--mu);min-width:44px;">${l.review_round}회차</div>
+            <div style="font-size:10px;font-weight:600;color:${rtype2==='follow'?'var(--gd)':rtype2==='memorize'?'#854F0B':'var(--gd)'};">${rtype2==='follow'?'따라하기':rtype2==='memorize'?'암기':'응용'}</div>
+            <div style="display:flex;gap:2px;">${dots}</div>
+            <div style="margin-left:auto;display:flex;align-items:center;gap:5px;">
+              ${scoreTag}
+              <div style="font-size:10px;font-weight:700;color:${l.completed?'var(--gd)':'var(--amd)'};">${l.completed?'✓ 완료':'미완료'}</div>
+            </div>
+          </div>
+          ${subContent}${aiFeedback}
+        </div>`;
+      }).join('')}
     </div>`;
   }).join('');
   el.innerHTML=`
@@ -1778,29 +1867,50 @@ async function saveLesson(){
   classes.forEach(cls=>{const di=document.getElementById(`lsd-${cls.replace(/\s/g,'_')}`);if(di)lsClsState[cls].date=di.value;});
   const schedules=Object.entries(lsClsState).filter(([,st])=>st.on&&st.date).map(([cls,st])=>({class_name:cls,lesson_date:st.date}));
   if(!schedules.length){tst('최소 하나의 반과 날짜를 선택해주세요');return;}
+
+  // 스크립트 + 빈칸 처리
+  const scriptRaw=document.getElementById('ls-script')?.value?.trim()||'';
+  const answersRaw=document.getElementById('ls-answers')?.value?.trim()||'';
+  const guide=document.getElementById('ls-guide')?.value?.trim()||'';
+  let blanks=null;
+  if(scriptRaw&&answersRaw){
+    const answers=answersRaw.split(',').map(a=>a.trim()).filter(Boolean);
+    blanks=JSON.stringify({script:scriptRaw,answers});
+  }
+
+  const lessonData={title:t,url:u,script:scriptRaw||null,blanks,guide:guide||null};
+
   if(editLessonId){
-    const{error}=await sb.from('lessons').update({title:t,url:u}).eq('id',editLessonId);
+    const{error}=await sb.from('lessons').update(lessonData).eq('id',editLessonId);
     if(error){tst('수정 실패');return;}
     await sb.from('lesson_schedules').delete().eq('lesson_id',editLessonId);
     await sb.from('lesson_schedules').insert(schedules.map(s=>({...s,lesson_id:editLessonId})));
     tst('수정됐어요!');
   }else{
-    const{data,error}=await sb.from('lessons').insert({title:t,url:u,lesson_date:schedules[0].lesson_date,created_by:U.id}).select().single();
+    const{data,error}=await sb.from('lessons').insert({...lessonData,lesson_date:schedules[0].lesson_date,created_by:U.id}).select().single();
     if(error){tst('추가 실패: '+error.message);return;}
     await sb.from('lesson_schedules').insert(schedules.map(s=>({...s,lesson_id:data.id})));
     tst('토픽 등록됐어요!');
   }
-  document.getElementById('lt').value='';document.getElementById('lu').value='';
+  // 폼 초기화
+  ['lt','lu','ls-script','ls-answers','ls-guide'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   editLessonId=null;lsClsState={};
   document.getElementById('ls-form-title').textContent='새 토픽 등록';
   document.getElementById('ls-form-btns').innerHTML='<button class="btn btn-p" onclick="saveLesson()">토픽 등록</button>';
   await rLsList();renderLsRows();
 }
+
 function editLesson(id){
   editLessonId=id;lsClsState={};
   const l=les.find(x=>x.id===id);if(!l)return;
   document.getElementById('lt').value=l.title;
   document.getElementById('lu').value=l.url;
+  // 스크립트/빈칸/가이드 불러오기
+  if(document.getElementById('ls-script'))document.getElementById('ls-script').value=l.script||'';
+  if(document.getElementById('ls-guide'))document.getElementById('ls-guide').value=l.guide||'';
+  if(document.getElementById('ls-answers')&&l.blanks){
+    try{const b=JSON.parse(l.blanks);document.getElementById('ls-answers').value=(b.answers||[]).join(', ');}catch{}
+  }
   document.getElementById('ls-form-title').textContent='토픽 수정';
   document.getElementById('ls-form-btns').innerHTML=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"><button onclick="cancelEdit()" style="padding:12px;border-radius:10px;border:1.5px solid var(--brd);background:var(--sf);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;color:var(--text);">취소</button><button class="btn btn-p" onclick="saveLesson()" style="margin-bottom:0;">저장</button></div>`;
   renderLsRows();
