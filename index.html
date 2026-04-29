@@ -478,7 +478,7 @@ function doUpdate(){
 
 <!-- REVIEW SESSION -->
 <div id="rs">
-  <div class="rs-top">
+  <div class="rs-top" id="rs-top">
     <div class="rs-back" onclick="cses()">
       <div class="rs-back-ic"><svg width="11" height="11" viewBox="0 0 11 11"><polyline points="7.5,1 2,5.5 7.5,10" fill="none" stroke="rgba(255,255,255,.8)" stroke-width="1.8"/></svg></div>
       <span>리뷰 목록</span>
@@ -487,7 +487,7 @@ function doUpdate(){
     <span class="rs-badge" id="rs-badge">-</span>
   </div>
   <div class="rs-content" id="rs-content"></div>
-  <div class="rs-bot">
+  <div class="rs-bot" id="rs-bot">
     <div class="rs-label">전체 몇 번 다 했나요? <strong style="color:var(--amd);">목표 5회</strong></div>
     <div class="rs-circles" id="rs-circles"></div>
     <div class="rs-hint" id="rs-hint"></div>
@@ -862,19 +862,24 @@ async function lRev(){
 }
 function renderRT(items,logs){
   if(!items.length){document.getElementById('rtd').innerHTML='<div class="empty">오늘 복습할 레슨이 없어요.<br>선생님이 출석을 체크하면 자동으로 나타나요.</div>';return;}
-  const cols=['var(--g)','var(--pu)','var(--pu)','var(--pu)'];
   document.getElementById('rtd').innerHTML=items.map((it,i)=>{
     const lg=logs.find(l=>l.lesson_id===it.lesson.id&&l.review_round===it.round);
     const done=lg?.completed||false;
+    const rtype=getRoundType(it.round);
+    const rtypeLabel=rtype==='follow'?'듣고 따라하기':rtype==='memorize'?'내용 암기':'표현 응용';
+    const rtypeColor=rtype==='follow'?'#1D9E75':rtype==='memorize'?'#854F0B':'#085041';
+    const rtypeEmoji=rtype==='follow'?'🎧':rtype==='memorize'?'📖':'✍️';
+    const btnBg=done?'linear-gradient(135deg,#1D9E75,#159468)':rtype==='follow'?'linear-gradient(135deg,#1D9E75,#159468)':rtype==='memorize'?'linear-gradient(135deg,#FFB347,#E8940A)':'linear-gradient(135deg,#1D9E75,#159468)';
+    const btnSh=done?'0 3px 10px rgba(29,158,117,.3)':rtype==='memorize'?'0 3px 10px rgba(255,179,71,.3)':'0 3px 10px rgba(29,158,117,.3)';
     return`<div class="csm" style="margin-bottom:8px;">
-      <div class="row" style="margin-bottom:4px;">
+      <div class="row" style="margin-bottom:3px;">
         <div style="font-size:13px;font-weight:700;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${it.lesson.title}</div>
         <span class="bdg ba" style="flex-shrink:0;">${it.round}회 전</span>
       </div>
-      <div class="mu" style="margin-bottom:9px;">${it.date} 수업</div>
+      <div style="font-size:11px;font-weight:700;color:${rtypeColor};margin-bottom:8px;">${rtypeEmoji} ${rtypeLabel}</div>
       <button onclick="oSes('${it.lesson.id}','${it.lesson.title.replace(/'/g,"\\'")}','${it.lesson.url}',${it.round})"
-        style="width:100%;padding:10px;border-radius:10px;font-size:13px;font-weight:700;border:none;cursor:pointer;color:#fff;background:${done?'linear-gradient(135deg,#1D9E75,#159468)':i===0?'linear-gradient(135deg,#1D9E75,#159468)':'linear-gradient(135deg,#6B63D4,#5248B8)'};box-shadow:${done?'0 3px 10px rgba(29,158,117,.3)':i===0?'0 3px 10px rgba(29,158,117,.3)':'0 3px 10px rgba(107,99,212,.3)'};font-family:inherit;">
-        ${done?'✓ 완료':'리뷰 시작'}
+        style="width:100%;padding:10px;border-radius:10px;font-size:13px;font-weight:700;border:none;cursor:pointer;color:#fff;background:${btnBg};box-shadow:${btnSh};font-family:inherit;">
+        ${done?'✓ 완료':rtypeLabel+' 시작'}
       </button>
     </div>`;
   }).join('');
@@ -905,29 +910,77 @@ function renderRH(logs){
 }
 
 // ── REVIEW SESSION ──
+// 회차별 타입 결정
+function getRoundType(round){
+  if(round<=2) return 'follow';    // 1,2회차 — 듣고 따라하기
+  if(round===3) return 'memorize'; // 3회차 — 내용 암기
+  return 'apply';                  // 5,7회차 — 표현 응용
+}
+function getRoundLabel(round){
+  if(round<=2) return {text:'따라하기', color:'#1D9E75', bg:'#E1F5EE', topBg:'#1E2D45'};
+  if(round===3) return {text:'내용 암기', color:'#854F0B', bg:'#FAEEDA', topBg:'#7C5A1E'};
+  return {text:'표현 응용', color:'#085041', bg:'#E1F5EE', topBg:'#1E3A2F'};
+}
+
 async function oSes(lid,title,url,round){
   ses={lid,title,url,round};
+  const lbl=getRoundLabel(round);
   document.getElementById('rs-title').textContent=title;
   document.getElementById('rs-badge').textContent=`${round}회 전`;
+  document.getElementById('rs-badge').style.background=lbl.bg;
+  document.getElementById('rs-badge').style.color=lbl.color;
+  document.getElementById('rs-top').style.background=lbl.topBg;
+
+  // 기존 로그 조회
   const{data:lg}=await sb.from('review_logs').select('*').eq('student_id',U.id).eq('lesson_id',lid).eq('review_round',round).single();
-  renderRSC(lg?.count||0);
+  // 기존 제출 조회 (암기/응용)
+  const{data:sub}=await sb.from('hw_submissions').select('*').eq('student_id',U.id).eq('lesson_id',lid).eq('review_round',round).single();
+
+  const type=getRoundType(round);
+  // iframe 공통 상단
   document.getElementById('rs-content').innerHTML=`
-    <div style="background:#1a2940;border-radius:9px;padding:8px 12px;display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-      <div style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:#fff;"><div style="width:5px;height:5px;border-radius:50%;background:#3b82f6;"></div>Speaking Gym with Noah</div>
-      <div style="font-size:9px;color:rgba(255,255,255,.35);">${title}</div>
+    <div style="background:rgba(0,0,0,.3);border-radius:9px;padding:8px 12px;display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+      <div style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:#fff;">
+        <div style="width:6px;height:6px;border-radius:50%;background:${lbl.bg};"></div>
+        Speaking Gym with Noah
+      </div>
+      <div style="font-size:10px;font-weight:700;color:${lbl.bg};padding:2px 8px;border-radius:99px;background:rgba(255,255,255,.1);">${lbl.text}</div>
     </div>
-    <iframe src="${url}" style="width:100%;height:calc(100vh - 200px);border:none;border-radius:9px;" allowfullscreen></iframe>`;
+    <iframe src="${url}" style="width:100%;height:calc(100vh - ${type==='follow'?200:320}px);border:none;border-radius:9px;" allowfullscreen></iframe>`;
+
+  // 하단 UI — 타입별 분기
+  if(type==='follow'){
+    renderBotFollow(lg?.count||0);
+  } else if(type==='memorize'){
+    renderBotMemorize(sub?.completed||false, lg?.url||url, title);
+  } else {
+    renderBotApply(sub?.content||'', sub?.completed||false);
+  }
   document.getElementById('rs').classList.add('on');
 }
+
+// ── 1,2회차: 따라하기 ──
+function renderBotFollow(n){
+  const bot=document.getElementById('rs-bot');
+  bot.innerHTML=`
+    <div style="font-size:12px;color:var(--mu);text-align:center;margin-bottom:9px;font-weight:500;">
+      몇 번 따라했나요? <strong style="color:var(--amd);">목표 5회</strong>
+    </div>
+    <div style="display:flex;gap:9px;justify-content:center;margin-bottom:7px;" id="rs-circles"></div>
+    <div style="font-size:11px;text-align:center;font-weight:600;" id="rs-hint"></div>`;
+  renderRSC(n);
+}
 function renderRSC(n){
-  document.getElementById('rs-circles').innerHTML=Array(5).fill(0).map((_,i)=>{
+  const el=document.getElementById('rs-circles');if(!el)return;
+  el.innerHTML=Array(5).fill(0).map((_,i)=>{
     const num=i+1,cls=num<=n?'dn':num===n+1?'ac':'';
     return`<div class="rsc ${cls}" onclick="tapRSC(${num})">
       ${num<=n?'<svg width="13" height="13" viewBox="0 0 13 13"><polyline points="2,6.5 5,10.5 11,2.5" fill="none" stroke="white" stroke-width="2"/></svg>':num}
     </div>`;
   }).join('');
-  if(n>=5){document.getElementById('rs-hint').textContent='5회 달성! 복습 완료!';document.getElementById('rs-hint').style.color='var(--gd)';}
-  else{document.getElementById('rs-hint').textContent=`${n} / 5회 · ${5-n}번 더!`;document.getElementById('rs-hint').style.color='var(--amd)';}
+  const hint=document.getElementById('rs-hint');if(!hint)return;
+  if(n>=5){hint.textContent='5회 달성! 복습 완료!';hint.style.color='var(--gd)';}
+  else{hint.textContent=`${n} / 5회 · ${5-n}번 더!`;hint.style.color='var(--amd)';}
 }
 async function tapRSC(n){
   if(!ses)return;
@@ -937,24 +990,104 @@ async function tapRSC(n){
   else await sb.from('review_logs').insert({student_id:U.id,lesson_id:ses.lid,review_round:ses.round,count:n,completed:done,completed_at:done?now:null});
   renderRSC(n);
   if(done){
-    tst('5회 달성! 복습 완료!');
-    setTimeout(()=>{
-      cses();
-      refreshReview().then(()=>{
-        // 다음 미완료 리뷰 자동 이동
-        const next=todayRevItems.find(it=>it.lesson.id!==ses?.lid);
-        if(next){
-          setTimeout(()=>{
-            tst(`다음 리뷰: ${next.lesson.title}`);
-            oSes(next.lesson.id,next.lesson.title,next.lesson.url,next.round);
-          },800);
-        }
-      });
-      lCal();lRec();buildHomeTodo();
-    },1200);
+    tst('5회 달성! 따라하기 완료!');
+    setTimeout(()=>{cses();refreshReview().then(autoNextReview);lCal();lRec();buildHomeTodo();},1200);
   }
 }
+
+// ── 3회차: 내용 암기 ──
+function renderBotMemorize(done){
+  const bot=document.getElementById('rs-bot');
+  if(done){
+    bot.innerHTML=`
+      <div style="display:flex;align-items:center;gap:10px;padding:4px 0;">
+        <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#FFB347,#E8940A);display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 3px 10px rgba(255,179,71,.4);">
+          <svg width="16" height="16" viewBox="0 0 16 16"><polyline points="2,8 6,13 14,3" fill="none" stroke="white" stroke-width="2.5"/></svg>
+        </div>
+        <div><div style="font-size:13px;font-weight:700;color:#854F0B;">암기 완료!</div><div style="font-size:10px;color:#A0622E;margin-top:1px;">다음 복습 때 응용 단계로 넘어가요</div></div>
+      </div>`;
+    return;
+  }
+  bot.innerHTML=`
+    <div style="font-size:11px;color:var(--mu);text-align:center;margin-bottom:10px;font-weight:500;">
+      영상 보지 않고 <strong style="color:#854F0B;">말할 수 있나요?</strong>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px;">
+      <button onclick="tapMemorize(false)" style="padding:13px;border-radius:13px;background:#FFF0F0;border:none;cursor:pointer;font-family:inherit;">
+        <div style="font-size:13px;font-weight:700;color:#C0392B;">아직 못해요</div>
+        <div style="font-size:10px;color:#E0837B;margin-top:2px;">내일 다시 도전</div>
+      </button>
+      <button onclick="tapMemorize(true)" style="padding:13px;border-radius:13px;background:linear-gradient(135deg,#FFB347,#E8940A);border:none;cursor:pointer;font-family:inherit;box-shadow:0 4px 14px rgba(255,179,71,.35);">
+        <div style="font-size:13px;font-weight:700;color:#fff;">외웠어요! 🎉</div>
+        <div style="font-size:10px;color:rgba(255,255,255,.8);margin-top:2px;">다음 단계로</div>
+      </button>
+    </div>`;
+}
+async function tapMemorize(ok){
+  if(!ses)return;
+  const now=new Date().toISOString();
+  // review_logs 완료 처리
+  const{data:ex}=await sb.from('review_logs').select('id').eq('student_id',U.id).eq('lesson_id',ses.lid).eq('review_round',ses.round).single();
+  if(ex)await sb.from('review_logs').update({count:ok?5:0,completed:ok,completed_at:ok?now:null}).eq('id',ex.id);
+  else await sb.from('review_logs').insert({student_id:U.id,lesson_id:ses.lid,review_round:ses.round,count:ok?5:0,completed:ok,completed_at:ok?now:null});
+  // hw_submissions 저장
+  const{data:exS}=await sb.from('hw_submissions').select('id').eq('student_id',U.id).eq('lesson_id',ses.lid).eq('review_round',ses.round).single();
+  const subData={student_id:U.id,lesson_id:ses.lid,review_round:ses.round,hw_type:'memorize',completed:ok,submitted_at:now};
+  if(exS)await sb.from('hw_submissions').update(subData).eq('id',exS.id);
+  else await sb.from('hw_submissions').insert(subData);
+  if(ok){
+    tst('암기 완료! 💪');
+    renderBotMemorize(true);
+    setTimeout(()=>{cses();refreshReview();lCal();lRec();buildHomeTodo();},1400);
+  } else {
+    tst('괜찮아요! 내일 다시 도전해요');
+    renderBotMemorize(false);
+  }
+}
+
+// ── 5,7회차: 표현 응용 ──
+function renderBotApply(existing, done){
+  const bot=document.getElementById('rs-bot');
+  if(done){
+    bot.innerHTML=`
+      <div style="background:#F0FAF6;border-radius:12px;padding:11px 13px;border:1.5px solid #C0E8D8;">
+        <div style="font-size:11px;font-weight:700;color:#085041;margin-bottom:5px;">✅ 제출 완료</div>
+        <div style="font-size:12px;color:#0F6E56;font-style:italic;line-height:1.6;">"${existing}"</div>
+      </div>`;
+    return;
+  }
+  bot.innerHTML=`
+    <div style="font-size:11px;color:var(--mu);text-align:center;margin-bottom:8px;font-weight:500;">
+      배운 표현으로 <strong style="color:var(--gd);">나만의 문장</strong>을 만들어보세요
+    </div>
+    <textarea id="apply-input" placeholder="예: I can't resist eating snacks while watching Netflix..." style="height:72px;margin-bottom:8px;font-size:13px;line-height:1.6;">${existing}</textarea>
+    <button onclick="tapApply()" style="width:100%;padding:12px;border-radius:12px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 4px 14px rgba(29,158,117,.3);">제출하기</button>`;
+}
+async function tapApply(){
+  if(!ses)return;
+  const txt=document.getElementById('apply-input')?.value?.trim();
+  if(!txt){tst('문장을 입력해주세요');return;}
+  const now=new Date().toISOString();
+  const{data:ex}=await sb.from('review_logs').select('id').eq('student_id',U.id).eq('lesson_id',ses.lid).eq('review_round',ses.round).single();
+  if(ex)await sb.from('review_logs').update({count:5,completed:true,completed_at:now}).eq('id',ex.id);
+  else await sb.from('review_logs').insert({student_id:U.id,lesson_id:ses.lid,review_round:ses.round,count:5,completed:true,completed_at:now});
+  const{data:exS}=await sb.from('hw_submissions').select('id').eq('student_id',U.id).eq('lesson_id',ses.lid).eq('review_round',ses.round).single();
+  const subData={student_id:U.id,lesson_id:ses.lid,review_round:ses.round,hw_type:'apply',content:txt,completed:true,submitted_at:now};
+  if(exS)await sb.from('hw_submissions').update(subData).eq('id',exS.id);
+  else await sb.from('hw_submissions').insert(subData);
+  tst('제출 완료! 훌륭해요 🎉');
+  renderBotApply(txt, true);
+  setTimeout(()=>{cses();refreshReview();lCal();lRec();buildHomeTodo();},1400);
+}
+
+function autoNextReview(){
+  const next=todayRevItems.find(it=>it.lesson.id!==ses?.lid);
+  if(next){setTimeout(()=>{tst(`다음: ${next.lesson.title}`);oSes(next.lesson.id,next.lesson.title,next.lesson.url,next.round);},800);}
+}
+
 function cses(){document.getElementById('rs').classList.remove('on');ses=null;}
+
+
 
 // ── RECORD ──
 async function lRec(){
@@ -1171,26 +1304,60 @@ function renderSList(cls,doneSet){
 }
 async function loadSStat(sid){
   const el=document.getElementById(`sstat-${sid}`);if(!el)return;
+  const td=new Date().toISOString().slice(0,10);
   const now=new Date(),y=now.getFullYear(),m=now.getMonth();
   const f=`${y}-${String(m+1).padStart(2,'0')}-01`,l=new Date(y,m+1,0).toISOString().slice(0,10);
-  const[{data:at},{data:rv}]=await Promise.all([
+
+  const[{data:at},{data:rv},{data:sub},{data:vc2}]=await Promise.all([
     sb.from('attendance').select('lesson_date,status').eq('student_id',sid).gte('lesson_date',f).lte('lesson_date',l),
-    sb.from('review_logs').select('student_id').eq('student_id',sid).eq('completed',true).gte('completed_at',f).lte('completed_at',l+'T23:59:59')
+    sb.from('review_logs').select('student_id,completed').eq('student_id',sid).eq('completed',true).gte('completed_at',td),
+    sb.from('hw_submissions').select('hw_type,completed,review_round').eq('student_id',sid).eq('completed',true).gte('submitted_at',td),
+    sb.from('vocab_cards').select('next_review,box_level').eq('student_id',sid)
   ]);
+
+  // 단어 학습 완료 여부 — 오늘 복습 대상 중 맞힌 게 있는지
+  const todayVoc=(vc2||[]).filter(v=>v.next_review>td).length; // 오늘 이후로 미뤄진 카드 = 오늘 학습함
+  const vocDone=todayVoc>0||(vc2||[]).every(v=>v.box_level>=3);
+
+  // 리뷰 완료 여부 (오늘 follow 타입)
+  const revDone=(rv||[]).length>0;
+
+  // 암기 완료 여부 (오늘 memorize 타입)
+  const memDone=(sub||[]).some(s=>s.hw_type==='memorize');
+
+  // 응용 완료 여부 (오늘 apply 타입)
+  const appDone=(sub||[]).some(s=>s.hw_type==='apply');
+
+  // 출석률
   const tot=(at||[]).length,pres=(at||[]).filter(a=>a.status==='present').length;
   const attP=tot?Math.round(pres/tot*100):0;
-  const hwP=pres?Math.round((rv||[]).length/pres*100):0;
+
   if(!document.getElementById(`sstat-${sid}`))return;
+
+  // 아이콘 렌더 함수
+  const icon=(done,label,color,bg)=>`
+    <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+      <div style="width:24px;height:24px;border-radius:7px;background:${done?bg:'#F0EDE8'};display:flex;align-items:center;justify-content:center;">
+        ${done
+          ?`<svg width="12" height="12" viewBox="0 0 12 12"><polyline points="2,6 5,10 10,2" fill="none" stroke="${color}" stroke-width="2.2"/></svg>`
+          :`<svg width="10" height="10" viewBox="0 0 10 10"><line x1="2" y1="2" x2="8" y2="8" stroke="#D0CCC6" stroke-width="1.8"/><line x1="8" y1="2" x2="2" y2="8" stroke="#D0CCC6" stroke-width="1.8"/></svg>`}
+      </div>
+      <div style="font-size:8px;color:${done?color:'#C0BCB5'};font-weight:600;">${label}</div>
+    </div>`;
+
   document.getElementById(`sstat-${sid}`).innerHTML=`
-    <div style="display:flex;gap:6px;align-items:center;margin-bottom:3px;">
-      <div style="font-size:10px;color:var(--mu);width:32px;">출석</div>
-      <div style="flex:1;background:var(--brd);border-radius:99px;height:4px;"><div style="width:${attP}%;background:var(--g);border-radius:99px;height:4px;"></div></div>
-      <div style="font-size:10px;font-weight:700;color:var(--gd);width:28px;">${attP}%</div>
-    </div>
-    <div style="display:flex;gap:6px;align-items:center;">
-      <div style="font-size:10px;color:var(--mu);width:32px;">숙제</div>
-      <div style="flex:1;background:var(--brd);border-radius:99px;height:4px;"><div style="width:${hwP}%;background:var(--pu);border-radius:99px;height:4px;"></div></div>
-      <div style="font-size:10px;font-weight:700;color:var(--pud);width:28px;">${hwP}%</div>
+    <div style="display:flex;gap:5px;align-items:center;margin-bottom:5px;">
+      ${icon(vocDone,'단어','#1D9E75','#E1F5EE')}
+      ${icon(revDone,'리뷰','#534AB7','#EEEDFE')}
+      ${icon(memDone,'암기','#854F0B','#FAEEDA')}
+      ${icon(appDone,'응용','#085041','#C0E8D8')}
+      <div style="flex:1;margin-left:4px;">
+        <div style="display:flex;gap:4px;align-items:center;margin-bottom:2px;">
+          <div style="font-size:9px;color:var(--mu);width:24px;">출석</div>
+          <div style="flex:1;background:var(--brd);border-radius:99px;height:3px;"><div style="width:${attP}%;background:var(--g);border-radius:99px;height:3px;"></div></div>
+          <div style="font-size:9px;font-weight:700;color:var(--gd);">${attP}%</div>
+        </div>
+      </div>
     </div>`;
 }
 function sAdCls(cls,btn){
