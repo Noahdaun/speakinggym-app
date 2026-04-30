@@ -1363,7 +1363,7 @@ function renderXPRecord(){
     </div>`;
 }
 
-
+function rectab(t,b){
   document.querySelectorAll('#prc>.tbb .tbn').forEach(x=>x.classList.remove('on'));
   if(b)b.classList.add('on');
   document.getElementById('rec-v').style.display=t==='v'?'block':'none';
