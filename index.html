@@ -719,7 +719,9 @@ async function lVoc(){
   const td=new Date().toISOString().slice(0,10);
   const{data}=await sb.from('vocab_cards').select('*').eq('student_id',U.id).order('next_review');
   vc=data||[];tv=vc.filter(v=>v.next_review<=td);
-  doneToday=0;
+  // 오늘 이미 학습한 카드 수 계산 (next_review가 오늘 이후로 바뀐 카드)
+  const todayStudied=vc.filter(v=>v.next_review>td&&v.updated_at&&v.updated_at.slice(0,10)===td);
+  doneToday=todayStudied.length;
   renderVHead();renderVDist();renderFC();rVL('a');
 }
 function renderVHead(){
@@ -756,7 +758,23 @@ function renderFC(){
   const a=document.getElementById('fca');
   if(!a)return;
   if(!tv.length){
-    a.innerHTML=`<div class="empty">📚<br>오늘 복습할 단어가 없어요!<br><span style="font-size:11px;">단어 목록에서 추가해보세요</span></div>`;
+    // 오늘 학습한 카드가 있으면 완료 화면, 없으면 빈 상태
+    if(doneToday>0){
+      a.innerHTML=`
+        <div style="text-align:center;padding:24px 16px;">
+          <div style="width:64px;height:64px;border-radius:50%;background:var(--gl);border:2.5px solid var(--g);display:flex;align-items:center;justify-content:center;margin:0 auto 14px;">
+            <svg width="28" height="28" viewBox="0 0 28 28"><polyline points="4,14 10,21 24,7" fill="none" stroke="var(--g)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div style="font-size:18px;font-weight:700;margin-bottom:4px;">오늘 완료! 🎉</div>
+          <div style="font-size:12px;color:var(--mu);margin-bottom:18px;">${doneToday}장 학습 완료</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px;">
+            <button onclick="resetVocab()" style="padding:11px;border-radius:11px;border:1.5px solid var(--brd);background:var(--sf);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;color:var(--text);">다시 학습</button>
+            <button onclick="gp('review')" style="padding:11px;border-radius:11px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">리뷰 →</button>
+          </div>
+        </div>`;
+    } else {
+      a.innerHTML=`<div class="empty">📚<br>오늘 복습할 단어가 없어요!<br><span style="font-size:11px;">단어 목록에서 추가해보세요</span></div>`;
+    }
     return;
   }
   if(ci>=tv.length){
@@ -872,10 +890,11 @@ async function delV(id){
 
 // ── REVIEW ──
 async function lRev(){
-  const[{data:lss},{data:schs},{data:at}]=await Promise.all([
+  const[{data:lss},{data:schs},{data:at},{data:logs}]=await Promise.all([
     sb.from('lessons').select('*').order('created_at',{ascending:false}),
     sb.from('lesson_schedules').select('*'),
-    sb.from('attendance').select('lesson_date').eq('student_id',U.id).eq('status','present').order('lesson_date',{ascending:false})
+    sb.from('attendance').select('lesson_date').eq('student_id',U.id).eq('status','present').order('lesson_date',{ascending:false}),
+    sb.from('review_logs').select('*').eq('student_id',U.id)
   ]);
   les=lss||[];
   const schMap={};(schs||[]).forEach(s=>{if(!schMap[s.lesson_id])schMap[s.lesson_id]=[];schMap[s.lesson_id].push(s);});
@@ -885,16 +904,20 @@ async function lRev(){
     return{...l,myDate:mySchs.length?mySchs[0].lesson_date:l.lesson_date};
   }).sort((a,b)=>b.myDate.localeCompare(a.myDate));
   const dates=(at||[]).map(a=>a.lesson_date).sort().reverse();
-  const rounds=[1,2,3,5,7];const items=[];const seen=new Set();
-  rounds.forEach(r=>{
-    if(dates.length>=r){
-      const attDate=dates[r-1];
-      const lesson=myLessons.find(l=>l.myDate<=attDate);
-      if(lesson&&!seen.has(lesson.id)){seen.add(lesson.id);items.push({lesson,round:r,date:attDate});}
+  const rounds=[1,2,3,5,7];const items=[];
+  // 각 레슨별로 출석 횟수 기반 현재 회차 계산
+  myLessons.forEach(lesson=>{
+    const attendAfter=dates.filter(d=>d>=lesson.myDate).length;
+    if(attendAfter<=0)return;
+    const doneRounds=new Set((logs||[]).filter(l=>l.lesson_id===lesson.id&&l.completed).map(l=>l.review_round));
+    for(const r of rounds){
+      if(attendAfter>=r&&!doneRounds.has(r)){
+        items.push({lesson,round:r,date:lesson.myDate});
+        break;
+      }
     }
   });
   todayRevItems=items.slice(0,4);
-  const{data:logs}=await sb.from('review_logs').select('*').eq('student_id',U.id);
   renderRT(todayRevItems,logs||[]);
   renderRH(logs||[]);
 }
