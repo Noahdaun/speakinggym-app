@@ -629,7 +629,7 @@ async function initApp(u){
     loaded.vocab=true;
     loaded.review=true;
     loaded.record=true;
-    await loadXP();
+    try{await loadXP();}catch(e){console.warn('XP 로드 실패',e);}
     buildHomeTodo();
   }
 }
@@ -2447,27 +2447,24 @@ async function loadXP(){
 }
 
 async function earnXP(amount, reason){
-  const now=new Date().toISOString();
-  // 오늘 같은 이유로 중복 지급 방지
-  const today=now.slice(0,10);
-  const{data:existing}=await sb.from('xp_logs').select('id').eq('student_id',U.id).eq('reason',reason).gte('created_at',today).single();
-  if(existing)return; // 이미 받음
-
-  myXP+=amount;
-  const info=getLevelInfo(myXP);
-  const newLevel=info.cur.level;
-  const leveledUp=newLevel>myLevel;
-  myLevel=newLevel;
-
-  // DB 업데이트
-  const{data:ex}=await sb.from('user_xp').select('id').eq('student_id',U.id).single();
-  if(ex)await sb.from('user_xp').update({total_xp:myXP,level:myLevel,updated_at:now}).eq('student_id',U.id);
-  else await sb.from('user_xp').insert({student_id:U.id,total_xp:myXP,level:myLevel});
-  await sb.from('xp_logs').insert({student_id:U.id,xp:amount,reason,created_at:now});
-
-  renderXPBar();
-  showXPToast(amount, reason);
-  if(leveledUp)setTimeout(()=>showLevelUp(info.cur),800);
+  try{
+    const now=new Date().toISOString();
+    const today=now.slice(0,10);
+    const{data:existing}=await sb.from('xp_logs').select('id').eq('student_id',U.id).eq('reason',reason).gte('created_at',today).single();
+    if(existing)return;
+    myXP+=amount;
+    const info=getLevelInfo(myXP);
+    const newLevel=info.cur.level;
+    const leveledUp=newLevel>myLevel;
+    myLevel=newLevel;
+    const{data:ex}=await sb.from('user_xp').select('id').eq('student_id',U.id).single();
+    if(ex)await sb.from('user_xp').update({total_xp:myXP,level:myLevel,updated_at:now}).eq('student_id',U.id);
+    else await sb.from('user_xp').insert({student_id:U.id,total_xp:myXP,level:myLevel});
+    await sb.from('xp_logs').insert({student_id:U.id,xp:amount,reason,created_at:now});
+    renderXPBar();
+    showXPToast(amount,reason);
+    if(leveledUp)setTimeout(()=>showLevelUp(info.cur),800);
+  }catch(e){console.warn('XP 획득 실패',e);}
 }
 
 function renderXPBar(){
