@@ -356,8 +356,6 @@ function doUpdate(){
         <button class="tbn on" onclick="rectab('v',this)">단어</button>
         <button class="tbn" onclick="rectab('r',this)">리뷰</button>
       </div>
-      <!-- 레벨 로드맵 -->
-      <div id="xp-record-wrap" style="margin-bottom:12px;"></div>
       <div id="rec-v">
         <!-- 연속학습 -->
         <div id="rec-streak" style="margin-bottom:10px;"></div>
@@ -1258,7 +1256,6 @@ async function lRec(){
   await calcStreak();
   // 7일 차트
   renderWeekChart();
-  renderXPRecord();
 }
 async function calcStreak(){
   const{data}=await sb.from('review_logs').select('completed_at').eq('student_id',U.id).eq('completed',true).order('completed_at',{ascending:false});
