@@ -264,6 +264,8 @@ function doUpdate(){
 
     <!-- HOME -->
     <div id="ph" class="pg on">
+      <!-- XP 바 -->
+      <div id="xp-bar-wrap" style="padding:14px 14px 0;"></div>
       <!-- 오늘 체크리스트 -->
       <div id="home-todo"></div>
       <!-- 달력 -->
@@ -354,6 +356,8 @@ function doUpdate(){
         <button class="tbn on" onclick="rectab('v',this)">단어</button>
         <button class="tbn" onclick="rectab('r',this)">리뷰</button>
       </div>
+      <!-- 레벨 로드맵 -->
+      <div id="xp-record-wrap" style="margin-bottom:12px;"></div>
       <div id="rec-v">
         <!-- 연속학습 -->
         <div id="rec-streak" style="margin-bottom:10px;"></div>
@@ -409,6 +413,22 @@ function doUpdate(){
 
       <!-- 레슨 -->
       <div id="ad-ls" style="display:none;">
+        <!-- ✨ AI 자동 가공 섹션 -->
+        <div style="background:linear-gradient(135deg,#1D9E75,#159468);border-radius:14px;padding:14px;margin-bottom:14px;color:#fff;">
+          <div style="font-size:13px;font-weight:700;margin-bottom:4px;">✨ AI 자동 가공</div>
+          <div style="font-size:11px;opacity:.85;margin-bottom:10px;">수업 스크립트를 붙여넣으면 단어·빈칸문제·응용가이드를 자동으로 만들어줘요</div>
+          <textarea id="ai-raw-script" placeholder="PPT에서 수업 내용을 복사해서 붙여넣으세요&#10;&#10;예:&#10;Pattern ① be a natural&#10;뜻: 타고난 재능이 있다&#10;She's a natural at teaching.&#10;You're a natural leader.&#10;..." style="background:rgba(255,255,255,.15);border:1.5px solid rgba(255,255,255,.3);color:#fff;height:100px;margin-bottom:9px;font-size:12px;::placeholder-color:rgba(255,255,255,.6);"></textarea>
+          <style>#ai-raw-script::placeholder{color:rgba(255,255,255,.6);}</style>
+          <button onclick="aiProcessScript()" id="ai-process-btn" style="width:100%;padding:11px;border-radius:11px;background:#fff;color:#085041;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">
+            🤖 AI로 자동 생성하기
+          </button>
+        </div>
+
+        <!-- AI 결과 미리보기 -->
+        <div id="ai-result" style="display:none;margin-bottom:14px;"></div>
+
+        <div class="dv"></div>
+
         <div style="font-size:13px;font-weight:600;margin-bottom:9px;" id="ls-form-title">새 토픽 등록</div>
         <input class="inp" type="text" id="lt" placeholder="토픽 제목 (예: KPop Demon Hunters)">
         <input class="inp" type="url" id="lu" placeholder="GitHub URL">
@@ -426,9 +446,14 @@ function doUpdate(){
         <div style="font-size:12px;font-weight:600;margin-bottom:4px;margin-top:4px;">✍️ 5·7회차 응용 가이드 <span style="font-size:11px;font-weight:400;color:var(--mu);">(선택)</span></div>
         <input class="inp" type="text" id="ls-guide" placeholder="예: I can't resist ___ 로 나만의 문장을 만들어보세요">
 
+        <div style="font-size:12px;font-weight:600;margin-bottom:4px;margin-top:4px;">💡 핵심 표현 카드 <span style="font-size:11px;font-weight:400;color:var(--mu);">(5·7회차 응용 시 표시, 선택)</span></div>
+        <div style="font-size:11px;color:var(--mu);margin-bottom:7px;">영어,한국어 형식으로 줄마다 입력 (최대 10개)</div>
+        <textarea id="ls-expressions" placeholder="be a natural,타고난 재능이 있다&#10;light up,얼굴이 환해지다&#10;jealous of,~가 부럽다" style="height:90px;"></textarea>
+
         <div id="ls-form-btns">
           <button class="btn btn-p" onclick="saveLesson()">토픽 등록</button>
         </div>
+        <div id="ai-vocab-preview" style="display:none;"></div>
         <div class="dv"></div>
         <div style="font-size:13px;font-weight:600;margin-bottom:9px;">등록된 토픽</div>
         <div id="lslist"><div class="loading">로딩중...</div></div>
@@ -604,6 +629,7 @@ async function initApp(u){
     loaded.vocab=true;
     loaded.review=true;
     loaded.record=true;
+    await loadXP();
     buildHomeTodo();
   }
 }
@@ -801,6 +827,8 @@ async function anFC(ok){
   c.box_level=nb;
   if(ok)doneToday++;
   ci++;fl=false;
+  // 오늘 처음 단어 완료 시 XP
+  if(doneToday===1)earnXP(XP_TABLE.vocab,'vocab_today_'+new Date().toISOString().slice(0,10));
   renderVHead();renderFC();
 }
 function vtab(t,b){
@@ -1003,58 +1031,89 @@ async function tapRSC(n){
   else await sb.from('review_logs').insert({student_id:U.id,lesson_id:ses.lid,review_round:ses.round,count:n,completed:done,completed_at:done?now:null});
   renderRSC(n);
   if(done){
+    earnXP(XP_TABLE.follow,'follow_complete_'+ses.lid+'_'+ses.round);
     tst('5회 달성! 따라하기 완료!');
     setTimeout(()=>{cses();refreshReview().then(autoNextReview);lCal();lRec();buildHomeTodo();},1200);
   }
 }
 
 // ── 3회차: 내용 암기 ──
-// ── 3회차: 빈칸 채우기 암기 ──
+// ── 3회차: 한글→영어 말하기 확인 ──
 function renderBotMemorize(lesson, existingSub){
   const bot=document.getElementById('rs-bot');
-  if(!lesson?.blanks){
-    if(existingSub?.completed){
-      bot.innerHTML=`<div style="display:flex;align-items:center;gap:10px;padding:4px 0;">
-        <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#FFB347,#E8940A);display:flex;align-items:center;justify-content:center;box-shadow:0 3px 10px rgba(255,179,71,.4);">
-          <svg width="16" height="16" viewBox="0 0 16 16"><polyline points="2,8 6,13 14,3" fill="none" stroke="white" stroke-width="2.5"/></svg>
-        </div>
-        <div><div style="font-size:13px;font-weight:700;color:#854F0B;">암기 완료!</div><div style="font-size:10px;color:#A0622E;margin-top:1px;">선생님이 확인할 거예요</div></div>
-      </div>`;
-      return;
-    }
+
+  // 스크립트 없으면 안내
+  if(!lesson?.blanks&&!lesson?.script){
     bot.innerHTML=`<div style="background:#FFF8F0;border-radius:12px;padding:11px 13px;border:1.5px solid #FAC775;">
-      <div style="font-size:11px;color:#854F0B;font-weight:600;">📌 스크립트가 아직 등록되지 않았어요</div>
-      <div style="font-size:10px;color:#A0622E;margin-top:3px;">선생님이 레슨 탭에서 스크립트를 등록하면 빈칸 채우기가 활성화돼요</div>
+      <div style="font-size:11px;color:#854F0B;font-weight:600;">📌 암기 스크립트가 등록되지 않았어요</div>
+      <div style="font-size:10px;color:#A0622E;margin-top:3px;">선생님이 레슨 탭에서 등록하면 활성화돼요</div>
     </div>`;
     return;
   }
-  let blanks;
-  try{blanks=JSON.parse(lesson.blanks);}catch{blanks=null;}
-  if(!blanks){bot.innerHTML='<div class="empty">스크립트 오류</div>';return;}
+
+  // 완료 상태
   if(existingSub?.completed){
     const score=existingSub.score||0;
-    bot.innerHTML=`<div style="background:${score>=60?'#F0FAF6':'#FFF8F0'};border-radius:12px;padding:12px 13px;border:1.5px solid ${score>=60?'#C0E8D8':'#FAC775'};">
+    bot.innerHTML=`<div style="background:#F0FAF6;border-radius:12px;padding:12px 13px;border:1.5px solid #C0E8D8;">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">
-        <div style="font-size:13px;font-weight:700;color:${score>=60?'#085041':'#854F0B'};">${score>=60?'✅ 암기 완료!':'📝 제출 완료'}</div>
-        <div style="font-size:16px;font-weight:800;color:${score>=60?'#085041':'#854F0B'};">${score}점</div>
+        <div style="font-size:13px;font-weight:700;color:#085041;">✅ 암기 완료!</div>
+        <div style="font-size:16px;font-weight:800;color:#085041;">${score}점</div>
       </div>
-      <div style="font-size:10px;color:${score>=60?'#0F6E56':'#A0622E'};">${score>=60?'훌륭해요! 선생님이 확인할 거예요':'조금 더 연습해봐요!'}</div>
+      <div style="font-size:10px;color:#0F6E56;">선생님이 확인할 거예요</div>
       ${score<60?`<button onclick="retryMemorize()" style="margin-top:9px;width:100%;padding:9px;border-radius:9px;background:linear-gradient(135deg,#FFB347,#E8940A);color:#fff;border:none;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">다시 도전하기</button>`:''}
     </div>`;
     return;
   }
-  const script=blanks.script||'';
-  const answers=blanks.answers||[];
-  let qNum=0;
-  const rendered=script.replace(/___/g,()=>{
-    const n=qNum++;
-    return `<input id="blank-${n}" type="text" placeholder="${n+1}번" style="display:inline-block;width:90px;padding:4px 8px;border:1.5px solid #FAC775;border-radius:7px;font-size:13px;text-align:center;font-family:inherit;background:#fff;">`;
-  });
-  const answersJson=JSON.stringify(answers).replace(/"/g,'\"');
-  bot.innerHTML=`
-    <div style="font-size:11px;color:var(--mu);text-align:center;margin-bottom:9px;font-weight:500;">빈칸을 <strong style="color:#854F0B;">채워보세요</strong> — 영상 없이!</div>
-    <div style="background:#FFF8F0;border-radius:12px;padding:13px;border:1.5px solid #FAC775;margin-bottom:10px;font-size:13px;line-height:2.2;color:#1a1a1a;">${rendered}</div>
-    <button onclick='submitMemorize(${answersJson})' style="width:100%;padding:12px;border-radius:12px;background:linear-gradient(135deg,#FFB347,#E8940A);color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 4px 14px rgba(255,179,71,.35);">제출하기</button>`;
+
+  // 스크립트 파싱 — blanks 우선, 없으면 script 그대로
+  let sentences=[];
+  if(lesson.blanks){
+    try{
+      const b=JSON.parse(lesson.blanks);
+      const answers=b.answers||[];
+      // 빈칸 있는 문장을 한글/영어 쌍으로
+      const scriptText=b.script||lesson.script||'';
+      sentences=[{korean:'위 영상의 핵심 문장을 말해보세요',english:scriptText,answers}];
+    }catch{}
+  }
+  if(!sentences.length&&lesson.script){
+    sentences=[{korean:'위 영상의 핵심 문장을 말해보세요',english:lesson.script,answers:[]}];
+  }
+
+  // 한글→영어 말하기 UI
+  let curIdx=0;
+  const renderSentence=(idx)=>{
+    const s=sentences[idx]||sentences[0];
+    const hasAnswers=s.answers?.length>0;
+    bot.innerHTML=`
+      <div style="font-size:11px;color:var(--mu);text-align:center;margin-bottom:9px;font-weight:500;">
+        한글을 보고 <strong style="color:#854F0B;">영어로 말해보세요</strong>
+      </div>
+      <div style="background:#FFF8F0;border-radius:12px;padding:13px;border:1.5px solid #FAC775;margin-bottom:8px;">
+        <div style="font-size:11px;color:#854F0B;font-weight:700;margin-bottom:6px;">🇰🇷 한국어</div>
+        <div style="font-size:13px;color:#1a1a1a;line-height:1.8;font-weight:600;">${s.korean}</div>
+      </div>
+      <div id="answer-reveal" style="display:none;background:#F0FAF6;border-radius:12px;padding:13px;border:1.5px solid #C0E8D8;margin-bottom:8px;">
+        <div style="font-size:11px;color:#085041;font-weight:700;margin-bottom:6px;">🇺🇸 영어 정답</div>
+        <div style="font-size:13px;color:#085041;line-height:1.8;font-weight:600;">${s.english}</div>
+        ${hasAnswers?`<div style="font-size:10px;color:#0F6E56;margin-top:5px;">핵심 표현: ${s.answers.join(', ')}</div>`:''}
+      </div>
+      <button id="reveal-btn" onclick="document.getElementById('answer-reveal').style.display='block';document.getElementById('reveal-btn').style.display='none';document.getElementById('check-btns').style.display='grid';"
+        style="width:100%;padding:11px;border-radius:11px;background:#FFF8F0;color:#854F0B;border:1.5px solid #FAC775;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:8px;">
+        정답 확인하기
+      </button>
+      <div id="check-btns" style="display:none;grid-template-columns:1fr 1fr;gap:9px;">
+        <button onclick="tapMemorizeCheck(false)" style="padding:13px;border-radius:12px;background:#FFF0F0;border:none;cursor:pointer;font-family:inherit;">
+          <div style="font-size:13px;font-weight:700;color:#C0392B;">모르겠어요</div>
+          <div style="font-size:10px;color:#E0837B;margin-top:2px;">다시 연습할게요</div>
+        </button>
+        <button onclick="tapMemorizeCheck(true)" style="padding:13px;border-radius:12px;background:linear-gradient(135deg,#FFB347,#E8940A);border:none;cursor:pointer;font-family:inherit;box-shadow:0 4px 12px rgba(255,179,71,.35);">
+          <div style="font-size:13px;font-weight:700;color:#fff;">알겠어요! ✓</div>
+          <div style="font-size:10px;color:rgba(255,255,255,.8);margin-top:2px;">완료로 기록</div>
+        </button>
+      </div>`;
+  };
+  renderSentence(0);
 }
 
 function retryMemorize(){
@@ -1063,90 +1122,95 @@ function retryMemorize(){
   renderBotMemorize(l,null);
 }
 
-async function submitMemorize(answers){
+async function tapMemorizeCheck(ok){
   if(!ses)return;
-  const total=answers.length;
-  let correct=0;
-  const results=answers.map((ans,i)=>{
-    const input=document.getElementById(`blank-${i}`)?.value?.trim()?.toLowerCase()||'';
-    const isOk=input===ans.toLowerCase()||(ans.toLowerCase().includes(input)&&input.length>=3);
-    if(isOk)correct++;
-    return{input,answer:ans,ok:isOk};
-  });
-  const score=total?Math.round(correct/total*100):0;
   const now=new Date().toISOString();
-  const subData={student_id:U.id,lesson_id:ses.lid,review_round:ses.round,hw_type:'memorize',content:JSON.stringify(results),score,completed:score>=60,submitted_at:now};
+  const score=ok?100:0;
+  const subData={student_id:U.id,lesson_id:ses.lid,review_round:ses.round,hw_type:'memorize',content:ok?'알겠어요':'모르겠어요',score,completed:ok,submitted_at:now};
   const{data:exS}=await sb.from('hw_submissions').select('id').eq('student_id',U.id).eq('lesson_id',ses.lid).eq('review_round',ses.round).single();
   if(exS)await sb.from('hw_submissions').update(subData).eq('id',exS.id);
   else await sb.from('hw_submissions').insert(subData);
-  const done=score>=60;
   const{data:exL}=await sb.from('review_logs').select('id').eq('student_id',U.id).eq('lesson_id',ses.lid).eq('review_round',ses.round).single();
-  if(exL)await sb.from('review_logs').update({count:done?5:correct,completed:done,completed_at:done?now:null}).eq('id',exL.id);
-  else await sb.from('review_logs').insert({student_id:U.id,lesson_id:ses.lid,review_round:ses.round,count:done?5:correct,completed:done,completed_at:done?now:null});
-  tst(done?`${score}점! 암기 완료! 🎉`:`${score}점. ${correct}/${total} 맞았어요. 다시 도전!`);
-  renderBotMemorize(les.find(x=>x.id===ses.lid),subData);
-  if(done){setTimeout(()=>{refreshReview();lCal();lRec();buildHomeTodo();},1400);}
+  if(exL)await sb.from('review_logs').update({count:ok?5:1,completed:ok,completed_at:ok?now:null}).eq('id',exL.id);
+  else await sb.from('review_logs').insert({student_id:U.id,lesson_id:ses.lid,review_round:ses.round,count:ok?5:1,completed:ok,completed_at:ok?now:null});
+  if(ok){
+    earnXP(XP_TABLE.memorize,'memorize_complete_'+ses.lid);
+    tst('암기 완료! 💪');
+    renderBotMemorize(les.find(x=>x.id===ses.lid),subData);
+    setTimeout(()=>{refreshReview();lCal();lRec();buildHomeTodo();},1400);
+  } else {
+    tst('괜찮아요! 영상 다시 보고 도전해요');
+    renderBotMemorize(les.find(x=>x.id===ses.lid),null);
+  }
 }
 
-// ── 5·7회차: 표현 응용 + AI 채점 ──
+// submitMemorize 제거 — tapMemorizeCheck로 대체
+function submitMemorize(){tapMemorizeCheck(true);}
+
+
+// ── 5·7회차: 핵심 표현 카드 + 문장 제출 ──
 function renderBotApply(lesson, existingSub){
   const bot=document.getElementById('rs-bot');
-  const guide=lesson?.guide||'배운 표현으로 나만의 문장을 만들어보세요';
+
+  // 핵심 표현 파싱
+  let expressions=[];
+  if(lesson?.key_expressions){
+    try{expressions=JSON.parse(lesson.key_expressions);}catch{}
+  }
+  // key_expressions 없으면 vocab에서 가져오기
+  if(!expressions.length&&lesson?.blanks){
+    try{const b=JSON.parse(lesson.blanks);if(b.answers)expressions=b.answers.map(a=>({english:a,korean:''}));}catch{}
+  }
+
   if(existingSub?.completed){
-    const content=existingSub.content||'';
-    const feedback=existingSub.feedback||'';
-    const score=existingSub.score||0;
     bot.innerHTML=`<div style="background:#F0FAF6;border-radius:12px;padding:12px 13px;border:1.5px solid #C0E8D8;">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;">
-        <div style="font-size:12px;font-weight:700;color:#085041;">✅ 제출 완료</div>
-        <div style="font-size:14px;font-weight:800;color:${score>=70?'#085041':'#854F0B'};">${score}점</div>
-      </div>
-      <div style="font-size:12px;color:#1a1a1a;font-style:italic;line-height:1.7;margin-bottom:${feedback?'7px':'0'};">"${content}"</div>
-      ${feedback?`<div style="background:#E1F5EE;border-radius:8px;padding:8px 10px;font-size:11px;color:#085041;line-height:1.7;">${feedback}</div>`:''}
+      <div style="font-size:12px;font-weight:700;color:#085041;margin-bottom:6px;">✅ 제출 완료!</div>
+      <div style="font-size:12px;color:#1a1a1a;font-style:italic;line-height:1.7;">"${existingSub.content||''}"</div>
     </div>`;
     return;
   }
+
+  const guide=lesson?.guide||'배운 핵심 표현을 사용해서 자신만의 문장을 말해보세요';
+  const expCards=expressions.slice(0,10).map(e=>`
+    <div style="background:#fff;border-radius:10px;padding:9px 11px;border:1.5px solid #EDE8DF;display:flex;align-items:center;gap:8px;box-shadow:0 1px 4px rgba(0,0,0,.05);">
+      <div style="flex:1;">
+        <div style="font-size:12px;font-weight:700;color:#111;">${e.english}</div>
+        ${e.korean?`<div style="font-size:10px;color:var(--mu);margin-top:1px;">${e.korean}</div>`:''}
+      </div>
+    </div>`).join('');
+
   bot.innerHTML=`
-    <div style="font-size:11px;color:var(--mu);text-align:center;margin-bottom:8px;font-weight:500;">✍️ <strong style="color:var(--gd);">나만의 문장</strong>을 영어로 써보세요</div>
-    <div style="background:#F0FAF6;border-radius:10px;padding:9px 12px;border:1.5px solid #C0E8D8;margin-bottom:8px;font-size:11px;color:#085041;font-weight:600;">💡 ${guide}</div>
-    <textarea id="apply-input" placeholder="여기에 영어 문장을 써보세요..." style="height:68px;margin-bottom:8px;font-size:13px;line-height:1.6;"></textarea>
-    <button onclick="tapApply()" style="width:100%;padding:12px;border-radius:12px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 4px 14px rgba(29,158,117,.3);">AI 채점 받기 →</button>`;
+    <div style="font-size:11px;color:var(--mu);text-align:center;margin-bottom:9px;font-weight:500;">
+      핵심 표현을 보고 <strong style="color:var(--gd);">나만의 문장</strong>으로 말해보세요
+    </div>
+    ${expressions.length?`
+    <div style="font-size:10px;font-weight:700;color:var(--mu);margin-bottom:6px;">💡 핵심 표현</div>
+    <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:10px;">${expCards}</div>`:''}
+    <div style="font-size:10px;color:#085041;background:#F0FAF6;border-radius:9px;padding:8px 11px;margin-bottom:8px;font-weight:600;border:1.5px solid #C0E8D8;">
+      ✍️ ${guide}
+    </div>
+    <textarea id="apply-input" placeholder="만든 문장을 영어로 써보세요..." style="height:65px;margin-bottom:8px;font-size:13px;line-height:1.6;"></textarea>
+    <button onclick="tapApply()" style="width:100%;padding:12px;border-radius:12px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 4px 14px rgba(29,158,117,.3);">
+      제출하기 →
+    </button>`;
 }
 
 async function tapApply(){
   if(!ses)return;
   const txt=document.getElementById('apply-input')?.value?.trim();
   if(!txt||txt.length<3){tst('문장을 입력해주세요');return;}
-  const lesson=les.find(x=>x.id===ses.lid);
-  const guide=lesson?.guide||'배운 표현 사용';
-  const btn=document.querySelector('#rs-bot button:last-child');
-  if(btn){btn.textContent='AI 채점 중...';btn.disabled=true;}
-  try{
-    const res=await fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:300,
-        messages:[{role:'user',content:`영어 말하기 과제 평가\n가이드: ${guide}\n레슨: ${lesson?.title||''} \n제출: "${txt}"\n\nJSON으로만: {"score":0-100,"feedback":"한국어 2문장 이내 격려 포함"}`}]})
-    });
-    const data=await res.json();
-    const result=JSON.parse((data.content?.[0]?.text||'{"score":60,"feedback":"잘 했어요!"}').replace(/```json|```/g,'').trim());
-    const score=result.score||60;
-    const feedback=result.feedback||'잘 했어요!';
-    const now=new Date().toISOString();
-    const subData={student_id:U.id,lesson_id:ses.lid,review_round:ses.round,hw_type:'apply',content:txt,score,feedback,completed:true,ai_checked:true,submitted_at:now};
-    const{data:exS}=await sb.from('hw_submissions').select('id').eq('student_id',U.id).eq('lesson_id',ses.lid).eq('review_round',ses.round).single();
-    if(exS)await sb.from('hw_submissions').update(subData).eq('id',exS.id);
-    else await sb.from('hw_submissions').insert(subData);
-    const{data:exL}=await sb.from('review_logs').select('id').eq('student_id',U.id).eq('lesson_id',ses.lid).eq('review_round',ses.round).single();
-    if(exL)await sb.from('review_logs').update({count:5,completed:true,completed_at:now}).eq('id',exL.id);
-    else await sb.from('review_logs').insert({student_id:U.id,lesson_id:ses.lid,review_round:ses.round,count:5,completed:true,completed_at:now});
-    tst(`${score}점! 제출 완료 🎉`);
-    renderBotApply(lesson,subData);
-    refreshReview();lCal();lRec();buildHomeTodo();
-  }catch(e){
-    tst('채점 실패. 다시 시도해주세요');
-    const btn2=document.querySelector('#rs-bot button:last-child');
-    if(btn2){btn2.textContent='AI 채점 받기 →';btn2.disabled=false;}
-  }
+  const now=new Date().toISOString();
+  const subData={student_id:U.id,lesson_id:ses.lid,review_round:ses.round,hw_type:'apply',content:txt,score:null,completed:true,submitted_at:now};
+  const{data:exS}=await sb.from('hw_submissions').select('id').eq('student_id',U.id).eq('lesson_id',ses.lid).eq('review_round',ses.round).single();
+  if(exS)await sb.from('hw_submissions').update(subData).eq('id',exS.id);
+  else await sb.from('hw_submissions').insert(subData);
+  const{data:exL}=await sb.from('review_logs').select('id').eq('student_id',U.id).eq('lesson_id',ses.lid).eq('review_round',ses.round).single();
+  if(exL)await sb.from('review_logs').update({count:5,completed:true,completed_at:now}).eq('id',exL.id);
+  else await sb.from('review_logs').insert({student_id:U.id,lesson_id:ses.lid,review_round:ses.round,count:5,completed:true,completed_at:now});
+  earnXP(XP_TABLE.apply,'apply_complete_'+ses.lid+'_'+ses.round);
+  tst('제출 완료! 훌륭해요 🎉');
+  renderBotApply(les.find(x=>x.id===ses.lid),subData);
+  refreshReview();lCal();lRec();buildHomeTodo();
 }
 
 
@@ -1194,6 +1258,7 @@ async function lRec(){
   await calcStreak();
   // 7일 차트
   renderWeekChart();
+  renderXPRecord();
 }
 async function calcStreak(){
   const{data}=await sb.from('review_logs').select('completed_at').eq('student_id',U.id).eq('completed',true).order('completed_at',{ascending:false});
@@ -1254,7 +1319,51 @@ function renderWeekChart(){
       </div>`).join('')}</div>`;
   }
 }
-function rectab(t,b){
+function renderXPRecord(){
+  const el=document.getElementById('xp-record-wrap');if(!el)return;
+  const info=getLevelInfo(myXP);
+  const cur=info.cur,next=info.next;
+  const pct=next?Math.round((myXP-cur.xp)/(next.xp-cur.xp)*100):100;
+  el.innerHTML=`
+    <div style="background:linear-gradient(135deg,#1a2940,#243054);border-radius:16px;padding:14px;margin-bottom:10px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <div style="display:flex;align-items:center;gap:9px;">
+          <div style="width:38px;height:38px;border-radius:11px;background:linear-gradient(135deg,#FFB347,#E8940A);display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 3px 10px rgba(255,179,71,.4);">${cur.emoji}</div>
+          <div>
+            <div style="font-size:10px;color:rgba(255,255,255,.5);font-weight:600;">LEVEL ${cur.level}</div>
+            <div style="font-size:15px;font-weight:800;color:#fff;">${cur.name}</div>
+          </div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:20px;font-weight:800;color:#FFB347;">${myXP.toLocaleString()}</div>
+          <div style="font-size:9px;color:rgba(255,255,255,.4);">XP</div>
+        </div>
+      </div>
+      <div style="background:rgba(255,255,255,.1);border-radius:99px;height:6px;margin-bottom:4px;">
+        <div style="background:linear-gradient(90deg,#FFB347,#FFD700);border-radius:99px;height:6px;width:${pct}%;box-shadow:0 0 8px rgba(255,179,71,.4);"></div>
+      </div>
+      <div style="font-size:9px;color:rgba(255,255,255,.35);text-align:right;">${next?`다음 레벨까지 ${(next.xp-myXP).toLocaleString()} XP`:'🏆 최고 레벨 달성!'}</div>
+    </div>
+    <div style="font-size:11px;font-weight:700;color:var(--mu);margin-bottom:8px;letter-spacing:.04em;">레벨 로드맵</div>
+    <div style="display:flex;flex-direction:column;gap:5px;">
+      ${LEVELS.map(lv=>{
+        const done=myXP>=lv.xp;
+        const isCur=lv.level===cur.level;
+        return`<div style="display:flex;align-items:center;gap:9px;padding:9px 11px;border-radius:11px;background:${isCur?'linear-gradient(135deg,#1a2940,#243054)':done?'#F0FAF6':'#F5F3F0'};border:${isCur?'2px solid #FFB347':done?'1.5px solid #C0E8D8':'1.5px solid #EDE8DF'};opacity:${done||isCur?1:0.55};">
+          <div style="width:32px;height:32px;border-radius:9px;background:${isCur?'linear-gradient(135deg,#FFB347,#E8940A)':done?'linear-gradient(135deg,#1D9E75,#159468)':'#E8E4DC'};display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">${lv.emoji}</div>
+          <div style="flex:1;">
+            <div style="font-size:12px;font-weight:700;color:${isCur?'#fff':done?'#085041':'#888'};">Lv.${lv.level} ${lv.name}</div>
+            <div style="font-size:9px;color:${isCur?'rgba(255,255,255,.5)':done?'#0F6E56':'#BBB'};">${lv.xp.toLocaleString()} XP${lv.level===6?'':'~'}</div>
+          </div>
+          ${isCur?`<div style="font-size:9px;font-weight:700;color:#FFB347;background:rgba(255,179,71,.15);padding:2px 8px;border-radius:99px;">진행중</div>`:
+            done?`<div style="width:18px;height:18px;border-radius:50%;background:#1D9E75;display:flex;align-items:center;justify-content:center;"><svg width="10" height="10" viewBox="0 0 10 10"><polyline points="1.5,5 4,8 8.5,2" fill="none" stroke="white" stroke-width="2"/></svg></div>`:
+            `<div style="font-size:9px;color:#CCC;">🔒</div>`}
+        </div>`;
+      }).join('')}
+    </div>`;
+}
+
+
   document.querySelectorAll('#prc>.tbb .tbn').forEach(x=>x.classList.remove('on'));
   if(b)b.classList.add('on');
   document.getElementById('rec-v').style.display=t==='v'?'block':'none';
@@ -1705,6 +1814,159 @@ function adTab(t,b){
   if(t==='vo'){rVTgt();rExtractLes();}
 }
 
+// ── AI 자동 가공 ──
+let aiGenerated=null;// 생성된 결과 저장
+
+async function aiProcessScript(){
+  const raw=document.getElementById('ai-raw-script')?.value?.trim();
+  if(!raw||raw.length<20){tst('스크립트를 입력해주세요');return;}
+  const btn=document.getElementById('ai-process-btn');
+  btn.textContent='🤖 분석 중...';btn.disabled=true;
+  document.getElementById('ai-result').style.display='none';
+
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-20250514',max_tokens:2000,
+        messages:[{role:'user',content:`당신은 영어 말하기 수업 자료 분석 전문가입니다.
+
+아래는 수업 스크립트입니다. 이것을 분석해서 JSON으로만 응답하세요 (다른 텍스트 없이):
+
+${raw}
+
+다음 형식으로 추출하세요:
+{
+  "title": "레슨 제목 (영어 에피소드명 또는 주제)",
+  "vocab": [
+    {"english": "단어/표현", "korean": "한국어 뜻"}
+  ],
+  "script": "3회차 암기용 핵심 문장 1-2개. 빈칸은 ___ 로 표시. 너무 길지 않게 (30단어 이내)",
+  "answers": ["빈칸1정답", "빈칸2정답"],
+  "guide": "5·7회차 응용 가이드 (예: 'be a natural' 을 사용해서 자신의 문장을 만들어보세요)",
+  "key_expressions": ["핵심표현1", "핵심표현2"]
+}
+
+주의:
+- vocab은 핵심 표현 위주로 8-12개
+- script는 수업에서 가장 인상적인 대사 1-2문장, ___로 핵심 단어 2-3개 빈칸 처리
+- answers는 빈칸 순서대로
+- guide는 핵심 표현을 활용한 응용 문장 만들기 지시`}]
+      })
+    });
+    const data=await res.json();
+    const text=data.content?.[0]?.text||'{}';
+    const result=JSON.parse(text.replace(/```json|```/g,'').trim());
+    aiGenerated=result;
+    renderAIResult(result);
+  }catch(e){
+    tst('AI 분석 실패. 다시 시도해주세요');
+    console.error(e);
+  }
+  btn.textContent='🤖 AI로 자동 생성하기';btn.disabled=false;
+}
+
+function renderAIResult(r){
+  const el=document.getElementById('ai-result');
+  el.style.display='block';
+  el.innerHTML=`
+    <div style="background:#F0FAF6;border-radius:14px;padding:14px;border:1.5px solid #C0E8D8;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <div style="font-size:13px;font-weight:700;color:#085041;">✅ AI 분석 완료</div>
+        <button onclick="applyAIResult()" style="padding:7px 14px;border-radius:9px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 3px 10px rgba(29,158,117,.3);">폼에 적용하기</button>
+      </div>
+
+      <!-- 제목 -->
+      <div style="margin-bottom:10px;">
+        <div style="font-size:11px;font-weight:700;color:var(--mu);margin-bottom:3px;">📌 추출된 제목</div>
+        <div style="font-size:13px;font-weight:600;color:#1a1a1a;">${r.title||'-'}</div>
+      </div>
+
+      <!-- 단어 -->
+      <div style="margin-bottom:10px;">
+        <div style="font-size:11px;font-weight:700;color:var(--mu);margin-bottom:6px;">📚 추출된 단어 ${(r.vocab||[]).length}개</div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap;">
+          ${(r.vocab||[]).map(v=>`<div style="background:#fff;border-radius:9px;padding:5px 10px;border:1.5px solid #C0E8D8;font-size:11px;">
+            <span style="font-weight:600;">${v.english}</span>
+            <span style="color:var(--mu);margin-left:4px;">${v.korean}</span>
+          </div>`).join('')}
+        </div>
+      </div>
+
+      <!-- 빈칸 스크립트 -->
+      <div style="margin-bottom:10px;">
+        <div style="font-size:11px;font-weight:700;color:var(--mu);margin-bottom:4px;">📖 3회차 빈칸 문제</div>
+        <div style="background:#FFF8F0;border-radius:9px;padding:10px 12px;border:1.5px solid #FAC775;font-size:12px;line-height:1.8;color:#1a1a1a;">${r.script||'-'}</div>
+        <div style="font-size:10px;color:var(--mu);margin-top:4px;">정답: ${(r.answers||[]).join(', ')}</div>
+      </div>
+
+      <!-- 응용 가이드 -->
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--mu);margin-bottom:4px;">✍️ 5·7회차 응용 가이드</div>
+        <div style="background:#E1F5EE;border-radius:9px;padding:9px 12px;border:1.5px solid #C0E8D8;font-size:12px;color:#085041;font-weight:600;">${r.guide||'-'}</div>
+      </div>
+    </div>`;
+}
+
+async function applyAIResult(){
+  if(!aiGenerated)return;
+  const r=aiGenerated;
+  // 제목 적용
+  if(r.title&&!document.getElementById('lt').value){
+    document.getElementById('lt').value=r.title;
+  }
+  // 스크립트 적용
+  if(r.script&&document.getElementById('ls-script')){
+    document.getElementById('ls-script').value=r.script;
+  }
+  // 정답 적용
+  if(r.answers&&document.getElementById('ls-answers')){
+    document.getElementById('ls-answers').value=(r.answers||[]).join(', ');
+  }
+  // 응용 가이드 적용
+  if(r.guide&&document.getElementById('ls-guide')){
+    document.getElementById('ls-guide').value=r.guide;
+  }
+  // 핵심 표현 적용
+  if(r.key_expressions?.length&&document.getElementById('ls-expressions')){
+    document.getElementById('ls-expressions').value=r.key_expressions.map(e=>e.english+(e.korean?','+e.korean:'')).join('\n');
+  }
+  tst('폼에 적용됐어요! 단어는 토픽 등록 후 추가해주세요');
+
+  // 단어 미리보기 표시
+  if(r.vocab?.length){
+    const vocabPreview=document.getElementById('ai-vocab-preview');
+    if(vocabPreview){
+      vocabPreview.style.display='block';
+      vocabPreview.innerHTML=`<div style="background:#F0FAF6;border-radius:11px;padding:11px;border:1.5px solid #C0E8D8;margin-top:10px;">
+        <div style="font-size:11px;font-weight:700;color:#085041;margin-bottom:7px;">단어 ${r.vocab.length}개 — 토픽 등록 후 자동 추가</div>
+        <div style="font-size:10px;color:var(--mu);">대상 학생을 선택 후 "단어 추가" 버튼을 누르세요</div>
+        <select id="ai-vocab-target" style="margin-top:7px;margin-bottom:7px;">
+          <option value="all">전체 학생</option>
+          ${classes.map(c=>`<option value="cls:${c}">${c} 전체</option>`).join('')}
+          ${sts.map(s=>`<option value="${s.id}">${dispName(s.name,s.email)}</option>`).join('')}
+        </select>
+        <button onclick="addAIVocab()" style="width:100%;padding:10px;border-radius:10px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">단어 ${r.vocab.length}개 추가하기</button>
+      </div>`;
+    }
+  }
+}
+
+async function addAIVocab(){
+  if(!aiGenerated?.vocab?.length){tst('추출된 단어가 없어요');return;}
+  const tgt=document.getElementById('ai-vocab-target')?.value||'all';
+  const today=new Date().toISOString().slice(0,10);
+  const targets=tgt==='all'?sts.map(s=>s.id):tgt.startsWith('cls:')?sts.filter(s=>s.class_name===tgt.slice(4)).map(s=>s.id):[tgt];
+  if(!targets.length){tst('대상 학생이 없어요');return;}
+  const rows=[];
+  targets.forEach(sid=>aiGenerated.vocab.forEach(v=>rows.push({student_id:sid,english:v.english,korean:v.korean,box_level:1,next_review:today})));
+  const{error}=await sb.from('vocab_cards').insert(rows);
+  if(error){tst('추가 실패: '+error.message);return;}
+  tst(`${aiGenerated.vocab.length}개 단어를 ${targets.length}명에게 추가했어요! 🎉`);
+  document.getElementById('ai-vocab-preview').style.display='none';
+  aiGenerated=null;
+}
+
 // ── 반관리 ──
 async function rClsList(){
   await loadClasses();
@@ -1878,7 +2140,17 @@ async function saveLesson(){
     blanks=JSON.stringify({script:scriptRaw,answers});
   }
 
-  const lessonData={title:t,url:u,script:scriptRaw||null,blanks,guide:guide||null};
+  // 핵심 표현 파싱
+  const expRaw=document.getElementById('ls-expressions')?.value?.trim()||'';
+  let keyExpressions=null;
+  if(expRaw){
+    const exps=expRaw.split('\n').filter(l=>l.trim()).map(l=>{
+      const p=l.split(',');
+      return p.length>=2?{english:p[0].trim(),korean:p.slice(1).join(',').trim()}:null;
+    }).filter(Boolean).slice(0,10);
+    if(exps.length)keyExpressions=JSON.stringify(exps);
+  }
+  const lessonData={title:t,url:u,script:scriptRaw||null,blanks,guide:guide||null,key_expressions:keyExpressions};
 
   if(editLessonId){
     const{error}=await sb.from('lessons').update(lessonData).eq('id',editLessonId);
@@ -1893,7 +2165,7 @@ async function saveLesson(){
     tst('토픽 등록됐어요!');
   }
   // 폼 초기화
-  ['lt','lu','ls-script','ls-answers','ls-guide'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ['lt','lu','ls-script','ls-answers','ls-guide','ls-expressions'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   editLessonId=null;lsClsState={};
   document.getElementById('ls-form-title').textContent='새 토픽 등록';
   document.getElementById('ls-form-btns').innerHTML='<button class="btn btn-p" onclick="saveLesson()">토픽 등록</button>';
@@ -1907,6 +2179,12 @@ function editLesson(id){
   document.getElementById('lu').value=l.url;
   // 스크립트/빈칸/가이드 불러오기
   if(document.getElementById('ls-script'))document.getElementById('ls-script').value=l.script||'';
+  if(document.getElementById('ls-expressions')&&l.key_expressions){
+    try{
+      const exps=JSON.parse(l.key_expressions);
+      document.getElementById('ls-expressions').value=exps.map(e=>e.english+(e.korean?','+e.korean:'')).join('\n');
+    }catch{}
+  }
   if(document.getElementById('ls-guide'))document.getElementById('ls-guide').value=l.guide||'';
   if(document.getElementById('ls-answers')&&l.blanks){
     try{const b=JSON.parse(l.blanks);document.getElementById('ls-answers').value=(b.answers||[]).join(', ');}catch{}
@@ -2129,6 +2407,125 @@ async function refreshReview(){
 function resetVocab(){
   loaded.vocab=false;
   startVocab();
+}
+
+// ── XP 시스템 ──
+const XP_TABLE = {
+  attend: 10,
+  vocab: 15,
+  follow: 20,
+  memorize: 30,
+  apply: 25,
+  masterWord: 5,
+  streak7: 50,
+  streak30: 200,
+};
+const LEVELS = [
+  {level:1, name:'Rookie',  emoji:'🌱', xp:0},
+  {level:2, name:'Learner', emoji:'📚', xp:500},
+  {level:3, name:'Speaker', emoji:'💬', xp:1500},
+  {level:4, name:'Trainer', emoji:'🔥', xp:3000},
+  {level:5, name:'Fluent',  emoji:'⚡', xp:5000},
+  {level:6, name:'Master',  emoji:'🏆', xp:7000},
+];
+
+let myXP=0, myLevel=1;
+
+function getLevelInfo(xp){
+  let cur=LEVELS[0], next=LEVELS[1];
+  for(let i=0;i<LEVELS.length;i++){
+    if(xp>=LEVELS[i].xp){cur=LEVELS[i];next=LEVELS[i+1]||null;}
+  }
+  return{cur,next};
+}
+
+async function loadXP(){
+  const{data}=await sb.from('user_xp').select('*').eq('student_id',U.id).single();
+  if(data){myXP=data.total_xp||0;myLevel=data.level||1;}
+  else{myXP=0;myLevel=1;}
+  renderXPBar();
+}
+
+async function earnXP(amount, reason){
+  const now=new Date().toISOString();
+  // 오늘 같은 이유로 중복 지급 방지
+  const today=now.slice(0,10);
+  const{data:existing}=await sb.from('xp_logs').select('id').eq('student_id',U.id).eq('reason',reason).gte('created_at',today).single();
+  if(existing)return; // 이미 받음
+
+  myXP+=amount;
+  const info=getLevelInfo(myXP);
+  const newLevel=info.cur.level;
+  const leveledUp=newLevel>myLevel;
+  myLevel=newLevel;
+
+  // DB 업데이트
+  const{data:ex}=await sb.from('user_xp').select('id').eq('student_id',U.id).single();
+  if(ex)await sb.from('user_xp').update({total_xp:myXP,level:myLevel,updated_at:now}).eq('student_id',U.id);
+  else await sb.from('user_xp').insert({student_id:U.id,total_xp:myXP,level:myLevel});
+  await sb.from('xp_logs').insert({student_id:U.id,xp:amount,reason,created_at:now});
+
+  renderXPBar();
+  showXPToast(amount, reason);
+  if(leveledUp)setTimeout(()=>showLevelUp(info.cur),800);
+}
+
+function renderXPBar(){
+  const el=document.getElementById('xp-bar-wrap');if(!el)return;
+  const info=getLevelInfo(myXP);
+  const cur=info.cur,next=info.next;
+  const pct=next?Math.round((myXP-cur.xp)/(next.xp-cur.xp)*100):100;
+  el.innerHTML=`
+    <div style="background:linear-gradient(135deg,#1a2940,#243054);border-radius:14px;padding:12px 14px;margin-bottom:10px;cursor:pointer;" onclick="gp('record')">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div style="width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,#FFB347,#E8940A);display:flex;align-items:center;justify-content:center;font-size:17px;box-shadow:0 3px 8px rgba(255,179,71,.4);">${cur.emoji}</div>
+          <div>
+            <div style="font-size:9px;color:rgba(255,255,255,.5);font-weight:600;letter-spacing:.06em;">LEVEL ${cur.level}</div>
+            <div style="font-size:13px;font-weight:800;color:#fff;letter-spacing:-.3px;">${cur.name}</div>
+          </div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:16px;font-weight:800;color:#FFB347;letter-spacing:-.5px;">${myXP.toLocaleString()}</div>
+          <div style="font-size:9px;color:rgba(255,255,255,.4);">XP</div>
+        </div>
+      </div>
+      <div style="background:rgba(255,255,255,.1);border-radius:99px;height:5px;margin-bottom:3px;">
+        <div style="background:linear-gradient(90deg,#FFB347,#FFD700);border-radius:99px;height:5px;width:${pct}%;transition:width .6s ease;box-shadow:0 0 6px rgba(255,179,71,.4);"></div>
+      </div>
+      <div style="font-size:9px;color:rgba(255,255,255,.35);text-align:right;">${next?`다음 레벨까지 ${(next.xp-myXP).toLocaleString()} XP`:'🏆 최고 레벨 달성!'}</div>
+    </div>`;
+}
+
+let xpToastTimer=null;
+function showXPToast(amount, reason){
+  const label={
+    [`attend_${new Date().toISOString().slice(0,10)}`]:'출석',
+    vocab_today:'단어 학습',
+    follow_complete:'따라하기 완료',
+    memorize_complete:'암기 완료',
+    apply_complete:'응용 제출',
+  }[reason]||reason;
+  const t=document.getElementById('toast');
+  t.innerHTML=`<span style="color:#FFB347;font-weight:800;">+${amount} XP</span> ${label}`;
+  t.classList.add('on');
+  clearTimeout(xpToastTimer);
+  xpToastTimer=setTimeout(()=>t.classList.remove('on'),2200);
+}
+
+function showLevelUp(levelInfo){
+  const pop=document.createElement('div');
+  pop.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9998;display:flex;align-items:center;justify-content:center;max-width:480px;margin:0 auto;';
+  pop.innerHTML=`
+    <div style="background:linear-gradient(135deg,#1a2940,#0F172A);border-radius:24px;padding:28px 24px;text-align:center;width:85%;box-shadow:0 20px 60px rgba(0,0,0,.5);border:1.5px solid rgba(255,179,71,.3);">
+      <div style="font-size:10px;color:rgba(255,255,255,.5);font-weight:700;letter-spacing:.12em;margin-bottom:10px;">LEVEL UP!</div>
+      <div style="width:72px;height:72px;border-radius:20px;background:linear-gradient(135deg,#FFB347,#E8940A);display:flex;align-items:center;justify-content:center;margin:0 auto 12px;font-size:38px;box-shadow:0 8px 24px rgba(255,179,71,.5);">${levelInfo.emoji}</div>
+      <div style="font-size:26px;font-weight:800;color:#fff;letter-spacing:-.5px;margin-bottom:4px;">${levelInfo.name}</div>
+      <div style="font-size:13px;color:rgba(255,255,255,.6);margin-bottom:20px;">Level ${levelInfo.level} 달성! 🎉</div>
+      <button onclick="this.parentElement.parentElement.remove()" style="padding:13px 32px;border-radius:12px;background:linear-gradient(135deg,#FFB347,#E8940A);color:#fff;border:none;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 4px 14px rgba(255,179,71,.4);">계속하기 →</button>
+    </div>`;
+  document.body.appendChild(pop);
+  setTimeout(()=>{if(pop.parentElement)pop.remove();},5000);
 }
 
 // ── SWIPE ──
