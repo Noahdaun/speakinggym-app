@@ -999,32 +999,43 @@ async function oSes(lid,title,url,round){
   document.getElementById('rs-badge').style.color=lbl.color;
   document.getElementById('rs-top').style.background=lbl.topBg;
 
-  // 기존 로그 조회
   const{data:lg}=await sb.from('review_logs').select('*').eq('student_id',U.id).eq('lesson_id',lid).eq('review_round',round).single();
-  // 기존 제출 조회 (암기/응용)
   const{data:sub}=await sb.from('hw_submissions').select('*').eq('student_id',U.id).eq('lesson_id',lid).eq('review_round',round).single();
-
-  const type=getRoundType(round);
-  // iframe 공통 상단
-  document.getElementById('rs-content').innerHTML=`
-    <div style="background:rgba(0,0,0,.3);border-radius:9px;padding:8px 12px;display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-      <div style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:#fff;">
-        <div style="width:6px;height:6px;border-radius:50%;background:${lbl.bg};"></div>
-        Speaking Gym with Noah
-      </div>
-      <div style="font-size:10px;font-weight:700;color:${lbl.bg};padding:2px 8px;border-radius:99px;background:rgba(255,255,255,.1);">${lbl.text}</div>
-    </div>
-    <iframe src="${url}" style="width:100%;height:calc(100vh - ${type==='follow'?200:320}px);border:none;border-radius:9px;" allowfullscreen></iframe>`;
-
-  // 하단 UI — 타입별 분기
   const lessonObj=les.find(x=>x.id===lid)||{};
+  const type=getRoundType(round);
+
   if(type==='follow'){
+    // 1·2회차 — iframe + 5회 체크
+    document.getElementById('rs-content').innerHTML=`
+      <div style="background:rgba(0,0,0,.3);border-radius:9px;padding:8px 12px;display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <div style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:#fff;">
+          <div style="width:6px;height:6px;border-radius:50%;background:${lbl.bg};"></div>
+          Speaking Gym with Noah
+        </div>
+        <div style="font-size:10px;font-weight:700;color:${lbl.bg};padding:2px 8px;border-radius:99px;background:rgba(255,255,255,.1);">🎧 듣고 따라하기</div>
+      </div>
+      <iframe src="${url}" style="width:100%;height:calc(100vh - 200px);border:none;border-radius:9px;" allowfullscreen></iframe>`;
     renderBotFollow(lg?.count||0);
+
   } else if(type==='memorize'){
+    // 5회차 — 플래시카드 (iframe 없음)
+    document.getElementById('rs-content').innerHTML=`
+      <div style="background:rgba(0,0,0,.3);border-radius:9px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;">
+        <div style="font-size:12px;font-weight:700;color:#fff;">📖 내용 암기</div>
+        <div style="font-size:11px;color:rgba(255,255,255,.6);">${title}</div>
+      </div>`;
     renderBotMemorize(lessonObj, sub||null);
+
   } else {
+    // 7회차 — 표현 응용 (iframe 없음)
+    document.getElementById('rs-content').innerHTML=`
+      <div style="background:rgba(0,0,0,.3);border-radius:9px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;">
+        <div style="font-size:12px;font-weight:700;color:#fff;">✍️ 표현 응용</div>
+        <div style="font-size:11px;color:rgba(255,255,255,.6);">${title}</div>
+      </div>`;
     renderBotApply(lessonObj, sub||null);
   }
+
   document.getElementById('rs').classList.add('on');
 }
 
@@ -1116,88 +1127,97 @@ function retryMemorize(){
 
 function renderMemCard(){
   const mc=window._memCards;if(!mc)return;
+  const content=document.getElementById('rs-content');
   const bot=document.getElementById('rs-bot');
+
   if(mc.idx>=mc.total){
-    // 완료 화면
     const score=Math.round(mc.known/mc.total*100);
     const passed=score>=75;
-    bot.innerHTML=`
-      <div style="text-align:center;padding:6px 0 8px;">
-        <div style="font-size:14px;font-weight:700;margin-bottom:3px;">${passed?'암기 완료! 🎉':'한 번 더 해볼까요?'}</div>
-        <div style="font-size:11px;color:var(--mu);margin-bottom:10px;">${mc.total}문장 중 ${mc.known}개 알겠어요</div>
-        <div style="background:#F5F2EC;border-radius:10px;padding:9px;margin-bottom:10px;">
-          <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
-            <div style="font-size:10px;color:#085041;font-weight:700;">알겠어요 ${mc.known}</div>
-            <div style="font-size:10px;color:#C0392B;font-weight:700;">모르겠어요 ${mc.unknown.length}</div>
-          </div>
-          <div style="background:#EDE8DF;border-radius:99px;height:5px;">
-            <div style="background:linear-gradient(90deg,#1D9E75,#25C48E);border-radius:99px;height:5px;width:${score}%;"></div>
-          </div>
-          <div style="font-size:9px;color:${passed?'#085041':'#854F0B'};font-weight:700;margin-top:3px;">${score}% ${passed?'— 완료 기준 75% 달성!':'— 75% 이상이면 완료!'}</div>
+    content.innerHTML=`
+      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;padding:20px;text-align:center;">
+        <div style="width:64px;height:64px;border-radius:50%;background:${passed?'#E1F5EE':'#FFF8F0'};border:2.5px solid ${passed?'#1D9E75':'#FAC775'};display:flex;align-items:center;justify-content:center;margin-bottom:14px;">
+          <svg width="28" height="28" viewBox="0 0 28 28"><polyline points="3,14 10,21 25,7" fill="none" stroke="${passed?'#1D9E75':'#FAC775'}" stroke-width="3" stroke-linecap="round"/></svg>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-          <button onclick="retryMemorize()" style="padding:10px;border-radius:10px;border:1.5px solid var(--brd);background:var(--sf);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;color:var(--text);">다시 도전</button>
-          <button onclick="finishMemorize(${score})" style="padding:10px;border-radius:10px;background:${passed?'linear-gradient(135deg,#1D9E75,#159468)':'#F5F2EC'};color:${passed?'#fff':'#888'};border:none;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">${passed?'완료 ✓':'종료'}</button>
+        <div style="font-size:20px;font-weight:700;margin-bottom:4px;">${passed?'암기 완료! 🎉':'한 번 더 해볼까요?'}</div>
+        <div style="font-size:12px;color:#888;margin-bottom:18px;">${mc.total}문장 중 ${mc.known}개 알겠어요</div>
+        <div style="width:100%;background:#F5F2EC;border-radius:12px;padding:13px;margin-bottom:16px;">
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+            <div style="font-size:11px;color:#085041;font-weight:700;">알겠어요 ${mc.known}</div>
+            <div style="font-size:11px;color:#C0392B;font-weight:700;">모르겠어요 ${mc.unknown.length}</div>
+          </div>
+          <div style="background:#EDE8DF;border-radius:99px;height:8px;">
+            <div style="background:linear-gradient(90deg,#1D9E75,#25C48E);border-radius:99px;height:8px;width:${score}%;"></div>
+          </div>
+          <div style="font-size:11px;color:${passed?'#085041':'#854F0B'};font-weight:700;margin-top:6px;">${score}% ${passed?'✓ 완료 기준 달성':'— 75% 이상이면 완료'}</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%;">
+          <button onclick="retryMemorize()" style="padding:13px;border-radius:12px;border:1.5px solid #EDE8DF;background:#F5F2EC;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;color:#1a1a1a;">다시 도전</button>
+          <button onclick="finishMemorize(${score})" style="padding:13px;border-radius:12px;background:${passed?'linear-gradient(135deg,#1D9E75,#159468)':'#F5F2EC'};color:${passed?'#fff':'#888'};border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">${passed?'완료 ✓':'종료'}</button>
         </div>
       </div>`;
+    bot.innerHTML='';
     return;
   }
 
   const sub=mc.subs[mc.idx];
-  const ytId=ses?.url?.match(/(?:youtu\.be\/|v=)([^&\s]+)/)?.[1]||'';
-  bot.innerHTML=`
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-      <div style="font-size:10px;color:var(--mu);">${mc.idx+1} / ${mc.total}</div>
-      <div style="font-size:10px;font-weight:700;color:#085041;">${mc.known}개 알겠어요</div>
-    </div>
-    <div id="mem-front" style="background:#fff;border-radius:16px;padding:22px 16px;text-align:center;box-shadow:0 3px 12px rgba(0,0,0,.08);margin-bottom:10px;cursor:pointer;" onclick="revealMemCard()">
-      <div style="font-size:10px;color:#BBB;background:#F5F2EC;padding:3px 11px;border-radius:99px;display:inline-block;margin-bottom:10px;font-weight:600;">영어로 말해보세요</div>
-      <div style="font-size:13px;font-weight:700;color:#1a1a1a;line-height:1.7;">${sub.kor||'(한국어 없음)'}</div>
-    </div>
-    <div id="mem-back" style="display:none;">
-      ${ytId?`<div style="background:#1a2940;border-radius:10px;padding:8px 11px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="playMemSeg(${sub.start},${sub.end},'${ytId}')">
-        <div style="font-size:9px;color:rgba(255,255,255,.6);">구간 재생 ${Math.floor(sub.start/60)}:${String(Math.floor(sub.start%60)).padStart(2,'0')}~${Math.floor(sub.end/60)}:${String(Math.floor(sub.end%60)).padStart(2,'0')}</div>
-        <div style="display:flex;align-items:center;gap:5px;">
-          <div style="width:22px;height:22px;border-radius:50%;background:#FFB347;display:flex;align-items:center;justify-content:center;"><svg width="8" height="9" viewBox="0 0 8 9"><polygon points="1,1 7,4.5 1,8" fill="#7C3800"/></svg></div>
-          <div style="font-size:9px;color:#FFB347;font-weight:600;">구간 재생</div>
+  content.innerHTML=`
+    <div style="height:100%;display:flex;flex-direction:column;padding:12px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <div style="font-size:12px;font-weight:700;color:rgba(255,255,255,.8);">${mc.idx+1} / ${mc.total}</div>
+        <div style="font-size:12px;font-weight:700;color:#FFB347;">${mc.known}개 알겠어요</div>
+      </div>
+      <div style="background:rgba(255,255,255,.1);border-radius:99px;height:4px;margin-bottom:12px;">
+        <div style="background:#FFB347;border-radius:99px;height:4px;width:${Math.round(mc.idx/mc.total*100)}%;"></div>
+      </div>
+      <div id="mem-front" style="flex:1;background:#fff;border-radius:18px;padding:24px 20px;text-align:center;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(0,0,0,.15);" onclick="revealMemCard()">
+        <div style="font-size:11px;color:#BBB;background:#F5F2EC;padding:5px 14px;border-radius:99px;margin-bottom:16px;font-weight:600;">영어로 말해보세요 → 탭해서 정답</div>
+        <div style="font-size:17px;font-weight:700;color:#1a1a1a;line-height:1.7;">${sub.kor||'(한국어 없음)'}</div>
+      </div>
+      <div id="mem-back" style="display:none;flex:1;flex-direction:column;gap:9px;padding-top:4px;">
+        <div style="background:#fff;border-radius:16px;padding:18px;text-align:center;box-shadow:0 3px 14px rgba(29,158,117,.12);border:1.5px solid #C0E8D8;">
+          <div style="font-size:11px;color:#0F6E56;margin-bottom:8px;font-weight:600;">🇰🇷 ${sub.kor}</div>
+          <div style="border-top:1px solid #EDE8DF;padding-top:10px;font-size:16px;font-weight:700;color:#1a1a1a;line-height:1.6;">${sub.text}</div>
         </div>
-      </div>`:''}
-      <div style="background:#fff;border-radius:13px;padding:12px 14px;text-align:center;box-shadow:0 2px 8px rgba(29,158,117,.1);border:1.5px solid #C0E8D8;margin-bottom:9px;">
-        <div style="font-size:10px;color:#0F6E56;margin-bottom:5px;font-weight:600;">🇰🇷 ${sub.kor}</div>
-        <div style="border-top:1px solid #EDE8DF;padding-top:7px;font-size:12px;font-weight:700;color:#1a1a1a;">${sub.text}</div>
+        <div style="background:#1a2940;border-radius:12px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="playMemSeg(${sub.start},${sub.end})">
+          <div style="font-size:11px;color:rgba(255,255,255,.7);">📺 ${Math.floor(sub.start/60)}:${String(Math.floor(sub.start%60)).padStart(2,'0')} ~ ${Math.floor(sub.end/60)}:${String(Math.floor(sub.end%60)).padStart(2,'0')}</div>
+          <div style="background:#FFB347;color:#7C3800;font-size:10px;font-weight:700;padding:4px 12px;border-radius:99px;">구간 열기</div>
+        </div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-        <button onclick="answerMemCard(false)" style="padding:11px;border-radius:11px;background:#FFF0F0;border:none;cursor:pointer;font-family:inherit;">
-          <div style="font-size:12px;font-weight:700;color:#C0392B;">모르겠어요</div>
-          <div style="font-size:9px;color:#E0837B;margin-top:1px;">다시 나와요</div>
-        </button>
-        <button onclick="answerMemCard(true)" style="padding:11px;border-radius:11px;background:linear-gradient(135deg,#1D9E75,#159468);border:none;cursor:pointer;font-family:inherit;box-shadow:0 3px 10px rgba(29,158,117,.3);">
-          <div style="font-size:12px;font-weight:700;color:#fff;">알겠어요 ✓</div>
-          <div style="font-size:9px;color:rgba(255,255,255,.75);margin-top:1px;">+XP</div>
-        </button>
-      </div>
+    </div>`;
+
+  bot.innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px;opacity:.3;pointer-events:none;" id="mem-btns">
+      <button style="padding:13px;border-radius:12px;background:#FFF0F0;border:none;font-family:inherit;">
+        <div style="font-size:13px;font-weight:700;color:#C0392B;">모르겠어요</div>
+        <div style="font-size:10px;color:#E0837B;margin-top:2px;">다시 나와요</div>
+      </button>
+      <button style="padding:13px;border-radius:12px;background:linear-gradient(135deg,#1D9E75,#159468);border:none;font-family:inherit;box-shadow:0 4px 12px rgba(29,158,117,.3);">
+        <div style="font-size:13px;font-weight:700;color:#fff;">알겠어요 ✓</div>
+        <div style="font-size:10px;color:rgba(255,255,255,.75);margin-top:2px;">+30 XP</div>
+      </button>
     </div>`;
 }
 
-let _memPlayer=null;
-function playMemSeg(start,end,ytId){
-  // 리뷰 세션 상단 iframe 활용
-  const iframe=document.querySelector('#rs-content iframe');
-  if(!iframe)return;
-  if(!_memPlayer){
-    // YT API로 시크
-    try{
-      if(window.YT&&window.YT.get){
-        const p=window.YT.get(iframe.id);
-        if(p){p.seekTo(start,true);p.playVideo();setTimeout(()=>p.pauseVideo(),(end-start)*1000);}
-      }
-    }catch{}
-  }
-}
 
 function revealMemCard(){
-  document.getElementById('mem-back').style.display='block';
-  document.getElementById('mem-front').style.display='none';
+  const front=document.getElementById('mem-front');
+  const back=document.getElementById('mem-back');
+  if(front)front.style.display='none';
+  if(back){back.style.display='flex';back.style.flexDirection='column';}
+  const btns=document.getElementById('mem-btns');
+  if(btns){
+    btns.style.opacity='1';
+    btns.style.pointerEvents='auto';
+    btns.innerHTML=`
+      <button onclick="answerMemCard(false)" style="padding:13px;border-radius:12px;background:#FFF0F0;border:none;cursor:pointer;font-family:inherit;">
+        <div style="font-size:13px;font-weight:700;color:#C0392B;">모르겠어요</div>
+        <div style="font-size:10px;color:#E0837B;margin-top:2px;">다시 나와요</div>
+      </button>
+      <button onclick="answerMemCard(true)" style="padding:13px;border-radius:12px;background:linear-gradient(135deg,#1D9E75,#159468);border:none;cursor:pointer;font-family:inherit;box-shadow:0 4px 12px rgba(29,158,117,.3);">
+        <div style="font-size:13px;font-weight:700;color:#fff;">알겠어요 ✓</div>
+        <div style="font-size:10px;color:rgba(255,255,255,.75);margin-top:2px;">+30 XP</div>
+      </button>`;
+  }
 }
 
 function answerMemCard(known){
@@ -1233,34 +1253,57 @@ async function finishMemorize(score){
 // ── 7회차: 핵심표현 카드 + 문장 제출 ──
 function renderBotApply(lesson, existingSub){
   const bot=document.getElementById('rs-bot');
+  const content=document.getElementById('rs-content');
   let expressions=[];
   if(lesson?.key_expressions){try{expressions=JSON.parse(lesson.key_expressions);}catch{}}
 
   if(existingSub?.completed){
     const feedback=existingSub.feedback||'';
-    bot.innerHTML=`<div style="background:#F0FAF6;border-radius:12px;padding:12px 13px;border:1.5px solid #C0E8D8;">
-      <div style="font-size:12px;font-weight:700;color:#085041;margin-bottom:6px;">✅ 제출 완료!</div>
-      <div style="font-size:12px;color:#1a1a1a;font-style:italic;line-height:1.7;">"${existingSub.content||''}"</div>
-      ${feedback?`<div style="background:#E1F5EE;border-radius:8px;padding:8px 10px;margin-top:7px;font-size:11px;color:#085041;line-height:1.7;">💬 ${feedback}</div>`:''}
-    </div>`;return;
+    content.innerHTML=`
+      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;padding:20px;text-align:center;">
+        <div style="width:60px;height:60px;border-radius:50%;background:#E1F5EE;border:2.5px solid #1D9E75;display:flex;align-items:center;justify-content:center;margin-bottom:14px;">
+          <svg width="26" height="26" viewBox="0 0 26 26"><polyline points="3,13 9,20 23,6" fill="none" stroke="#1D9E75" stroke-width="3" stroke-linecap="round"/></svg>
+        </div>
+        <div style="font-size:18px;font-weight:700;color:#fff;margin-bottom:6px;">제출 완료!</div>
+        <div style="background:#fff;border-radius:14px;padding:14px 16px;text-align:left;width:100%;margin-bottom:${feedback?12:0}px;">
+          <div style="font-size:11px;color:#BBB;margin-bottom:5px;font-weight:600;">제출한 문장</div>
+          <div style="font-size:14px;color:#1a1a1a;font-style:italic;line-height:1.7;">"${existingSub.content||''}"</div>
+        </div>
+        ${feedback?`<div style="background:#E1F5EE;border-radius:12px;padding:12px 14px;text-align:left;width:100%;border:1.5px solid #C0E8D8;">
+          <div style="font-size:11px;color:#085041;font-weight:700;margin-bottom:4px;">💬 선생님 피드백</div>
+          <div style="font-size:13px;color:#085041;line-height:1.7;">${feedback}</div>
+        </div>`:'<div style="font-size:11px;color:rgba(255,255,255,.5);">선생님 피드백을 기다리는 중...</div>'}
+      </div>`;
+    bot.innerHTML='';
+    return;
   }
 
+  // 핵심표현 카드를 rs-content에
   const expCards=expressions.slice(0,10).map((e,i)=>`
-    <div onclick="selectExp(${i})" id="exp-card-${i}" style="background:#fff;border-radius:10px;padding:8px 10px;border:1.5px solid #EDE8DF;cursor:pointer;transition:border-color .15s;">
-      <div style="font-size:12px;font-weight:700;color:#1a1a1a;">${e.english}</div>
-      ${e.korean?`<div style="font-size:10px;color:var(--mu);margin-top:1px;">${e.korean}</div>`:''}
+    <div onclick="selectExp(${i})" id="exp-card-${i}" style="background:#fff;border-radius:11px;padding:10px 12px;border:1.5px solid #EDE8DF;cursor:pointer;transition:all .15s;">
+      <div style="font-size:13px;font-weight:700;color:#1a1a1a;">${e.english}</div>
+      ${e.korean?`<div style="font-size:11px;color:#888;margin-top:2px;">${e.korean}</div>`:''}
     </div>`).join('');
 
-  const guide=lesson?.guide||'배운 핵심 표현으로 나만의 문장을 만들어보세요';
+  content.innerHTML=`
+    <div style="padding:12px;height:100%;overflow-y:auto;">
+      <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.7);margin-bottom:10px;">핵심 표현 — 하나 골라서 문장 만들기</div>
+      ${expressions.length
+        ?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;">${expCards}</div>`
+        :`<div style="background:rgba(255,255,255,.1);border-radius:12px;padding:14px;color:rgba(255,255,255,.7);font-size:12px;text-align:center;">핵심 표현이 아직 등록되지 않았어요<br><span style="font-size:11px;opacity:.6;">선생님이 레슨 탭에서 등록해요</span></div>`
+      }
+      <div id="apply-guide-box" style="display:none;background:#E1F5EE;border-radius:11px;padding:11px 13px;margin-top:10px;border:1.5px solid #C0E8D8;">
+        <div id="apply-guide-text" style="font-size:12px;color:#085041;font-weight:600;"></div>
+      </div>
+    </div>`;
+
   bot.innerHTML=`
-    <div style="font-size:11px;color:var(--mu);text-align:center;margin-bottom:8px;font-weight:500;">표현 하나 골라서 <strong style="color:var(--gd);">나만의 문장</strong>을 써보세요</div>
-    ${expressions.length?`
-    <div style="font-size:10px;font-weight:700;color:var(--mu);margin-bottom:6px;">핵심 표현 선택</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:9px;">${expCards}</div>`:''}
-    <div id="apply-guide" style="display:none;background:#F0FAF6;border-radius:9px;padding:8px 11px;margin-bottom:7px;border:1.5px solid #C0E8D8;font-size:11px;color:#085041;font-weight:600;"></div>
-    <textarea id="apply-input" placeholder="영어 문장을 써보세요..." style="height:60px;margin-bottom:8px;font-size:13px;line-height:1.6;"></textarea>
+    <textarea id="apply-input" placeholder="선택한 표현으로 영어 문장을 써보세요..." style="height:60px;margin-bottom:8px;font-size:13px;line-height:1.6;"></textarea>
     <button onclick="tapApply()" style="width:100%;padding:12px;border-radius:12px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 4px 14px rgba(29,158,117,.3);">제출하기 → +25 XP</button>`;
 }
+
+
+  let expressions=[];
 
 let _selectedExp=null;
 function selectExp(i){
@@ -1274,11 +1317,12 @@ function selectExp(i){
   if(lesson?.key_expressions){try{expressions=JSON.parse(lesson.key_expressions);}catch{}}
   const exp=expressions[i];
   if(exp){
-    const guide=document.getElementById('apply-guide');
-    if(guide){
-      guide.style.display='block';
-      guide.innerHTML=`<strong>${exp.english}</strong>${exp.korean?' — '+exp.korean:''}<br><span style="font-size:10px;font-style:italic;">이 표현을 사용해서 나만의 문장을 만들어보세요</span>`;
-    }
+    const box=document.getElementById('apply-guide-box');
+    const txt=document.getElementById('apply-guide-text');
+    if(box){box.style.display='block';}
+    if(txt){txt.innerHTML=`<strong>${exp.english}</strong>${exp.korean?' — '+exp.korean:''}<br><span style="font-size:10px;font-weight:400;color:#0F6E56;">이 표현으로 나만의 문장을 만들어보세요</span>`;}
+    // 입력창 포커스
+    setTimeout(()=>document.getElementById('apply-input')?.focus(),100);
   }
 }
 
@@ -2823,6 +2867,13 @@ async function saveFeedback(subId, lessonId, round){
   }
   tst('피드백 저장됐어요!');
   loadSDRev();
+}
+
+function playMemSeg(start,end){
+  if(!ses?.url)return;
+  const ytId=ses.url.match(/(?:youtu\.be\/|v=)([^&\s]+)/)?.[1];
+  if(ytId){window.open(`https://www.youtube.com/watch?v=${ytId}&t=${Math.floor(start)}s`,'_blank');}
+  else{window.open(ses.url,'_blank');}
 }
 
 // ── SWIPE ──
