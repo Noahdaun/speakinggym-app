@@ -442,6 +442,17 @@ function doUpdate(){
         <div style="font-size:12px;font-weight:600;margin-bottom:4px;margin-top:8px;">✍️ 7회차 응용 가이드 <span style="font-size:11px;font-weight:400;color:var(--mu);">(선택)</span></div>
         <input class="inp" type="text" id="ls-guide" placeholder="예: light up 을 사용해서 나만의 문장을 만들어보세요">
 
+        <div class="dv"></div>
+        <div style="font-size:12px;font-weight:600;margin-bottom:4px;">📚 단어 일괄 추가 <span style="font-size:11px;font-weight:400;color:var(--mu);">(저장 시 자동 추가)</span></div>
+        <div style="font-size:11px;color:var(--mu);margin-bottom:7px;">영어,한국어 형식으로 줄마다 — 대상 반을 선택하세요</div>
+        <div id="ls-vocab-tgt" style="background:var(--sf);border-radius:10px;padding:9px 11px;margin-bottom:7px;border:1.5px solid var(--brd);display:flex;flex-wrap:wrap;gap:7px;">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;">
+            <input type="checkbox" id="lv-all" onchange="lvAllToggle(this)" style="accent-color:var(--g);">전체
+          </label>
+        </div>
+        <textarea id="ls-vocab" placeholder="ask out,데이트 신청하다&#10;come with me,나랑 같이 가다&#10;it's on me,내가 살게" style="height:90px;"></textarea>
+        <div id="ls-vocab-preview" style="font-size:11px;color:var(--gm);margin-top:4px;margin-bottom:4px;"></div>
+
         <div id="ls-form-btns">
           <button class="btn btn-p" onclick="saveLesson()">토픽 등록</button>
         </div>
@@ -1124,12 +1135,47 @@ function parseSGImport(){
     filled++;
   }
 
+  // 단어 → ls-vocab
+  const vocabKey=Object.keys(sections).find(k=>k.includes('단어'));
+  if(vocabKey&&document.getElementById('ls-vocab')){
+    document.getElementById('ls-vocab').value=sections[vocabKey];
+    const lines=sections[vocabKey].split('\n').filter(l=>l.trim()).length;
+    const pv=document.getElementById('ls-vocab-preview');
+    if(pv)pv.textContent=`✅ ${lines}개 단어 — 저장 시 자동 추가`;
+    filled++;
+  }
+
   if(filled>0){
     tst(`✨ ${filled}개 항목 자동 채워졌어요!`);
     document.getElementById('sg-import').value='';
   } else {
     tst('형식을 확인해주세요');
   }
+}
+
+function lvAllToggle(cb){
+  document.querySelectorAll('.lv-cls-cb').forEach(el=>el.checked=cb.checked);
+}
+
+function lsVocabRenderTgt(){
+  const wrap=document.getElementById('ls-vocab-tgt');if(!wrap)return;
+  const clsItems=classes.map(c=>`
+    <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px;">
+      <input type="checkbox" class="lv-cls-cb" value="${c}" style="accent-color:var(--g);">${c}
+    </label>`).join('');
+  // 전체 체크박스 뒤에 반별 추가
+  const allLabel=wrap.querySelector('label');
+  if(allLabel)allLabel.insertAdjacentHTML('afterend', clsItems);
+}
+
+function getLsVocabTargets(){
+  const allCb=document.getElementById('lv-all');
+  if(allCb?.checked)return sts.map(s=>s.id);
+  const ids=new Set();
+  document.querySelectorAll('.lv-cls-cb:checked').forEach(cb=>{
+    sts.filter(s=>s.class_name===cb.value).forEach(s=>ids.add(s.id));
+  });
+  return [...ids];
 }
 
 function previewSubtitles(val){
@@ -2175,7 +2221,7 @@ function adTab(t,b){
   document.querySelectorAll('#pad>.tbb .tbn').forEach(x=>x.classList.remove('on'));
   if(b)b.classList.add('on');
   if(t==='cl')rClsList();
-  if(t==='ls'){rLsList();renderLsRows();}
+  if(t==='ls'){rLsList();renderLsRows();lsVocabRenderTgt();}
   if(t==='at'){document.getElementById('atd').value=new Date().toISOString().slice(0,10);rAtCls();}
   if(t==='vo'){rVTgt();rExtractLes();}
 }
@@ -2554,9 +2600,26 @@ async function saveLesson(){
     await sb.from('lesson_schedules').insert(schedules.map(s=>({...s,lesson_id:data.id})));
     tst('토픽 등록됐어요!');
   }
+
+  // 단어 일괄 추가
+  const vocabRaw=document.getElementById('ls-vocab')?.value?.trim()||'';
+  if(vocabRaw){
+    const pairs=vocabRaw.split('\n').filter(l=>l.trim()&&l.includes(',')).map(l=>{
+      const p=l.split(',');return p.length>=2?{eng:p[0].trim(),kor:p.slice(1).join(',').trim()}:null;
+    }).filter(Boolean);
+    const targets=getLsVocabTargets();
+    if(pairs.length&&targets.length){
+      const today=new Date().toISOString().slice(0,10);
+      const rows=[];
+      targets.forEach(sid=>pairs.forEach(p=>rows.push({student_id:sid,english:p.eng,korean:p.kor,box_level:1,next_review:today})));
+      const{error:ve}=await sb.from('vocab_cards').insert(rows);
+      if(!ve)tst(`단어 ${pairs.length}개 → ${targets.length}명 추가 완료! 🎉`);
+    }
+  }
   // 폼 초기화
-  ['lt','lu','ls-script','ls-answers','ls-guide','ls-expressions','ls-subtitles'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ['lt','lu','ls-script','ls-answers','ls-guide','ls-expressions','ls-subtitles','ls-vocab'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   const spv=document.getElementById('subtitle-preview');if(spv)spv.textContent='';
+  const lvpv=document.getElementById('ls-vocab-preview');if(lvpv)lvpv.textContent='';
   editLessonId=null;lsClsState={};
   document.getElementById('ls-form-title').textContent='새 토픽 등록';
   document.getElementById('ls-form-btns').innerHTML='<button class="btn btn-p" onclick="saveLesson()">토픽 등록</button>';
