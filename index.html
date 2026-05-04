@@ -400,7 +400,7 @@ function doUpdate(){
       </div>
 
       <!-- 반관리 -->
-      <div id="ad-cl" style="display:none;">
+      <div id="ad-cls" style="display:none;">
         <div style="font-size:13px;font-weight:600;margin-bottom:9px;">새 반 만들기</div>
         <div style="display:flex;gap:7px;margin-bottom:14px;">
           <input class="inp" type="text" id="ncls" placeholder="반 이름 (예: 월수금반)" style="flex:1;margin-bottom:0;">
@@ -1451,90 +1451,6 @@ async function tapApply(){
   refreshReview();lCal();lRec();buildHomeTodo();
 }
 
-
-function renderBotMemorize(lesson, existingSub){
-  const bot=document.getElementById('rs-bot');
-
-  // 스크립트 없으면 안내
-  if(!lesson?.blanks&&!lesson?.script){
-    bot.innerHTML=`<div style="background:#FFF8F0;border-radius:12px;padding:11px 13px;border:1.5px solid #FAC775;">
-      <div style="font-size:11px;color:#854F0B;font-weight:600;">📌 암기 스크립트가 등록되지 않았어요</div>
-      <div style="font-size:10px;color:#A0622E;margin-top:3px;">선생님이 레슨 탭에서 등록하면 활성화돼요</div>
-    </div>`;
-    return;
-  }
-
-  // 완료 상태
-  if(existingSub?.completed){
-    const score=existingSub.score||0;
-    bot.innerHTML=`<div style="background:#F0FAF6;border-radius:12px;padding:12px 13px;border:1.5px solid #C0E8D8;">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">
-        <div style="font-size:13px;font-weight:700;color:#085041;">✅ 암기 완료!</div>
-        <div style="font-size:16px;font-weight:800;color:#085041;">${score}점</div>
-      </div>
-      <div style="font-size:10px;color:#0F6E56;">선생님이 확인할 거예요</div>
-      ${score<60?`<button onclick="retryMemorize()" style="margin-top:9px;width:100%;padding:9px;border-radius:9px;background:linear-gradient(135deg,#FFB347,#E8940A);color:#fff;border:none;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">다시 도전하기</button>`:''}
-    </div>`;
-    return;
-  }
-
-  // 스크립트 파싱 — blanks 우선, 없으면 script 그대로
-  let sentences=[];
-  if(lesson.blanks){
-    try{
-      const b=JSON.parse(lesson.blanks);
-      const answers=b.answers||[];
-      // 빈칸 있는 문장을 한글/영어 쌍으로
-      const scriptText=b.script||lesson.script||'';
-      sentences=[{korean:'위 영상의 핵심 문장을 말해보세요',english:scriptText,answers}];
-    }catch{}
-  }
-  if(!sentences.length&&lesson.script){
-    sentences=[{korean:'위 영상의 핵심 문장을 말해보세요',english:lesson.script,answers:[]}];
-  }
-
-  // 한글→영어 말하기 UI
-  let curIdx=0;
-  const renderSentence=(idx)=>{
-    const s=sentences[idx]||sentences[0];
-    const hasAnswers=s.answers?.length>0;
-    bot.innerHTML=`
-      <div style="font-size:11px;color:var(--mu);text-align:center;margin-bottom:9px;font-weight:500;">
-        한글을 보고 <strong style="color:#854F0B;">영어로 말해보세요</strong>
-      </div>
-      <div style="background:#FFF8F0;border-radius:12px;padding:13px;border:1.5px solid #FAC775;margin-bottom:8px;">
-        <div style="font-size:11px;color:#854F0B;font-weight:700;margin-bottom:6px;">🇰🇷 한국어</div>
-        <div style="font-size:13px;color:#1a1a1a;line-height:1.8;font-weight:600;">${s.korean}</div>
-      </div>
-      <div id="answer-reveal" style="display:none;background:#F0FAF6;border-radius:12px;padding:13px;border:1.5px solid #C0E8D8;margin-bottom:8px;">
-        <div style="font-size:11px;color:#085041;font-weight:700;margin-bottom:6px;">🇺🇸 영어 정답</div>
-        <div style="font-size:13px;color:#085041;line-height:1.8;font-weight:600;">${s.english}</div>
-        ${hasAnswers?`<div style="font-size:10px;color:#0F6E56;margin-top:5px;">핵심 표현: ${s.answers.join(', ')}</div>`:''}
-      </div>
-      <button id="reveal-btn" onclick="document.getElementById('answer-reveal').style.display='block';document.getElementById('reveal-btn').style.display='none';document.getElementById('check-btns').style.display='grid';"
-        style="width:100%;padding:11px;border-radius:11px;background:#FFF8F0;color:#854F0B;border:1.5px solid #FAC775;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:8px;">
-        정답 확인하기
-      </button>
-      <div id="check-btns" style="display:none;grid-template-columns:1fr 1fr;gap:9px;">
-        <button onclick="tapMemorizeCheck(false)" style="padding:13px;border-radius:12px;background:#FFF0F0;border:none;cursor:pointer;font-family:inherit;">
-          <div style="font-size:13px;font-weight:700;color:#C0392B;">모르겠어요</div>
-          <div style="font-size:10px;color:#E0837B;margin-top:2px;">다시 연습할게요</div>
-        </button>
-        <button onclick="tapMemorizeCheck(true)" style="padding:13px;border-radius:12px;background:linear-gradient(135deg,#FFB347,#E8940A);border:none;cursor:pointer;font-family:inherit;box-shadow:0 4px 12px rgba(255,179,71,.35);">
-          <div style="font-size:13px;font-weight:700;color:#fff;">알겠어요! ✓</div>
-          <div style="font-size:10px;color:rgba(255,255,255,.8);margin-top:2px;">완료로 기록</div>
-        </button>
-      </div>`;
-  };
-  renderSentence(0);
-}
-
-function retryMemorize(){
-  if(!ses)return;
-  const l=les.find(x=>x.id===ses.lid);
-  renderBotMemorize(l,null);
-}
-
 async function tapMemorizeCheck(ok){
   if(!ses)return;
   const now=new Date().toISOString();
@@ -1562,69 +1478,6 @@ function submitMemorize(){tapMemorizeCheck(true);}
 
 
 // ── 5·7회차: 핵심 표현 카드 + 문장 제출 ──
-function renderBotApply(lesson, existingSub){
-  const bot=document.getElementById('rs-bot');
-
-  // 핵심 표현 파싱
-  let expressions=[];
-  if(lesson?.key_expressions){
-    try{expressions=JSON.parse(lesson.key_expressions);}catch{}
-  }
-  // key_expressions 없으면 vocab에서 가져오기
-  if(!expressions.length&&lesson?.blanks){
-    try{const b=JSON.parse(lesson.blanks);if(b.answers)expressions=b.answers.map(a=>({english:a,korean:''}));}catch{}
-  }
-
-  if(existingSub?.completed){
-    bot.innerHTML=`<div style="background:#F0FAF6;border-radius:12px;padding:12px 13px;border:1.5px solid #C0E8D8;">
-      <div style="font-size:12px;font-weight:700;color:#085041;margin-bottom:6px;">✅ 제출 완료!</div>
-      <div style="font-size:12px;color:#1a1a1a;font-style:italic;line-height:1.7;">"${existingSub.content||''}"</div>
-    </div>`;
-    return;
-  }
-
-  const guide=lesson?.guide||'배운 핵심 표현을 사용해서 자신만의 문장을 말해보세요';
-  const expCards=expressions.slice(0,10).map(e=>`
-    <div style="background:#fff;border-radius:10px;padding:9px 11px;border:1.5px solid #EDE8DF;display:flex;align-items:center;gap:8px;box-shadow:0 1px 4px rgba(0,0,0,.05);">
-      <div style="flex:1;">
-        <div style="font-size:12px;font-weight:700;color:#111;">${e.english}</div>
-        ${e.korean?`<div style="font-size:10px;color:var(--mu);margin-top:1px;">${e.korean}</div>`:''}
-      </div>
-    </div>`).join('');
-
-  bot.innerHTML=`
-    <div style="font-size:11px;color:var(--mu);text-align:center;margin-bottom:9px;font-weight:500;">
-      핵심 표현을 보고 <strong style="color:var(--gd);">나만의 문장</strong>으로 말해보세요
-    </div>
-    ${expressions.length?`
-    <div style="font-size:10px;font-weight:700;color:var(--mu);margin-bottom:6px;">💡 핵심 표현</div>
-    <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:10px;">${expCards}</div>`:''}
-    <div style="font-size:10px;color:#085041;background:#F0FAF6;border-radius:9px;padding:8px 11px;margin-bottom:8px;font-weight:600;border:1.5px solid #C0E8D8;">
-      ✍️ ${guide}
-    </div>
-    <textarea id="apply-input" placeholder="만든 문장을 영어로 써보세요..." style="height:65px;margin-bottom:8px;font-size:13px;line-height:1.6;"></textarea>
-    <button onclick="tapApply()" style="width:100%;padding:12px;border-radius:12px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 4px 14px rgba(29,158,117,.3);">
-      제출하기 →
-    </button>`;
-}
-
-async function tapApply(){
-  if(!ses)return;
-  const txt=document.getElementById('apply-input')?.value?.trim();
-  if(!txt||txt.length<3){tst('문장을 입력해주세요');return;}
-  const now=new Date().toISOString();
-  const subData={student_id:U.id,lesson_id:ses.lid,review_round:ses.round,hw_type:'apply',content:txt,score:null,completed:true,submitted_at:now};
-  const{data:exS}=await sb.from('hw_submissions').select('id').eq('student_id',U.id).eq('lesson_id',ses.lid).eq('review_round',ses.round).single();
-  if(exS)await sb.from('hw_submissions').update(subData).eq('id',exS.id);
-  else await sb.from('hw_submissions').insert(subData);
-  const{data:exL}=await sb.from('review_logs').select('id').eq('student_id',U.id).eq('lesson_id',ses.lid).eq('review_round',ses.round).single();
-  if(exL)await sb.from('review_logs').update({count:5,completed:true,completed_at:now}).eq('id',exL.id);
-  else await sb.from('review_logs').insert({student_id:U.id,lesson_id:ses.lid,review_round:ses.round,count:5,completed:true,completed_at:now});
-  earnXP(XP_TABLE.apply,'apply_complete_'+ses.lid+'_'+ses.round);
-  tst('제출 완료! 훌륭해요 🎉');
-  renderBotApply(les.find(x=>x.id===ses.lid),subData);
-  refreshReview();lCal();lRec();buildHomeTodo();
-}
 
 
 function autoNextReview(){
