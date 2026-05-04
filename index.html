@@ -411,6 +411,14 @@ function doUpdate(){
 
       <!-- 레슨 -->
       <div id="ad-ls" style="display:none;">
+        <!-- sg_builder 내보내기 일괄 붙여넣기 -->
+        <div style="background:#F0FAF6;border-radius:13px;padding:13px;margin-bottom:14px;border:1.5px solid #C0E8D8;">
+          <div style="font-size:12px;font-weight:700;color:#085041;margin-bottom:5px;">📲 sg_builder 내보내기 붙여넣기</div>
+          <div style="font-size:11px;color:#0F6E56;margin-bottom:8px;">sg_builder에서 "앱으로 내보내기" → 전체 복사 후 여기에 붙여넣기</div>
+          <textarea id="sg-import" style="height:80px;font-family:monospace;font-size:11px;" placeholder="=== ① 5회차 암기용 자막 데이터 ===&#10;16.7|20.7|Hello|안녕하세요&#10;..."></textarea>
+          <button onclick="parseSGImport()" style="width:100%;padding:10px;border-radius:10px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:7px;">자동으로 채우기 ✨</button>
+        </div>
+
         <div style="font-size:13px;font-weight:600;margin-bottom:9px;" id="ls-form-title">새 토픽 등록</div>
         <input class="inp" type="text" id="lt" placeholder="토픽 제목 (예: KPop Demon Hunters)">
         <input class="inp" type="url" id="lu" placeholder="GitHub URL">
@@ -455,8 +463,14 @@ function doUpdate(){
 
       <!-- 단어추가 -->
       <div id="ad-vo" style="display:none;">
-        <div style="font-size:12px;font-weight:600;margin-bottom:6px;">대상 선택</div>
-        <select id="vtgt" style="margin-bottom:12px;"></select>
+        <div style="font-size:12px;font-weight:600;margin-bottom:6px;">대상 선택 <span style="font-size:11px;font-weight:400;color:var(--mu);">(중복 선택 가능)</span></div>
+        <div id="vtgt-wrap" style="background:var(--sf);border-radius:11px;padding:10px 12px;margin-bottom:12px;border:1.5px solid var(--brd);display:flex;flex-direction:column;gap:7px;">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+            <input type="checkbox" id="vtgt-all" onchange="vtgtAllToggle(this)" style="width:16px;height:16px;accent-color:var(--g);">
+            <span style="font-size:13px;font-weight:600;">전체 학생 (${sts.length}명)</span>
+          </label>
+          <div id="vtgt-cls" style="display:flex;flex-direction:column;gap:6px;padding-left:4px;border-top:1px solid var(--brd);padding-top:7px;"></div>
+        </div>
         <div style="font-size:12px;font-weight:600;margin-bottom:6px;">단어 1개 추가</div>
         <input class="inp" type="text" id="ae2" placeholder="영어 표현">
         <input class="inp" type="text" id="ak2" placeholder="한국어 뜻">
@@ -1068,6 +1082,56 @@ async function tapRSC(n){
 }
 
 // ── 3회차: 내용 암기 ──
+function parseSGImport(){
+  const raw=document.getElementById('sg-import')?.value?.trim();
+  if(!raw){tst('내용을 붙여넣어주세요');return;}
+
+  // 섹션 파싱
+  const sections={};
+  let curKey=null, curLines=[];
+  raw.split('\n').forEach(line=>{
+    const m=line.match(/^===\s*[①②③④]?\s*(.+?)\s*===$/);
+    if(m){
+      if(curKey)sections[curKey]=curLines.join('\n').trim();
+      curKey=m[1];curLines=[];
+    } else if(curKey){
+      curLines.push(line);
+    }
+  });
+  if(curKey)sections[curKey]=curLines.join('\n').trim();
+
+  let filled=0;
+
+  // 자막 → ls-subtitles
+  const subKey=Object.keys(sections).find(k=>k.includes('자막'));
+  if(subKey&&document.getElementById('ls-subtitles')){
+    document.getElementById('ls-subtitles').value=sections[subKey];
+    previewSubtitles(sections[subKey]);
+    filled++;
+  }
+
+  // 핵심 표현 → ls-expressions
+  const expKey=Object.keys(sections).find(k=>k.includes('핵심 표현')||k.includes('표현 카드'));
+  if(expKey&&document.getElementById('ls-expressions')){
+    document.getElementById('ls-expressions').value=sections[expKey];
+    filled++;
+  }
+
+  // 응용 가이드 → ls-guide
+  const guideKey=Object.keys(sections).find(k=>k.includes('가이드'));
+  if(guideKey&&document.getElementById('ls-guide')){
+    document.getElementById('ls-guide').value=sections[guideKey];
+    filled++;
+  }
+
+  if(filled>0){
+    tst(`✨ ${filled}개 항목 자동 채워졌어요!`);
+    document.getElementById('sg-import').value='';
+  } else {
+    tst('형식을 확인해주세요');
+  }
+}
+
 function previewSubtitles(val){
   const el=document.getElementById('subtitle-preview');if(!el)return;
   const lines=val.split('\n').filter(l=>l.trim()&&l.includes('|'));
@@ -1767,15 +1831,15 @@ function renderSList(cls,doneSet){
   if(!el)return;
   el.innerHTML=filt.length?filt.map((s,i)=>{
     const ini=dispInitial(s.name,s.email),done=doneSet?.has(s.id);
-    return`<div class="card" style="cursor:pointer;margin-bottom:8px;" onclick="openSD('${s.id}','${(s.name||s.email).replace(/'/g,"\\'")}','${s.class_name||''}')">
+    return`<div class="card" style="margin-bottom:8px;">
       <div class="row" style="margin-bottom:7px;">
-        <div style="display:flex;align-items:center;gap:9px;">
+        <div style="display:flex;align-items:center;gap:9px;cursor:pointer;" onclick="openSD('${s.id}','${(s.name||s.email).replace(/'/g,"\\'")}','${s.class_name||''}')">
           <div class="sa" style="background:${av[i%5]};color:${tc[i%5]};">${ini}</div>
           <div><div style="font-size:13px;font-weight:600;">${dispName(s.name,s.email)}</div><div class="mu">${s.class_name||'반 없음'}</div></div>
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
           <span class="bdg ${done?'bg':'bgr'}">${done?'리뷰완료':'미완료'}</span>
-          <svg width="11" height="11" viewBox="0 0 11 11"><polyline points="3.5,1 8,5.5 3.5,10" fill="none" stroke="#C8C4BA" stroke-width="1.5"/></svg>
+          <div onclick="delStudent('${s.id}','${dispName(s.name,s.email).replace(/'/g,"\\'")}',event)" style="font-size:10px;color:var(--rd);background:var(--rl);padding:2px 8px;border-radius:6px;cursor:pointer;font-weight:600;">삭제</div>
         </div>
       </div>
       <div id="sstat-${s.id}"><div style="font-size:10px;color:var(--mu);">통계 로딩중...</div></div>
@@ -2280,7 +2344,10 @@ function renderClsList(){
   if(!classes.length){el.innerHTML='<div class="empty">아직 반이 없어요</div>';return;}
   el.innerHTML=classes.map(cls=>{
     const members=sts.filter(s=>s.class_name===cls);
-    const tags=members.map(s=>`<div style="display:flex;align-items:center;gap:4px;background:var(--sf);border-radius:99px;padding:3px 10px;font-size:11px;">${s.name||s.email}<div onclick="rmFromCls('${s.id}','${cls}')" style="width:14px;height:14px;border-radius:50%;background:var(--rl);display:flex;align-items:center;justify-content:center;cursor:pointer;margin-left:2px;"><svg width="7" height="7" viewBox="0 0 7 7"><line x1="1" y1="1" x2="6" y2="6" stroke="#A32D2D" stroke-width="1.5"/><line x1="6" y1="1" x2="1" y2="6" stroke="#A32D2D" stroke-width="1.5"/></svg></div></div>`).join('');
+    const tags=members.map(s=>`<div style="display:flex;align-items:center;gap:4px;background:var(--sf);border-radius:99px;padding:3px 10px;font-size:11px;">${dispName(s.name,s.email)}
+      <div onclick="rmFromCls('${s.id}','${cls}')" style="width:14px;height:14px;border-radius:50%;background:var(--rl);display:flex;align-items:center;justify-content:center;cursor:pointer;margin-left:2px;" title="반에서 제거"><svg width="7" height="7" viewBox="0 0 7 7"><line x1="1" y1="1" x2="6" y2="6" stroke="#A32D2D" stroke-width="1.5"/><line x1="6" y1="1" x2="1" y2="6" stroke="#A32D2D" stroke-width="1.5"/></svg></div>
+      <div onclick="delStudent('${s.id}','${dispName(s.name,s.email).replace(/'/g,"\\'")}',event)" style="width:14px;height:14px;border-radius:50%;background:#fee2e2;display:flex;align-items:center;justify-content:center;cursor:pointer;margin-left:1px;" title="학생 완전 삭제">🗑</div>
+    </div>`).join('');
     const unassigned=sts.filter(s=>!s.class_name||s.class_name!==cls);
     const opts=unassigned.map(s=>`<option value="${s.id}">${dispName(s.name,s.email)}</option>`).join('');
     return`<div class="card" style="margin-bottom:9px;">
@@ -2316,6 +2383,16 @@ async function addToCls(cls){
   const st=sts.find(s=>s.id===sid);if(st)st.class_name=cls;
   renderClsList();tst('반에 추가됐어요!');
 }
+async function delStudent(sid, name, e){
+  if(e)e.stopPropagation();
+  if(!confirm(`"${name}" 학생을 완전히 삭제할까요?\n\n출석, 단어, 리뷰 기록이 모두 삭제됩니다.`))return;
+  const{error}=await sb.from('profiles').delete().eq('id',sid);
+  if(error){tst('삭제 실패: '+error.message);return;}
+  sts=sts.filter(s=>s.id!==sid);
+  tst(`${name} 삭제됐어요`);
+  lAdm();
+}
+
 async function rmFromCls(sid,cls){
   if(!confirm(`${cls}에서 제거할까요?`))return;
   const{error}=await sb.from('profiles').update({class_name:null}).eq('id',sid);
@@ -2577,17 +2654,49 @@ async function sAt(sid,status,date){
 
 // ── 단어추가 ──
 function rVTgt(){
-  const el=document.getElementById('vtgt');if(!el)return;
-  const clsOpts=classes.map(c=>`<option value="cls:${c}">${c} 전체</option>`).join('');
-  const stOpts=sts.map(s=>`<option value="${s.id}">${dispName(s.name,s.email)} (${s.class_name||'반없음'})</option>`).join('');
-  el.innerHTML=`<option value="all">전체 학생 (${sts.length}명)</option>${clsOpts}${stOpts}`;
+  const wrap=document.getElementById('vtgt-cls');if(!wrap)return;
+  // 전체 체크박스 업데이트
+  const allCb=document.getElementById('vtgt-all');
+  if(allCb)allCb.parentElement.querySelector('span').textContent=`전체 학생 (${sts.length}명)`;
+  // 반별 + 개인 체크박스
+  const clsItems=classes.map(c=>`
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+      <input type="checkbox" class="vtgt-cb" value="cls:${c}" style="width:15px;height:15px;accent-color:var(--g);">
+      <span style="font-size:12px;font-weight:600;">${c} 전체 (${sts.filter(s=>s.class_name===c).length}명)</span>
+    </label>`).join('');
+  const stItems=sts.map(s=>`
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding-left:8px;">
+      <input type="checkbox" class="vtgt-cb" value="${s.id}" style="width:14px;height:14px;accent-color:var(--g);">
+      <span style="font-size:12px;">${dispName(s.name,s.email)} <span style="color:var(--mu);font-size:11px;">(${s.class_name||'반없음'})</span></span>
+    </label>`).join('');
+  wrap.innerHTML=clsItems+stItems;
 }
+
+function vtgtAllToggle(cb){
+  const checked=cb.checked;
+  document.querySelectorAll('.vtgt-cb').forEach(el=>el.checked=checked);
+}
+
+function getVTgtIds(){
+  const allCb=document.getElementById('vtgt-all');
+  if(allCb?.checked)return sts.map(s=>s.id);
+  const ids=new Set();
+  document.querySelectorAll('.vtgt-cb:checked').forEach(cb=>{
+    const v=cb.value;
+    if(v.startsWith('cls:')){
+      sts.filter(s=>s.class_name===v.slice(4)).forEach(s=>ids.add(s.id));
+    } else {
+      ids.add(v);
+    }
+  });
+  return [...ids];
+}
+
 async function admAddV(){
   const e=document.getElementById('ae2').value.trim(),k=document.getElementById('ak2').value.trim();
-  const tgt=document.getElementById('vtgt').value;
   if(!e||!k){tst('영어와 한국어를 입력해주세요');return;}
   const today=new Date().toISOString().slice(0,10);
-  const targets=tgt==='all'?sts.map(s=>s.id):tgt.startsWith('cls:')?sts.filter(s=>s.class_name===tgt.slice(4)).map(s=>s.id):[tgt];
+  const targets=getVTgtIds();
   if(!targets.length){tst('대상 학생이 없어요');return;}
   const{error}=await sb.from('vocab_cards').insert(targets.map(sid=>({student_id:sid,english:e,korean:k,box_level:1,next_review:today})));
   if(error){tst('추가 실패: '+error.message);console.error(error);return;}
@@ -2596,7 +2705,6 @@ async function admAddV(){
 }
 async function admBulkV(){
   const bulk=document.getElementById('vbulk').value.trim();
-  const tgt=document.getElementById('vtgt').value;
   if(!bulk){tst('단어를 입력해주세요');return;}
   const pairs=bulk.split('\n').filter(l=>l.trim()).map(l=>{const p=l.split(',');return p.length>=2?{eng:p[0].trim(),kor:p.slice(1).join(',').trim()}:null;}).filter(Boolean);
   if(!pairs.length){tst('영어,한국어 형식으로 입력해주세요');return;}
