@@ -411,53 +411,32 @@ function doUpdate(){
 
       <!-- 레슨 -->
       <div id="ad-ls" style="display:none;">
-        <!-- ✨ AI 자동 가공 섹션 -->
-        <div style="background:linear-gradient(135deg,#1D9E75,#159468);border-radius:14px;padding:14px;margin-bottom:14px;color:#fff;">
-          <div style="font-size:13px;font-weight:700;margin-bottom:4px;">✨ AI 자동 가공</div>
-          <div style="font-size:11px;opacity:.85;margin-bottom:10px;">수업 스크립트를 붙여넣으면 단어·빈칸문제·응용가이드를 자동으로 만들어줘요</div>
-          <textarea id="ai-raw-script" placeholder="PPT에서 수업 내용을 복사해서 붙여넣으세요&#10;&#10;예:&#10;Pattern ① be a natural&#10;뜻: 타고난 재능이 있다&#10;She's a natural at teaching.&#10;You're a natural leader.&#10;..." style="background:rgba(255,255,255,.15);border:1.5px solid rgba(255,255,255,.3);color:#fff;height:100px;margin-bottom:9px;font-size:12px;::placeholder-color:rgba(255,255,255,.6);"></textarea>
-          <style>#ai-raw-script::placeholder{color:rgba(255,255,255,.6);}</style>
-          <button onclick="aiProcessScript()" id="ai-process-btn" style="width:100%;padding:11px;border-radius:11px;background:#fff;color:#085041;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">
-            🤖 AI로 자동 생성하기
-          </button>
-        </div>
-
-        <!-- AI 결과 미리보기 -->
-        <div id="ai-result" style="display:none;margin-bottom:14px;"></div>
-
-        <div class="dv"></div>
-
         <div style="font-size:13px;font-weight:600;margin-bottom:9px;" id="ls-form-title">새 토픽 등록</div>
         <input class="inp" type="text" id="lt" placeholder="토픽 제목 (예: KPop Demon Hunters)">
         <input class="inp" type="url" id="lu" placeholder="GitHub URL">
         <div style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--text);">반별 수업 날짜</div>
         <div id="ls-cls-rows"></div>
 
-        <!-- 스크립트 + 빈칸 설정 -->
         <div class="dv"></div>
-        <div style="font-size:12px;font-weight:600;margin-bottom:4px;">📖 3회차 암기 스크립트 <span style="font-size:11px;font-weight:400;color:var(--mu);">(선택)</span></div>
-        <div style="font-size:11px;color:var(--mu);margin-bottom:7px;">학생이 빈칸을 채워서 암기를 확인해요. ___ 로 빈칸 표시</div>
-        <textarea id="ls-script" placeholder="예: I can't ___ singing along whenever I hear this song. It just hits ___.&#10;(빈칸: resist, differently)"></textarea>
-        <div style="font-size:11px;color:var(--mu);margin-bottom:7px;margin-top:6px;">정답 (쉼표로 구분, 순서대로)</div>
-        <input class="inp" type="text" id="ls-answers" placeholder="예: resist, differently">
 
-        <div style="font-size:12px;font-weight:600;margin-bottom:4px;margin-top:4px;">✍️ 5·7회차 응용 가이드 <span style="font-size:11px;font-weight:400;color:var(--mu);">(선택)</span></div>
-        <input class="inp" type="text" id="ls-guide" placeholder="예: I can't resist ___ 로 나만의 문장을 만들어보세요">
-
-        <div style="font-size:12px;font-weight:600;margin-bottom:4px;margin-top:4px;">💡 핵심 표현 카드 <span style="font-size:11px;font-weight:400;color:var(--mu);">(5·7회차 응용 시 표시, 선택)</span></div>
-        <div style="font-size:11px;color:var(--mu);margin-bottom:7px;">영어,한국어 형식으로 줄마다 입력 (최대 10개)</div>
-        <textarea id="ls-expressions" placeholder="be a natural,타고난 재능이 있다&#10;light up,얼굴이 환해지다&#10;jealous of,~가 부럽다" style="height:90px;"></textarea>
-
-        <div class="dv"></div>
+        <!-- 5회차 자막 -->
         <div style="font-size:12px;font-weight:600;margin-bottom:4px;">🎬 5회차 암기용 자막 데이터 <span style="font-size:11px;font-weight:400;color:var(--mu);">(선택)</span></div>
         <div style="font-size:11px;color:var(--mu);margin-bottom:7px;">sg_builder에서 파이프 형식으로 복사해서 붙여넣으세요</div>
         <textarea id="ls-subtitles" placeholder="형식: 시작초|끝초|영어자막|한국어자막&#10;예:&#10;16.7|20.7|Good morning, Doobies|안녕하세요 여러분&#10;24.1|27.8|She lit up when she walked in|그녀가 들어오자 환해졌어" style="height:110px;font-family:monospace;font-size:11px;" oninput="previewSubtitles(this.value)"></textarea>
-        <div id="subtitle-preview" style="font-size:11px;color:var(--gm);margin-top:4px;margin-bottom:6px;"></div>
+        <div id="subtitle-preview" style="font-size:11px;color:var(--gm);margin-top:4px;margin-bottom:8px;"></div>
+
+        <!-- 7회차 핵심 표현 카드 -->
+        <div style="font-size:12px;font-weight:600;margin-bottom:4px;">💡 핵심 표현 카드 <span style="font-size:11px;font-weight:400;color:var(--mu);">(7회차 응용 시 표시, 선택)</span></div>
+        <div style="font-size:11px;color:var(--mu);margin-bottom:7px;">영어,한국어 형식으로 줄마다 입력 (최대 10개)</div>
+        <textarea id="ls-expressions" placeholder="be a natural,타고난 재능이 있다&#10;light up,얼굴이 환해지다&#10;jealous of,~가 부럽다" style="height:90px;"></textarea>
+
+        <!-- 7회차 응용 가이드 -->
+        <div style="font-size:12px;font-weight:600;margin-bottom:4px;margin-top:8px;">✍️ 7회차 응용 가이드 <span style="font-size:11px;font-weight:400;color:var(--mu);">(선택)</span></div>
+        <input class="inp" type="text" id="ls-guide" placeholder="예: light up 을 사용해서 나만의 문장을 만들어보세요">
 
         <div id="ls-form-btns">
           <button class="btn btn-p" onclick="saveLesson()">토픽 등록</button>
         </div>
-        <div id="ai-vocab-preview" style="display:none;"></div>
         <div class="dv"></div>
         <div style="font-size:13px;font-weight:600;margin-bottom:9px;">등록된 토픽</div>
         <div id="lslist"><div class="loading">로딩중...</div></div>
@@ -486,12 +465,7 @@ function doUpdate(){
         <div style="font-size:12px;font-weight:600;margin-bottom:4px;">일괄 추가</div>
         <div style="font-size:11px;color:var(--mu);margin-bottom:7px;">영어,한국어 형식으로 줄마다</div>
         <textarea id="vbulk" placeholder="I can't resist,~하지 않을 수가 없어&#10;hit differently,색다르게 느껴지다"></textarea>
-        <button class="btn btn-p" onclick="admBulkV()" style="margin-top:8px;margin-bottom:14px;">일괄 추가</button>
-        <div class="dv"></div>
-        <div style="font-size:12px;font-weight:600;margin-bottom:4px;">AI 자동 추출 <span style="font-size:10px;font-weight:400;color:var(--mu);">· 레슨에서 표현 자동 추출</span></div>
-        <select id="extract-lesson" style="margin-bottom:8px;"><option value="">레슨 선택...</option></select>
-        <button class="btn btn-p" onclick="extractVocab()" id="extract-btn">AI로 표현 추출하기</button>
-        <div id="extract-result"></div>
+        <button class="btn btn-p" onclick="admBulkV()" style="margin-top:8px;">일괄 추가</button>
       </div>
     </div>
 
