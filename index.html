@@ -980,13 +980,13 @@ function renderRH(logs){
 // ── REVIEW SESSION ──
 // 회차별 타입 결정
 function getRoundType(round){
-  if(round<=2) return 'follow';    // 1,2회차 — 듣고 따라하기
-  if(round===3) return 'memorize'; // 3회차 — 내용 암기
-  return 'apply';                  // 5,7회차 — 표현 응용
+  if(round<=3) return 'follow';    // 1,2,3회차 — 듣고 따라하기
+  if(round===5) return 'memorize'; // 5회차 — 내용 암기 플래시카드
+  return 'apply';                  // 7회차 — 표현 응용
 }
 function getRoundLabel(round){
-  if(round<=2) return {text:'따라하기', color:'#1D9E75', bg:'#E1F5EE', topBg:'#1E2D45'};
-  if(round===3) return {text:'내용 암기', color:'#854F0B', bg:'#FAEEDA', topBg:'#7C5A1E'};
+  if(round<=3) return {text:'듣고 따라하기', color:'#1D9E75', bg:'#E1F5EE', topBg:'#1E2D45'};
+  if(round===5) return {text:'내용 암기', color:'#854F0B', bg:'#FAEEDA', topBg:'#7C5A1E'};
   return {text:'표현 응용', color:'#085041', bg:'#E1F5EE', topBg:'#1E3A2F'};
 }
 
@@ -1018,13 +1018,30 @@ async function oSes(lid,title,url,round){
     renderBotFollow(lg?.count||0);
 
   } else if(type==='memorize'){
-    // 5회차 — 플래시카드 (iframe 없음)
-    document.getElementById('rs-content').innerHTML=`
-      <div style="background:rgba(0,0,0,.3);border-radius:9px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;">
-        <div style="font-size:12px;font-weight:700;color:#fff;">📖 내용 암기</div>
-        <div style="font-size:11px;color:rgba(255,255,255,.6);">${title}</div>
-      </div>`;
-    renderBotMemorize(lessonObj, sub||null);
+    // 5회차 — 자막 있으면 플래시카드, 없으면 영상 + 안내
+    const lessonSubs=lessonObj?.subtitles;
+    let hasSubs=false;
+    if(lessonSubs){try{hasSubs=JSON.parse(lessonSubs).filter(s=>s.kor).length>0;}catch{}}
+    if(hasSubs){
+      document.getElementById('rs-content').innerHTML=`
+        <div style="background:rgba(0,0,0,.3);border-radius:9px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;">
+          <div style="font-size:12px;font-weight:700;color:#fff;">📖 내용 암기</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.6);">${title}</div>
+        </div>`;
+      renderBotMemorize(lessonObj, sub||null);
+    } else {
+      // 자막 없으면 영상 그대로 + 하단에 안내
+      document.getElementById('rs-content').innerHTML=`
+        <div style="background:rgba(0,0,0,.3);border-radius:9px;padding:8px 12px;display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <div style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:#fff;">
+            <div style="width:6px;height:6px;border-radius:50%;background:${lbl.bg};"></div>
+            Speaking Gym with Noah
+          </div>
+          <div style="font-size:10px;font-weight:700;color:${lbl.bg};padding:2px 8px;border-radius:99px;background:rgba(255,255,255,.1);">📖 내용 암기</div>
+        </div>
+        <iframe src="${url}" style="width:100%;height:calc(100vh - 200px);border:none;border-radius:9px;" allowfullscreen></iframe>`;
+      renderBotMemorize(lessonObj, sub||null);
+    }
 
   } else {
     // 7회차 — 표현 응용 (iframe 없음)
