@@ -352,23 +352,56 @@ function doUpdate(){
 
     <!-- RECORD -->
     <div id="prc" class="pg">
-      <div class="tbb">
+      <!-- 프로필 + 연속학습 상단 고정 -->
+      <div style="padding:14px 14px 0;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:12px;">
+          <!-- 프로필 카드 -->
+          <div style="background:linear-gradient(145deg,#1a2940,#243054);border-radius:18px;padding:13px 11px;display:flex;flex-direction:column;align-items:center;position:relative;overflow:hidden;">
+            <div style="position:absolute;right:-8px;top:-8px;width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.04);"></div>
+            <!-- 프로필 사진 -->
+            <div style="position:relative;margin-bottom:7px;">
+              <div id="profile-avatar" style="width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#1D9E75,#159468);border:2.5px solid rgba(255,255,255,.2);overflow:hidden;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,.3);cursor:pointer;" onclick="document.getElementById('profile-upload').click()">
+                <svg width="26" height="26" viewBox="0 0 26 26" fill="none"><circle cx="13" cy="10" r="5" stroke="rgba(255,255,255,.7)" stroke-width="1.5"/><path d="M4 23c0-5 4-9 9-9s9 4 9 9" stroke="rgba(255,255,255,.7)" stroke-width="1.5" stroke-linecap="round"/></svg>
+              </div>
+              <div onclick="document.getElementById('profile-upload').click()" style="position:absolute;bottom:0;right:0;width:18px;height:18px;border-radius:50%;background:rgba(255,255,255,.2);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;cursor:pointer;">
+                <svg width="9" height="9" viewBox="0 0 9 9" fill="none"><path d="M1 7h1.5l3.5-3.5L4.5 2 1 5.5V7z" stroke="rgba(255,255,255,.8)" stroke-width="1"/><line x1="4.5" y1="2" x2="7" y2="4.5" stroke="rgba(255,255,255,.8)" stroke-width="1"/></svg>
+              </div>
+            </div>
+            <input type="file" id="profile-upload" accept="image/*" style="display:none;" onchange="uploadProfilePhoto(this)">
+            <div id="profile-name" style="font-size:11px;font-weight:700;color:#fff;margin-bottom:2px;">-</div>
+            <div id="profile-class" style="font-size:8px;color:rgba(255,255,255,.45);margin-bottom:7px;">-</div>
+            <div id="profile-level-badge" style="background:linear-gradient(135deg,#FFB347,#E8940A);border-radius:99px;padding:3px 9px;box-shadow:0 2px 8px rgba(255,179,71,.4);">
+              <div style="font-size:9px;font-weight:700;color:#fff;">🔥 Lv.-</div>
+            </div>
+          </div>
+          <!-- 연속학습 카드 -->
+          <div id="rec-streak" style="background:linear-gradient(135deg,#FF8C42,#F06020);border-radius:18px;padding:13px 11px;display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(240,96,32,.3);position:relative;overflow:hidden;">
+            <div style="position:absolute;right:-6px;bottom:-6px;width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.08);"></div>
+            <div style="font-size:28px;line-height:1;margin-bottom:4px;">🔥</div>
+            <div style="font-size:24px;font-weight:800;color:#fff;letter-spacing:-.5px;line-height:1;">-</div>
+            <div style="font-size:8px;color:rgba(255,255,255,.8);margin-top:4px;font-weight:600;">연속 학습</div>
+          </div>
+        </div>
+        <!-- XP 바 -->
+        <div id="xp-bar-rec" style="margin-bottom:12px;"></div>
+      </div>
+
+      <div class="tbb" style="margin:0 14px 12px;">
         <button class="tbn on" onclick="rectab('v',this)">단어</button>
         <button class="tbn" onclick="rectab('r',this)">리뷰</button>
       </div>
-      <div id="rec-v">
-        <!-- 연속학습 -->
-        <div id="rec-streak" style="margin-bottom:10px;"></div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
-          <div style="background:var(--gl);border-radius:12px;padding:12px;border:1.5px solid #C0E8D8;text-align:center;"><div style="font-size:20px;font-weight:700;color:var(--gd);" id="rv-total">-</div><div style="font-size:11px;color:var(--gm);margin-top:2px;">총 학습</div></div>
-          <div style="background:var(--pul);border-radius:12px;padding:12px;border:1.5px solid #BDB8EF;text-align:center;"><div style="font-size:20px;font-weight:700;color:var(--pud);" id="rv-master">-</div><div style="font-size:11px;color:var(--pu);margin-top:2px;">마스터</div></div>
+      <div id="rec-v" style="padding:0 14px 14px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin-bottom:12px;">
+          <div style="background:#fff;border-radius:12px;padding:10px 6px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.06);"><div style="font-size:18px;font-weight:800;color:var(--gd);" id="rv-total">-</div><div style="font-size:9px;color:var(--mu);margin-top:1px;">단어</div></div>
+          <div style="background:#fff;border-radius:12px;padding:10px 6px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.06);"><div style="font-size:18px;font-weight:800;color:var(--pud);" id="rv-master">-</div><div style="font-size:9px;color:var(--mu);margin-top:1px;">마스터</div></div>
+          <div style="background:#fff;border-radius:12px;padding:10px 6px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.06);"><div style="font-size:18px;font-weight:800;color:var(--amd);" id="rv-streak-num">-</div><div style="font-size:9px;color:var(--mu);margin-top:1px;">연속일</div></div>
         </div>
         <div class="sec">최근 7일 학습</div>
         <div id="rec-chart" style="margin-bottom:12px;"></div>
         <div class="sec">현재 단어 분포</div>
         <div id="rec-dist"></div>
       </div>
-      <div id="rec-r" style="display:none;">
+      <div id="rec-r" style="display:none;padding:0 14px 14px;">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
           <div style="background:var(--gl);border-radius:12px;padding:12px;border:1.5px solid #C0E8D8;text-align:center;"><div style="font-size:20px;font-weight:700;color:var(--gd);" id="rr-done">-</div><div style="font-size:11px;color:var(--gm);margin-top:2px;">완료한 리뷰</div></div>
           <div style="background:var(--aml);border-radius:12px;padding:12px;border:1.5px solid #FAC775;text-align:center;"><div style="font-size:20px;font-weight:700;color:var(--amd);" id="rr-cnt">-</div><div style="font-size:11px;color:#854F0B;margin-top:2px;">총 따라하기</div></div>
@@ -633,6 +666,7 @@ async function initApp(u){
     loaded.review=true;
     loaded.record=true;
     try{await loadXP();}catch(e){console.warn('XP 로드 실패',e);}
+    loadProfilePhoto();
     buildHomeTodo();
   }
 }
@@ -1526,26 +1560,70 @@ async function lRec(){
   renderWeekChart();
 }
 async function calcStreak(){
-  const{data}=await sb.from('review_logs').select('completed_at').eq('student_id',U.id).eq('completed',true).order('completed_at',{ascending:false});
-  const dates=[...new Set((data||[]).map(l=>l.completed_at?.slice(0,10)).filter(Boolean))];
+  const today=new Date().toISOString().slice(0,10);
+  const{data:rl}=await sb.from('review_logs').select('completed_at').eq('student_id',U.id).eq('completed',true).order('completed_at',{ascending:false});
+  const{data:xl}=await sb.from('xp_logs').select('created_at').eq('student_id',U.id).order('created_at',{ascending:false});
+  const allDates=new Set([
+    ...(rl||[]).map(l=>l.completed_at?.slice(0,10)).filter(Boolean),
+    ...(xl||[]).map(l=>l.created_at?.slice(0,10)).filter(Boolean),
+  ]);
+  const dates=[...allDates];
   let streak=0;
-  const today=new Date();
-  for(let i=0;i<30;i++){
-    const d=new Date(today);d.setDate(d.getDate()-i);
+  const todayDt=new Date();
+  for(let i=0;i<365;i++){
+    const d=new Date(todayDt);d.setDate(d.getDate()-i);
     const ds=d.toISOString().slice(0,10);
     if(dates.includes(ds))streak++;
     else if(i>0)break;
   }
-  // 단어 학습도 포함
-  const{data:vc2}=await sb.from('vocab_cards').select('next_review').eq('student_id',U.id);
-  const el=document.getElementById('rec-streak');
-  if(el)el.innerHTML=streak>0?`<div style="background:linear-gradient(135deg,#FF8C42,#F06020);border-radius:14px;padding:14px;margin-bottom:10px;text-align:center;box-shadow:0 6px 18px rgba(240,96,32,.25);">
-    <div style="font-size:26px;font-weight:800;color:#fff;letter-spacing:-.5px;">🔥 ${streak}일</div>
-    <div style="font-size:11px;color:#854F0B;margin-top:2px;">연속 학습 중! 오늘도 했어요</div>
-  </div>`:`<div style="background:var(--sf);border-radius:12px;padding:12px 14px;border:1.5px solid var(--brd);margin-bottom:10px;text-align:center;">
-    <div style="font-size:13px;color:var(--mu);">아직 연속 학습 기록이 없어요</div>
-    <div style="font-size:11px;color:var(--mu);margin-top:2px;">오늘 시작해봐요!</div>
-  </div>`;
+  const doneToday=dates.includes(today);
+
+  // 연속학습 카드 업데이트
+  const streakEl=document.getElementById('rec-streak');
+  if(streakEl){
+    streakEl.innerHTML=`
+      <div style="position:absolute;right:-6px;bottom:-6px;width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.08);"></div>
+      <div style="font-size:28px;line-height:1;margin-bottom:4px;">🔥</div>
+      <div style="font-size:${streak>=100?20:24}px;font-weight:800;color:#fff;letter-spacing:-.5px;line-height:1;">${streak}일</div>
+      <div style="font-size:8px;color:rgba(255,255,255,.8);margin-top:4px;font-weight:600;">연속 학습</div>
+      <div style="font-size:7px;color:rgba(255,255,255,.55);margin-top:2px;">${doneToday?'오늘도 했어요!':'오늘도 해봐요 💪'}</div>`;
+  }
+
+  // 연속일 숫자도 통계에
+  const snEl=document.getElementById('rv-streak-num');
+  if(snEl)snEl.textContent=streak;
+
+  // 프로필 카드 이름/반/레벨 업데이트
+  const nameEl=document.getElementById('profile-name');
+  const clsEl=document.getElementById('profile-class');
+  const lvEl=document.getElementById('profile-level-badge');
+  if(nameEl)nameEl.textContent=dispName(P?.name,U?.email)||'-';
+  if(clsEl)clsEl.textContent=P?.class_name||'반 없음';
+  if(lvEl){
+    const info=getLevelInfo(myXP);
+    lvEl.innerHTML=`<div style="font-size:9px;font-weight:700;color:#fff;">${info.cur.emoji} Lv.${info.cur.level} ${info.cur.name}</div>`;
+  }
+
+  // XP 바 (기록탭용)
+  const xpRec=document.getElementById('xp-bar-rec');
+  if(xpRec){
+    const info=getLevelInfo(myXP);
+    const cur=info.cur,next=info.next;
+    const pct=next?Math.round((myXP-cur.xp)/(next.xp-cur.xp)*100):100;
+    xpRec.innerHTML=`<div style="background:linear-gradient(135deg,#1a2940,#243054);border-radius:13px;padding:11px 13px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;">
+        <div style="display:flex;align-items:center;gap:7px;">
+          <div style="font-size:16px;">${cur.emoji}</div>
+          <div><div style="font-size:9px;color:rgba(255,255,255,.4);font-weight:600;">LEVEL ${cur.level}</div><div style="font-size:12px;font-weight:800;color:#fff;">${cur.name}</div></div>
+        </div>
+        <div style="font-size:15px;font-weight:800;color:#FFB347;">${myXP.toLocaleString()} XP</div>
+      </div>
+      <div style="background:rgba(255,255,255,.1);border-radius:99px;height:5px;">
+        <div style="background:linear-gradient(90deg,#FFB347,#FFD700);border-radius:99px;height:5px;width:${pct}%;"></div>
+      </div>
+      <div style="font-size:8px;color:rgba(255,255,255,.3);text-align:right;margin-top:3px;">${next?`다음 레벨까지 ${(next.xp-myXP).toLocaleString()} XP`:'🏆 최고 레벨!'}</div>
+    </div>`;
+  }
 }
 function renderWeekChart(){
   const el=document.getElementById('rec-chart');
@@ -2889,6 +2967,49 @@ function playMemSeg(start,end){
   const ytId=ses.url.match(/(?:youtu\.be\/|v=)([^&\s]+)/)?.[1];
   if(ytId){window.open(`https://www.youtube.com/watch?v=${ytId}&t=${Math.floor(start)}s`,'_blank');}
   else{window.open(ses.url,'_blank');}
+}
+
+// ── 프로필 사진 ──
+async function loadProfilePhoto(){
+  try{
+    const{data}=await sb.storage.from('avatars').list(U.id+'/');
+    if(data?.length){
+      const{data:url}=sb.storage.from('avatars').getPublicUrl(`${U.id}/avatar`);
+      setProfilePhoto(url.publicUrl+'?t='+Date.now());
+    }
+  }catch(e){console.warn('프로필 사진 로드 실패',e);}
+}
+
+function setProfilePhoto(url){
+  const el=document.getElementById('profile-avatar');
+  if(!el)return;
+  el.innerHTML=`<img src="${url}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" onerror="this.parentElement.innerHTML='<svg width=26 height=26 viewBox=\\'0 0 26 26\\' fill=\\'none\\'><circle cx=\\'13\\' cy=\\'10\\' r=\\'5\\' stroke=\\'rgba(255,255,255,.7)\\' stroke-width=\\'1.5\\'/><path d=\\'M4 23c0-5 4-9 9-9s9 4 9 9\\' stroke=\\'rgba(255,255,255,.7)\\' stroke-width=\\'1.5\\' stroke-linecap=\\'round\\'/></svg>'">`;
+  // 홈 아바타도 업데이트
+  const av=document.getElementById('uav');
+  if(av){av.style.backgroundImage=`url(${url})`;av.style.backgroundSize='cover';av.style.backgroundPosition='center';av.textContent='';}
+}
+
+async function uploadProfilePhoto(input){
+  const file=input.files?.[0];if(!file)return;
+  if(file.size>5*1024*1024){tst('5MB 이하 사진만 올릴 수 있어요');return;}
+  tst('사진 업로드 중...');
+  try{
+    // 리사이즈 (canvas)
+    const img=await new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=URL.createObjectURL(file);});
+    const canvas=document.createElement('canvas');
+    const size=Math.min(img.width,img.height,400);
+    canvas.width=size;canvas.height=size;
+    const ctx=canvas.getContext('2d');
+    const sx=(img.width-size)/2,sy=(img.height-size)/2;
+    ctx.drawImage(img,sx,sy,size,size,0,0,size,size);
+    const blob=await new Promise(res=>canvas.toBlob(res,'image/jpeg',0.85));
+    const{error}=await sb.storage.from('avatars').upload(`${U.id}/avatar`,blob,{upsert:true,contentType:'image/jpeg'});
+    if(error){tst('업로드 실패: '+error.message);return;}
+    const{data:url}=sb.storage.from('avatars').getPublicUrl(`${U.id}/avatar`);
+    setProfilePhoto(url.publicUrl+'?t='+Date.now());
+    tst('프로필 사진이 변경됐어요! 📸');
+  }catch(e){tst('업로드 실패');console.error(e);}
+  input.value='';
 }
 
 // ── SWIPE ──
