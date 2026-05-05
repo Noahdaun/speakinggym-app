@@ -352,38 +352,57 @@ function doUpdate(){
 
     <!-- RECORD -->
     <div id="prc" class="pg">
-      <!-- 프로필 + 연속학습 상단 고정 -->
+      <!-- 프로필 히어로 -->
       <div style="padding:14px 14px 0;">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:12px;">
-          <!-- 프로필 카드 -->
-          <div style="background:linear-gradient(145deg,#1a2940,#243054);border-radius:18px;padding:13px 11px;display:flex;flex-direction:column;align-items:center;position:relative;overflow:hidden;">
-            <div style="position:absolute;right:-8px;top:-8px;width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.04);"></div>
-            <!-- 프로필 사진 -->
-            <div style="position:relative;margin-bottom:7px;">
-              <div id="profile-avatar" style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#1D9E75,#159468);border:2.5px solid rgba(255,255,255,.2);overflow:hidden;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,.3);cursor:pointer;" onclick="document.getElementById('profile-upload').click()">
-                <svg width="32" height="32" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="12" r="6" stroke="rgba(255,255,255,.7)" stroke-width="1.8"/><path d="M5 28c0-6 5-11 11-11s11 5 11 11" stroke="rgba(255,255,255,.7)" stroke-width="1.8" stroke-linecap="round"/></svg>
+        <div style="background:linear-gradient(160deg,#1a2940 0%,#243054 100%);border-radius:20px;padding:18px 16px;margin-bottom:10px;position:relative;overflow:hidden;">
+          <div style="position:absolute;right:-20px;top:-20px;width:80px;height:80px;border-radius:50%;background:rgba(255,255,255,.04);"></div>
+          <div style="position:absolute;left:-10px;bottom:-20px;width:60px;height:60px;border-radius:50%;background:rgba(255,255,255,.03);"></div>
+
+          <!-- 사진 + 정보 가로 배치 -->
+          <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;">
+            <!-- 네모 큰 사진 -->
+            <div style="position:relative;flex-shrink:0;">
+              <div id="profile-avatar" onclick="document.getElementById('profile-upload').click()" style="width:88px;height:88px;border-radius:18px;background:linear-gradient(135deg,#1D9E75,#159468);overflow:hidden;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 20px rgba(0,0,0,.4);cursor:pointer;border:2px solid rgba(255,255,255,.15);">
+                <svg width="42" height="42" viewBox="0 0 42 42" fill="none"><circle cx="21" cy="15" r="8" stroke="rgba(255,255,255,.65)" stroke-width="2"/><path d="M6 38c0-8 7-14 15-14s15 6 15 14" stroke="rgba(255,255,255,.65)" stroke-width="2" stroke-linecap="round"/></svg>
               </div>
-              <div onclick="document.getElementById('profile-upload').click()" style="position:absolute;bottom:1px;right:1px;width:20px;height:20px;border-radius:50%;background:rgba(255,255,255,.25);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;cursor:pointer;border:1.5px solid rgba(255,255,255,.3);">
-                <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M1.5 8h1.8l4-4L5.8 2.5 1.5 6.2V8z" stroke="rgba(255,255,255,.9)" stroke-width="1.1"/><line x1="5.8" y1="2.5" x2="8" y2="4.7" stroke="rgba(255,255,255,.9)" stroke-width="1.1"/></svg>
+              <div onclick="document.getElementById('profile-upload').click()" style="position:absolute;bottom:6px;right:6px;width:24px;height:24px;border-radius:8px;background:rgba(0,0,0,.5);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;cursor:pointer;border:1.5px solid rgba(255,255,255,.2);">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 10h2.2l4.5-4.5L6.5 3.3 2 7.8V10z" stroke="white" stroke-width="1.2"/><line x1="6.5" y1="3.3" x2="9.2" y2="6" stroke="white" stroke-width="1.2"/></svg>
               </div>
+              <input type="file" id="profile-upload" accept="image/*" style="display:none;" onchange="uploadProfilePhoto(this)">
             </div>
-            <input type="file" id="profile-upload" accept="image/*" style="display:none;" onchange="uploadProfilePhoto(this)">
-            <div id="profile-name" style="font-size:11px;font-weight:700;color:#fff;margin-bottom:2px;">-</div>
-            <div id="profile-class" style="font-size:8px;color:rgba(255,255,255,.45);margin-bottom:7px;">-</div>
-            <div id="profile-level-badge" style="background:linear-gradient(135deg,#FFB347,#E8940A);border-radius:99px;padding:3px 9px;box-shadow:0 2px 8px rgba(255,179,71,.4);">
-              <div style="font-size:9px;font-weight:700;color:#fff;">🔥 Lv.-</div>
+            <!-- 이름 + 레벨 -->
+            <div style="flex:1;min-width:0;">
+              <div id="profile-name" style="font-size:20px;font-weight:800;color:#fff;letter-spacing:-.4px;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">-</div>
+              <div id="profile-class" style="font-size:12px;color:rgba(255,255,255,.5);margin-bottom:10px;">-</div>
+              <div id="profile-level-badge" style="display:inline-flex;align-items:center;gap:5px;background:linear-gradient(135deg,#FFB347,#E8940A);border-radius:99px;padding:5px 13px;box-shadow:0 3px 10px rgba(255,179,71,.4);">
+                <span style="font-size:14px;">🔥</span>
+                <span style="font-size:12px;font-weight:700;color:#fff;">Lv.- -</span>
+              </div>
             </div>
           </div>
-          <!-- 연속학습 카드 -->
-          <div id="rec-streak" style="background:linear-gradient(135deg,#FF8C42,#F06020);border-radius:18px;padding:13px 11px;display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(240,96,32,.3);position:relative;overflow:hidden;">
-            <div style="position:absolute;right:-6px;bottom:-6px;width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.08);"></div>
-            <div style="font-size:28px;line-height:1;margin-bottom:4px;">🔥</div>
-            <div style="font-size:24px;font-weight:800;color:#fff;letter-spacing:-.5px;line-height:1;">-</div>
-            <div style="font-size:8px;color:rgba(255,255,255,.8);margin-top:4px;font-weight:600;">연속 학습</div>
+
+          <!-- XP 바 -->
+          <div id="xp-bar-rec"></div>
+        </div>
+
+        <!-- 연속 + 통계 3개 -->
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px;">
+          <div id="rec-streak" style="background:linear-gradient(135deg,#FF8C42,#F06020);border-radius:14px;padding:12px 8px;text-align:center;box-shadow:0 4px 14px rgba(240,96,32,.3);position:relative;overflow:hidden;">
+            <div style="font-size:20px;margin-bottom:2px;">🔥</div>
+            <div style="font-size:20px;font-weight:800;color:#fff;line-height:1;">-</div>
+            <div style="font-size:9px;color:rgba(255,255,255,.8);margin-top:3px;font-weight:600;">연속일</div>
+          </div>
+          <div style="background:#fff;border-radius:14px;padding:12px 8px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.07);">
+            <div style="font-size:20px;margin-bottom:2px;">📚</div>
+            <div style="font-size:20px;font-weight:800;color:#085041;line-height:1;" id="rv-total">-</div>
+            <div style="font-size:9px;color:#BBB;margin-top:3px;">단어</div>
+          </div>
+          <div style="background:#fff;border-radius:14px;padding:12px 8px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.07);">
+            <div style="font-size:20px;margin-bottom:2px;">✅</div>
+            <div style="font-size:20px;font-weight:800;color:#3C3489;line-height:1;" id="rv-master">-</div>
+            <div style="font-size:9px;color:#BBB;margin-top:3px;">리뷰</div>
           </div>
         </div>
-        <!-- XP 바 -->
-        <div id="xp-bar-rec" style="margin-bottom:12px;"></div>
       </div>
 
       <div class="tbb" style="margin:0 14px 12px;">
@@ -391,11 +410,6 @@ function doUpdate(){
         <button class="tbn" onclick="rectab('r',this)">리뷰</button>
       </div>
       <div id="rec-v" style="padding:0 14px 14px;">
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin-bottom:12px;">
-          <div style="background:#fff;border-radius:12px;padding:10px 6px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.06);"><div style="font-size:18px;font-weight:800;color:var(--gd);" id="rv-total">-</div><div style="font-size:9px;color:var(--mu);margin-top:1px;">단어</div></div>
-          <div style="background:#fff;border-radius:12px;padding:10px 6px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.06);"><div style="font-size:18px;font-weight:800;color:var(--pud);" id="rv-master">-</div><div style="font-size:9px;color:var(--mu);margin-top:1px;">마스터</div></div>
-          <div style="background:#fff;border-radius:12px;padding:10px 6px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.06);"><div style="font-size:18px;font-weight:800;color:var(--amd);" id="rv-streak-num">-</div><div style="font-size:9px;color:var(--mu);margin-top:1px;">연속일</div></div>
-        </div>
         <div class="sec">최근 7일 학습</div>
         <div id="rec-chart" style="margin-bottom:12px;"></div>
         <div class="sec">현재 단어 분포</div>
@@ -1578,20 +1592,15 @@ async function calcStreak(){
   }
   const doneToday=dates.includes(today);
 
-  // 연속학습 카드 업데이트
+  // 연속학습 카드
   const streakEl=document.getElementById('rec-streak');
   if(streakEl){
     streakEl.innerHTML=`
-      <div style="position:absolute;right:-6px;bottom:-6px;width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.08);"></div>
-      <div style="font-size:28px;line-height:1;margin-bottom:4px;">🔥</div>
-      <div style="font-size:${streak>=100?20:24}px;font-weight:800;color:#fff;letter-spacing:-.5px;line-height:1;">${streak}일</div>
-      <div style="font-size:8px;color:rgba(255,255,255,.8);margin-top:4px;font-weight:600;">연속 학습</div>
-      <div style="font-size:7px;color:rgba(255,255,255,.55);margin-top:2px;">${doneToday?'오늘도 했어요!':'오늘도 해봐요 💪'}</div>`;
+      <div style="font-size:20px;margin-bottom:2px;">🔥</div>
+      <div style="font-size:20px;font-weight:800;color:#fff;line-height:1;">${streak}</div>
+      <div style="font-size:9px;color:rgba(255,255,255,.8);margin-top:3px;font-weight:600;">연속일</div>
+      <div style="font-size:8px;color:rgba(255,255,255,.55);margin-top:2px;">${doneToday?'오늘도 ✓':'오늘도 해봐요!'}</div>`;
   }
-
-  // 연속일 숫자도 통계에
-  const snEl=document.getElementById('rv-streak-num');
-  if(snEl)snEl.textContent=streak;
 
   // 프로필 카드 이름/반/레벨 업데이트
   const nameEl=document.getElementById('profile-name');
@@ -1927,6 +1936,22 @@ async function renderSD(){
     calH+=`<div class="cc ${cls}">${d}</div>`;
   }
   const stu=sts.find(s=>s.id===sdSid);
+  // 학생 프로필 사진 가져오기
+  let avatarUrl='';
+  try{
+    const{data:avatarData}=sb.storage.from('avatars').getPublicUrl(`${sdSid}/avatar`);
+    avatarUrl=avatarData?.publicUrl||'';
+  }catch{}
+  const avatarHtml=avatarUrl
+    ?`<img src="${avatarUrl}?t=${Date.now()}" style="width:100%;height:100%;object-fit:cover;border-radius:16px;" onerror="this.style.display='none'">`
+    :`<svg width="34" height="34" viewBox="0 0 34 34" fill="none"><circle cx="17" cy="12" r="7" stroke="rgba(255,255,255,.65)" stroke-width="1.8"/><path d="M5 31c0-7 5.5-12 12-12s12 5 12 12" stroke="rgba(255,255,255,.65)" stroke-width="1.8" stroke-linecap="round"/></svg>`;
+
+  // XP 정보
+  const{data:xpData}=await sb.from('user_xp').select('total_xp,level').eq('student_id',sdSid).single();
+  const stuXP=xpData?.total_xp||0;
+  const stuLevel=xpData?.level||1;
+  const stuLvInfo=getLevelInfo(stuXP);
+
   document.getElementById('sdp').innerHTML=`
     <div style="background:var(--bg);padding:13px 16px 9px;border-bottom:1.5px solid var(--brd);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10;">
       <div style="display:flex;align-items:center;gap:9px;">
@@ -1938,9 +1963,20 @@ async function renderSD(){
       <span class="bdg bgr">${stu?.class_name||'반 없음'}</span>
     </div>
     <div style="padding:14px;">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
-        <div style="background:var(--gl);border-radius:12px;padding:12px;border:1.5px solid #C0E8D8;text-align:center;"><div style="font-size:20px;font-weight:700;color:var(--gd);">${attP}%</div><div style="font-size:11px;color:var(--gm);margin-top:2px;">출석률</div></div>
-        <div style="background:#F3F0FC;border-radius:12px;padding:12px;border:1.5px solid #BDB8EF;text-align:center;"><div style="font-size:20px;font-weight:700;color:var(--pud);">${hwP}%</div><div style="font-size:11px;color:var(--pu);margin-top:2px;">숙제달성</div></div>
+      <!-- 프로필 히어로 -->
+      <div style="background:linear-gradient(160deg,#1a2940,#243054);border-radius:18px;padding:16px;margin-bottom:12px;display:flex;align-items:center;gap:13px;">
+        <div style="width:72px;height:72px;border-radius:16px;background:linear-gradient(135deg,#1D9E75,#159468);overflow:hidden;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 4px 14px rgba(0,0,0,.35);border:2px solid rgba(255,255,255,.12);">${avatarHtml}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:17px;font-weight:800;color:#fff;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${sdName}</div>
+          <div style="background:linear-gradient(135deg,#FFB347,#E8940A);border-radius:99px;padding:3px 11px;display:inline-block;margin-bottom:8px;">
+            <span style="font-size:11px;font-weight:700;color:#fff;">${stuLvInfo.cur.emoji} Lv.${stuLvInfo.cur.level} ${stuLvInfo.cur.name}</span>
+          </div>
+          <div style="display:flex;gap:10px;">
+            <div><div style="font-size:14px;font-weight:800;color:#fff;">${attP}%</div><div style="font-size:9px;color:rgba(255,255,255,.4);">출석</div></div>
+            <div><div style="font-size:14px;font-weight:800;color:#FFB347;">${stuXP.toLocaleString()}</div><div style="font-size:9px;color:rgba(255,255,255,.4);">XP</div></div>
+            <div><div style="font-size:14px;font-weight:800;color:#4ADE80;">${hwP}%</div><div style="font-size:9px;color:rgba(255,255,255,.4);">숙제</div></div>
+          </div>
+        </div>
       </div>
       <!-- 탭 -->
       <div class="tbb" style="margin-bottom:12px;">
