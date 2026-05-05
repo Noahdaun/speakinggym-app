@@ -1411,16 +1411,18 @@ function renderBotApply(lesson, existingSub){
 
   if(existingSub?.completed){
     const feedback=existingSub.feedback||'';
+    const recUrl=existingSub.recording_url||'';
     content.innerHTML=`
       <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;padding:20px;text-align:center;">
         <div style="width:60px;height:60px;border-radius:50%;background:#E1F5EE;border:2.5px solid #1D9E75;display:flex;align-items:center;justify-content:center;margin-bottom:14px;">
           <svg width="26" height="26" viewBox="0 0 26 26"><polyline points="3,13 9,20 23,6" fill="none" stroke="#1D9E75" stroke-width="3" stroke-linecap="round"/></svg>
         </div>
         <div style="font-size:18px;font-weight:700;color:#fff;margin-bottom:6px;">제출 완료!</div>
-        <div style="background:#fff;border-radius:14px;padding:14px 16px;text-align:left;width:100%;margin-bottom:${feedback?12:0}px;">
-          <div style="font-size:11px;color:#BBB;margin-bottom:5px;font-weight:600;">제출한 문장</div>
-          <div style="font-size:14px;color:#1a1a1a;font-style:italic;line-height:1.7;">"${existingSub.content||''}"</div>
-        </div>
+        <div style="font-size:11px;color:rgba(255,255,255,.5);margin-bottom:14px;">${existingSub.content||''}</div>
+        ${recUrl?`<div style="background:#fff;border-radius:14px;padding:12px 14px;width:100%;margin-bottom:${feedback?12:0}px;">
+          <div style="font-size:11px;color:#BBB;margin-bottom:8px;font-weight:600;">🎙️ 제출한 녹음</div>
+          <audio controls src="${recUrl}" style="width:100%;height:36px;"></audio>
+        </div>`:''}
         ${feedback?`<div style="background:#E1F5EE;border-radius:12px;padding:12px 14px;text-align:left;width:100%;border:1.5px solid #C0E8D8;">
           <div style="font-size:11px;color:#085041;font-weight:700;margin-bottom:4px;">💬 선생님 피드백</div>
           <div style="font-size:13px;color:#085041;line-height:1.7;">${feedback}</div>
@@ -1450,12 +1452,38 @@ function renderBotApply(lesson, existingSub){
     </div>`;
 
   bot.innerHTML=`
-    <textarea id="apply-input" placeholder="선택한 표현으로 영어 문장을 써보세요..." style="height:60px;margin-bottom:8px;font-size:13px;line-height:1.6;"></textarea>
-    <button onclick="tapApply()" style="width:100%;padding:12px;border-radius:12px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 4px 14px rgba(29,158,117,.3);">제출하기 → +25 XP</button>`;
+    <div id="rec-ui" style="text-align:center;">
+      <div id="rec-status" style="font-size:11px;color:var(--mu);margin-bottom:10px;">표현을 선택하고 녹음 버튼을 누르세요</div>
+      <!-- 파형 -->
+      <div id="rec-wave" style="display:none;justify-content:center;align-items:center;gap:2px;height:28px;margin-bottom:10px;">
+        ${Array(9).fill(0).map((_,i)=>`<div class="wave-bar" style="width:3px;height:${[8,16,22,14,26,18,12,20,10][i]}px;background:#E24B4A;border-radius:2px;"></div>`).join('')}
+      </div>
+      <!-- 녹음 버튼 -->
+      <div id="rec-btn-wrap" style="margin-bottom:10px;">
+        <button id="rec-btn" onclick="toggleRecord()" style="width:60px;height:60px;border-radius:50%;background:#FCEBEB;border:2px solid #E24B4A;display:flex;align-items:center;justify-content:center;cursor:pointer;margin:0 auto;font-family:inherit;">
+          <svg width="18" height="24" viewBox="0 0 18 24" fill="none"><rect x="5" y="1" width="8" height="13" rx="4" stroke="#E24B4A" stroke-width="1.8"/><path d="M2 12c0 4 3.5 7 7 7s7-3 7-7" stroke="#E24B4A" stroke-width="1.8" stroke-linecap="round"/><line x1="9" y1="19" x2="9" y2="23" stroke="#E24B4A" stroke-width="1.8"/></svg>
+        </button>
+        <div id="rec-timer" style="font-size:11px;color:var(--mu);margin-top:6px;">눌러서 녹음 시작</div>
+      </div>
+      <!-- 미리듣기 + 제출 (녹음 후 표시) -->
+      <div id="rec-preview" style="display:none;">
+        <div style="background:var(--sf);border-radius:11px;padding:9px 12px;display:flex;align-items:center;gap:9px;margin-bottom:9px;border:1.5px solid var(--brd);">
+          <button onclick="playPreview()" id="play-btn" style="width:32px;height:32px;border-radius:50%;background:#E1F5EE;border:1.5px solid #C0E8D8;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;padding:0;">
+            <svg id="play-icon" width="10" height="12" viewBox="0 0 10 12"><polygon points="1,1 9,6 1,11" fill="#1D9E75"/></svg>
+          </button>
+          <div style="flex:1;background:var(--brd);border-radius:99px;height:4px;">
+            <div id="play-prog" style="background:#1D9E75;border-radius:99px;height:4px;width:0%;transition:width .1s;"></div>
+          </div>
+          <div id="play-dur" style="font-size:11px;color:var(--mu);">0:00</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <button onclick="resetRecord()" style="padding:11px;border-radius:11px;border:1.5px solid var(--brd);background:var(--sf);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;color:var(--text);">다시 녹음</button>
+          <button onclick="tapApply()" style="padding:11px;border-radius:11px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 3px 10px rgba(29,158,117,.3);">제출 +25 XP</button>
+        </div>
+      </div>
+    </div>`;
 }
 
-
-  let expressions=[];
 
 let _selectedExp=null;
 function selectExp(i){
@@ -1478,17 +1506,106 @@ function selectExp(i){
   }
 }
 
+// 녹음 상태
+let _mediaRecorder=null, _recChunks=[], _recBlob=null, _recTimer=null, _recSec=0, _audioEl=null;
+
+function toggleRecord(){
+  if(_mediaRecorder&&_mediaRecorder.state==='recording'){
+    _mediaRecorder.stop();
+  } else {
+    startRecord();
+  }
+}
+
+async function startRecord(){
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({audio:true});
+    _recChunks=[];_recSec=0;
+    _mediaRecorder=new MediaRecorder(stream);
+    _mediaRecorder.ondataavailable=e=>{if(e.data.size>0)_recChunks.push(e.data);};
+    _mediaRecorder.onstop=()=>{
+      stream.getTracks().forEach(t=>t.stop());
+      _recBlob=new Blob(_recChunks,{type:'audio/webm'});
+      _audioEl=new Audio(URL.createObjectURL(_recBlob));
+      _audioEl.ontimeupdate=()=>{
+        const p=document.getElementById('play-prog');
+        const d=document.getElementById('play-dur');
+        if(p&&_audioEl.duration)p.style.width=((_audioEl.currentTime/_audioEl.duration)*100)+'%';
+        if(d)d.textContent=fmtSec(Math.floor(_audioEl.currentTime));
+      };
+      _audioEl.onended=()=>{
+        const icon=document.getElementById('play-icon');
+        if(icon)icon.innerHTML='<polygon points="1,1 9,6 1,11" fill="#1D9E75"/>';
+        const p=document.getElementById('play-prog');if(p)p.style.width='0%';
+        const d=document.getElementById('play-dur');if(d)d.textContent=fmtSec(Math.round(_audioEl.duration||0));
+      };
+      clearInterval(_recTimer);
+      // 완료 UI
+      const btn=document.getElementById('rec-btn');
+      if(btn)btn.innerHTML='<svg width="18" height="24" viewBox="0 0 18 24" fill="none"><rect x="5" y="1" width="8" height="13" rx="4" stroke="#E24B4A" stroke-width="1.8"/><path d="M2 12c0 4 3.5 7 7 7s7-3 7-7" stroke="#E24B4A" stroke-width="1.8" stroke-linecap="round"/><line x1="9" y1="19" x2="9" y2="23" stroke="#E24B4A" stroke-width="1.8"/></svg>';
+      const wave=document.getElementById('rec-wave');if(wave)wave.style.display='none';
+      const timer=document.getElementById('rec-timer');if(timer)timer.textContent='녹음 완료 · '+fmtSec(_recSec);
+      const preview=document.getElementById('rec-preview');if(preview)preview.style.display='block';
+      const dur=document.getElementById('play-dur');if(dur)dur.textContent=fmtSec(_recSec);
+    };
+    _mediaRecorder.start();
+    // 녹음 중 UI
+    const btn=document.getElementById('rec-btn');
+    if(btn)btn.innerHTML='<div style="width:16px;height:16px;background:#E24B4A;border-radius:3px;"></div>';
+    const wave=document.getElementById('rec-wave');if(wave)wave.style.display='flex';
+    const preview=document.getElementById('rec-preview');if(preview)preview.style.display='none';
+    _recTimer=setInterval(()=>{
+      _recSec++;
+      const t=document.getElementById('rec-timer');if(t)t.textContent='녹음 중... '+fmtSec(_recSec);
+      if(_recSec>=60)_mediaRecorder.stop(); // 최대 60초
+    },1000);
+  }catch(e){
+    if(e.name==='NotAllowedError')tst('마이크 권한을 허용해주세요');
+    else tst('녹음 시작 실패: '+e.message);
+  }
+}
+
+function playPreview(){
+  if(!_audioEl)return;
+  const icon=document.getElementById('play-icon');
+  if(_audioEl.paused){
+    _audioEl.play();
+    if(icon)icon.innerHTML='<rect x="2" y="1" width="3" height="10" fill="#1D9E75"/><rect x="7" y="1" width="3" height="10" fill="#1D9E75"/>';
+  } else {
+    _audioEl.pause();
+    if(icon)icon.innerHTML='<polygon points="1,1 9,6 1,11" fill="#1D9E75"/>';
+  }
+}
+
+function resetRecord(){
+  _recBlob=null;_recChunks=[];_recSec=0;
+  if(_audioEl){_audioEl.pause();_audioEl=null;}
+  const preview=document.getElementById('rec-preview');if(preview)preview.style.display='none';
+  const wave=document.getElementById('rec-wave');if(wave)wave.style.display='none';
+  const btn=document.getElementById('rec-btn');
+  if(btn)btn.innerHTML='<svg width="18" height="24" viewBox="0 0 18 24" fill="none"><rect x="5" y="1" width="8" height="13" rx="4" stroke="#E24B4A" stroke-width="1.8"/><path d="M2 12c0 4 3.5 7 7 7s7-3 7-7" stroke="#E24B4A" stroke-width="1.8" stroke-linecap="round"/><line x1="9" y1="19" x2="9" y2="23" stroke="#E24B4A" stroke-width="1.8"/></svg>';
+  const timer=document.getElementById('rec-timer');if(timer)timer.textContent='눌러서 녹음 시작';
+}
+
+function fmtSec(s){return Math.floor(s/60)+':'+String(s%60).padStart(2,'0');}
+
 async function tapApply(){
   if(!ses)return;
-  const txt=document.getElementById('apply-input')?.value?.trim();
-  if(!txt||txt.length<3){tst('문장을 입력해주세요');return;}
+  if(!_recBlob){tst('먼저 녹음해주세요');return;}
+  if(!_selectedExp&&_selectedExp!==0){tst('표현을 선택해주세요');return;}
+  tst('제출 중...');
   const lesson=les.find(x=>x.id===ses.lid);
   let expressions=[];
   if(lesson?.key_expressions){try{expressions=JSON.parse(lesson.key_expressions);}catch{}}
-  const usedExp=_selectedExp!=null?expressions[_selectedExp]?.english||'':'';
+  const usedExp=expressions[_selectedExp]?.english||'';
   const now=new Date().toISOString();
-  const content=usedExp?`[${usedExp}] ${txt}`:txt;
-  const subData={student_id:U.id,lesson_id:ses.lid,review_round:ses.round,hw_type:'apply',content,score:null,completed:true,submitted_at:now};
+  const fileName=`${U.id}/${ses.lid}_r${ses.round}_${Date.now()}.webm`;
+  // Supabase Storage에 녹음 업로드
+  const{error:upErr}=await sb.storage.from('recordings').upload(fileName,_recBlob,{contentType:'audio/webm',upsert:true});
+  if(upErr){tst('업로드 실패: '+upErr.message);return;}
+  const{data:urlData}=sb.storage.from('recordings').getPublicUrl(fileName);
+  const content=usedExp?`[${usedExp}] 🎙️ 녹음 제출`:'🎙️ 녹음 제출';
+  const subData={student_id:U.id,lesson_id:ses.lid,review_round:ses.round,hw_type:'apply',content,recording_url:urlData.publicUrl,score:null,completed:true,submitted_at:now};
   const{data:exS}=await sb.from('hw_submissions').select('id').eq('student_id',U.id).eq('lesson_id',ses.lid).eq('review_round',ses.round).single();
   if(exS)await sb.from('hw_submissions').update(subData).eq('id',exS.id);
   else await sb.from('hw_submissions').insert(subData);
@@ -1497,7 +1614,7 @@ async function tapApply(){
   else await sb.from('review_logs').insert({student_id:U.id,lesson_id:ses.lid,review_round:ses.round,count:5,completed:true,completed_at:now});
   earnXP(XP_TABLE.apply,'apply_complete_'+ses.lid+'_'+ses.round);
   tst('제출 완료! 훌륭해요 🎉');
-  _selectedExp=null;
+  _selectedExp=null;_recBlob=null;
   renderBotApply(lesson,subData);
   refreshReview();lCal();lRec();buildHomeTodo();
 }
@@ -2061,7 +2178,8 @@ async function loadSDRev(){
           ?Array(5).fill(0).map((_,i)=>`<div style="width:13px;height:13px;border-radius:50%;background:${i<(l.count||0)?'var(--g)':'var(--brd)'};"></div>`).join('')
           :'';
         const subContent=sub?.content?`<div style="background:#F5F3F0;border-radius:8px;padding:8px 10px;margin-top:5px;font-size:11px;color:#1a1a1a;font-style:italic;line-height:1.6;">"${sub.content}"</div>`:'';
-        const aiFeedback=sub?.feedback?`<div style="background:#E1F5EE;border-radius:8px;padding:7px 10px;margin-top:4px;font-size:10px;color:#085041;line-height:1.6;">🤖 ${sub.feedback}</div>`:'';
+        const aiFeedback=sub?.feedback?`<div style="background:#E1F5EE;border-radius:8px;padding:7px 10px;margin-top:4px;font-size:10px;color:#085041;line-height:1.6;">💬 ${sub.feedback}</div>`:'';
+        const recPlayer=sub?.recording_url?`<div style="margin-top:5px;background:#F0FAF6;border-radius:8px;padding:8px 10px;border:1.5px solid #C0E8D8;"><div style="font-size:10px;color:#085041;font-weight:600;margin-bottom:5px;">🎙️ 녹음</div><audio controls src="${sub.recording_url}" style="width:100%;height:32px;"></audio></div>`:''
         const scoreTag=sub?.score!=null?`<span style="font-size:10px;font-weight:800;color:${sub.score>=60?'var(--gd)':'var(--rd)'};">${sub.score}점</span>`:'';
         return`<div style="padding:7px 0;border-bottom:1px solid var(--brd);">
           <div style="display:flex;align-items:center;gap:7px;">
@@ -2073,7 +2191,7 @@ async function loadSDRev(){
               <div style="font-size:10px;font-weight:700;color:${l.completed?'var(--gd)':'var(--amd)'};">${l.completed?'✓ 완료':'미완료'}</div>
             </div>
           </div>
-          ${subContent}${aiFeedback}
+          ${subContent}${recPlayer}${aiFeedback}
         </div>`;
       }).join('')}
     </div>`;
