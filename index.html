@@ -457,9 +457,7 @@ function doUpdate(){
           <button onclick="addClass()" style="padding:0 16px;border-radius:10px;background:var(--g);color:#fff;border:none;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:inherit;">추가</button>
         </div>
         <div id="cls-list"><div class="loading">로딩중...</div></div>
-      </div>
-
-      <!-- 레슨 -->
+      </div>      <!-- 레슨 -->
       <div id="ad-ls" style="display:none;">
         <!-- sg_builder 내보내기 일괄 붙여넣기 -->
         <div style="background:#F0FAF6;border-radius:13px;padding:13px;margin-bottom:14px;border:1.5px solid #C0E8D8;">
@@ -2346,8 +2344,9 @@ async function adTab(t,b){
   document.querySelectorAll('#pad>.tbb .tbn').forEach(x=>x.classList.remove('on'));
   if(b)b.classList.add('on');
   if(t==='cl'){
-    // display:block 적용 후 렌더링
-    setTimeout(async()=>{await rClsList();},50);
+    const clDiv=document.getElementById('ad-cls');
+    if(clDiv)clDiv.style.display='block';
+    rClsList();
   }
   if(t==='ls'){rLsList();renderLsRows();lsVocabRenderTgt();}
   if(t==='at'){document.getElementById('atd').value=new Date().toISOString().slice(0,10);rAtCls();}
