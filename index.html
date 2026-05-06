@@ -1906,8 +1906,11 @@ function renderClassBars(doneSet){
   }).join('');
 }
 
-function renderMissingAlert(doneSet){
-  const missing=sts.filter(s=>!doneSet.has(s.id));
+function renderMissingAlert(doneSet, cls='all'){
+  const targetSts = cls==='all'
+    ? sts.filter(s=>s.class_name) // 반배정된 학생만
+    : sts.filter(s=>s.class_name===cls);
+  const missing=targetSts.filter(s=>!doneSet.has(s.id));
   const el=document.getElementById('missing-alert');
   if(!el){
     const adsl=document.getElementById('adsl');
@@ -2024,9 +2027,6 @@ function sAdCls(cls,btn){
   sb.from('review_logs').select('student_id').eq('completed',true).gte('completed_at',td).then(({data:lg})=>{
     const doneSet=new Set((lg||[]).map(l=>l.student_id));
     renderSList(cls,doneSet);
-    // 선택된 반 기준으로 미완료 계산
-    const targetSts=cls==='all'?sts:sts.filter(s=>s.class_name===cls);
-    const missing=targetSts.filter(s=>!doneSet.has(s.id));
     const alertDiv=document.getElementById('missing-alert');
     if(alertDiv){
       if(!missing.length){
