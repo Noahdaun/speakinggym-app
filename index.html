@@ -3194,16 +3194,17 @@ function setProfilePhoto(url, posX, posY){
 }
 
 function showPhotoPositionEditor(url){
-  let posX=50, posY=50;
+  let offsetX=0, offsetY=0;
   const pop=document.createElement('div');
-  pop.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;max-width:480px;margin:0 auto;';
+  pop.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;max-width:480px;margin:0 auto;';
   pop.innerHTML=`
     <div style="font-size:15px;font-weight:700;color:#fff;margin-bottom:6px;">사진 위치 조정</div>
-    <div style="font-size:12px;color:rgba(255,255,255,.5);margin-bottom:16px;">손가락으로 드래그해서 위치를 맞춰요</div>
-    <div id="pos-preview" style="position:relative;width:240px;height:240px;border-radius:20px;overflow:hidden;border:2.5px solid rgba(255,255,255,.3);margin-bottom:20px;cursor:grab;user-select:none;-webkit-user-select:none;">
-      <img id="pos-img" src="${url}" style="width:100%;height:100%;object-fit:cover;object-position:50% 50%;pointer-events:none;display:block;">
+    <div style="font-size:12px;color:rgba(255,255,255,.5);margin-bottom:16px;">사진을 드래그해서 위치를 맞춰요</div>
+    <div id="pos-preview" style="width:240px;height:240px;border-radius:20px;overflow:hidden;border:2.5px solid rgba(255,255,255,.3);margin-bottom:20px;cursor:grab;position:relative;background:#111;">
+      <img id="pos-img" src="${url}" style="position:absolute;width:150%;height:150%;object-fit:cover;top:-25%;left:-25%;pointer-events:none;transform:translate(0px,0px);will-change:transform;">
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;width:100%;max-width:240px;">
+    <div style="font-size:11px;color:rgba(255,255,255,.4);margin-bottom:14px;">← → ↑ ↓ 드래그로 조정</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;width:240px;">
       <button onclick="this.closest('div[style*=fixed]').remove()" style="padding:13px;border-radius:12px;background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.2);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">취소</button>
       <button id="pos-save-btn" style="padding:13px;border-radius:12px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">저장</button>
     </div>`;
@@ -3213,53 +3214,53 @@ function showPhotoPositionEditor(url){
   const preview=document.getElementById('pos-preview');
   const img=document.getElementById('pos-img');
   let dragging=false, lastX=0, lastY=0;
+  const maxOffset=preview.offsetWidth*0.25; // 25% 범위
+
+  function clamp(v){return Math.max(-maxOffset,Math.min(maxOffset,v));}
 
   function getXY(e){
     if(e.touches&&e.touches.length)return{x:e.touches[0].clientX,y:e.touches[0].clientY};
     return{x:e.clientX,y:e.clientY};
   }
 
-  function onStart(e){
-    dragging=true;
-    const p=getXY(e);
-    lastX=p.x; lastY=p.y;
-    preview.style.cursor='grabbing';
+  preview.addEventListener('mousedown',e=>{
+    dragging=true; const p=getXY(e); lastX=p.x; lastY=p.y;
+    preview.style.cursor='grabbing'; e.preventDefault();
+  });
+  preview.addEventListener('touchstart',e=>{
+    dragging=true; const p=getXY(e); lastX=p.x; lastY=p.y;
     e.preventDefault();
-    e.stopPropagation();
-  }
-
-  function onMove(e){
+  },{passive:false});
+  preview.addEventListener('mousemove',e=>{
     if(!dragging)return;
     const p=getXY(e);
-    const dx=p.x-lastX, dy=p.y-lastY;
+    offsetX=clamp(offsetX+(p.x-lastX));
+    offsetY=clamp(offsetY+(p.y-lastY));
     lastX=p.x; lastY=p.y;
-    // 드래그 반대 방향으로 이동 (사진이 손가락 따라 움직이는 느낌)
-    posX=Math.max(0,Math.min(100, posX - dx/2.4));
-    posY=Math.max(0,Math.min(100, posY - dy/2.4));
-    img.style.objectPosition=`${posX}% ${posY}%`;
+    img.style.transform=`translate(${offsetX}px,${offsetY}px)`;
     e.preventDefault();
-    e.stopPropagation();
-  }
-
-  function onEnd(){
-    dragging=false;
-    preview.style.cursor='grab';
-  }
-
-  preview.addEventListener('mousedown',onStart);
-  preview.addEventListener('touchstart',onStart,{passive:false});
-  preview.addEventListener('mousemove',onMove);
-  preview.addEventListener('touchmove',onMove,{passive:false});
-  preview.addEventListener('mouseup',onEnd);
-  preview.addEventListener('touchend',onEnd);
-  preview.addEventListener('mouseleave',onEnd);
+  });
+  preview.addEventListener('touchmove',e=>{
+    if(!dragging)return;
+    const p=getXY(e);
+    offsetX=clamp(offsetX+(p.x-lastX));
+    offsetY=clamp(offsetY+(p.y-lastY));
+    lastX=p.x; lastY=p.y;
+    img.style.transform=`translate(${offsetX}px,${offsetY}px)`;
+    e.preventDefault();
+  },{passive:false});
+  const endDrag=()=>{dragging=false;preview.style.cursor='grab';};
+  preview.addEventListener('mouseup',endDrag);
+  preview.addEventListener('touchend',endDrag);
+  preview.addEventListener('mouseleave',endDrag);
 
   document.getElementById('pos-save-btn').onclick=async()=>{
+    // offsetX,Y를 0~100% 포지션으로 변환
+    const posX=Math.round(50-offsetX/maxOffset*50);
+    const posY=Math.round(50-offsetY/maxOffset*50);
     pop.remove();
     setProfilePhoto(url, posX, posY);
-    try{
-      await sb.from('profiles').update({avatar_pos_x:posX,avatar_pos_y:posY}).eq('id',U.id);
-    }catch{}
+    try{await sb.from('profiles').update({avatar_pos_x:posX,avatar_pos_y:posY}).eq('id',U.id);}catch{}
     tst('프로필 사진이 저장됐어요! 📸');
   };
 }
