@@ -2339,10 +2339,16 @@ function closeNotifyPopup(){const p=document.getElementById('notify-popup');if(p
 
 
 async function adTab(t,b){
-  ['st','cl','ls','at','vo'].forEach(x=>{const el=document.getElementById(`ad-${x}`);if(el)el.style.display=x===t?'block':'none';});
+  ['st','cl','ls','at','vo'].forEach(x=>{
+    const el=document.getElementById(`ad-${x}`);
+    if(el)el.style.display=x===t?'block':'none';
+  });
   document.querySelectorAll('#pad>.tbb .tbn').forEach(x=>x.classList.remove('on'));
   if(b)b.classList.add('on');
-  if(t==='cl'){rClsList();}
+  if(t==='cl'){
+    // display:block 적용 후 렌더링
+    setTimeout(async()=>{await rClsList();},50);
+  }
   if(t==='ls'){rLsList();renderLsRows();lsVocabRenderTgt();}
   if(t==='at'){document.getElementById('atd').value=new Date().toISOString().slice(0,10);rAtCls();}
   if(t==='vo'){rVTgt();}
@@ -2503,9 +2509,19 @@ async function addAIVocab(){
 
 // ── 반관리 ──
 async function rClsList(){
-  await loadClasses();
-  if(!sts.length)await loadStudents();
-  renderClsList();
+  const el=document.getElementById('cls-list');
+  if(el)el.innerHTML='<div class="loading">로딩중...</div>';
+  try{
+    const{data:clsData,error:clsErr}=await sb.from('classes').select('name').order('name');
+    if(clsErr){tst('반 로드 실패: '+clsErr.message);return;}
+    classes=(clsData||[]).map(c=>c.name);
+    const{data:stData,error:stErr}=await sb.from('profiles').select('*').eq('role','student').order('name');
+    if(stErr){tst('학생 로드 실패: '+stErr.message);return;}
+    sts=stData||[];
+    renderClsList();
+  }catch(e){
+    tst('오류: '+e.message);
+  }
 }
 function renderClsList(){
   const el=document.getElementById('cls-list');if(!el)return;
