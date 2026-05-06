@@ -439,7 +439,7 @@ function doUpdate(){
       </div>
 
       <!-- 학생현황 -->
-      <div id="ad-st">
+      <div id="ad-st" style="display:block;">
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin-bottom:12px;">
           <div style="background:var(--gl);border-radius:11px;padding:11px;border:1.5px solid #C0E8D8;text-align:center;"><div style="font-size:18px;font-weight:700;color:var(--gd);" id="a-tot">-</div><div style="font-size:10px;color:var(--gm);">전체</div></div>
           <div style="background:#F0FAF6;border-radius:11px;padding:11px;border:1.5px solid #C0E8D8;text-align:center;"><div style="font-size:18px;font-weight:700;color:var(--gd);" id="a-done">-</div><div style="font-size:10px;color:var(--gm);">리뷰완료</div></div>
@@ -3016,8 +3016,8 @@ function gp(n){
     }
   }
   if(n==='admin'){
-    if(!classes.length)loadClasses().then(()=>loadStudents().then(()=>lAdm()));
-    else lAdm();
+    if(!classes.length)loadClasses().then(()=>loadStudents().then(()=>{lAdm();adTab('st',document.querySelector('#pad>.tbb .tbn'));}));
+    else{lAdm();adTab('st',document.querySelector('#pad>.tbb .tbn'));}
   }
 }
 
