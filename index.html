@@ -2304,11 +2304,11 @@ function showNotifyPopup(targets){
 function closeNotifyPopup(){const p=document.getElementById('notify-popup');if(p)p.style.display='none';}
 
 
-function adTab(t,b){
+async function adTab(t,b){
   ['st','cl','ls','at','vo'].forEach(x=>{const el=document.getElementById(`ad-${x}`);if(el)el.style.display=x===t?'block':'none';});
   document.querySelectorAll('#pad>.tbb .tbn').forEach(x=>x.classList.remove('on'));
   if(b)b.classList.add('on');
-  if(t==='cl')renderClsList();
+  if(t==='cl'){await loadClasses();await loadStudents();renderClsList();}
   if(t==='ls'){rLsList();renderLsRows();lsVocabRenderTgt();}
   if(t==='at'){document.getElementById('atd').value=new Date().toISOString().slice(0,10);rAtCls();}
   if(t==='vo'){rVTgt();}
