@@ -483,24 +483,32 @@ function doUpdate(){
         <textarea id="ls-subtitles" placeholder="형식: 시작초|끝초|영어자막|한국어자막&#10;예:&#10;16.7|20.7|Good morning, Doobies|안녕하세요 여러분&#10;24.1|27.8|She lit up when she walked in|그녀가 들어오자 환해졌어" style="height:110px;font-family:monospace;font-size:11px;" oninput="previewSubtitles(this.value)"></textarea>
         <div id="subtitle-preview" style="font-size:11px;color:var(--gm);margin-top:4px;margin-bottom:8px;"></div>
 
-        <!-- 7회차 핵심 표현 카드 -->
+        <!-- 5회차 자막 -->
+        <div class="dv"></div>
+        <div style="font-size:12px;font-weight:600;margin-bottom:4px;">🎬 5회차 암기용 자막 데이터 <span style="font-size:11px;font-weight:400;color:var(--mu);">(선택)</span></div>
+        <div style="font-size:11px;color:var(--mu);margin-bottom:7px;">sg_builder에서 파이프 형식으로 복사해서 붙여넣으세요</div>
+        <textarea id="ls-subtitles" placeholder="형식: 시작초|끝초|영어자막|한국어자막&#10;예:&#10;16.7|20.7|Good morning, Doobies|안녕하세요 여러분&#10;24.1|27.8|She lit up when she walked in|그녀가 들어오자 환해졌어" style="height:110px;font-family:monospace;font-size:11px;" oninput="previewSubtitles(this.value)"></textarea>
+        <div id="subtitle-preview" style="font-size:11px;color:var(--gm);margin-top:4px;margin-bottom:8px;"></div>
+
+        <!-- 핵심 표현 카드 (7회차) -->
         <div style="font-size:12px;font-weight:600;margin-bottom:4px;">💡 핵심 표현 카드 <span style="font-size:11px;font-weight:400;color:var(--mu);">(7회차 응용 시 표시, 선택)</span></div>
         <div style="font-size:11px;color:var(--mu);margin-bottom:7px;">영어,한국어 형식으로 줄마다 입력 (최대 10개)</div>
         <textarea id="ls-expressions" placeholder="be a natural,타고난 재능이 있다&#10;light up,얼굴이 환해지다&#10;jealous of,~가 부럽다" style="height:90px;"></textarea>
 
         <!-- 7회차 응용 가이드 -->
         <div style="font-size:12px;font-weight:600;margin-bottom:4px;margin-top:8px;">✍️ 7회차 응용 가이드 <span style="font-size:11px;font-weight:400;color:var(--mu);">(선택)</span></div>
-        <input class="inp" type="text" id="ls-guide" placeholder="예: light up 을 사용해서 나만의 문장을 만들어보세요">
+        <input class="inp" type="text" id="ls-guide" placeholder="예: light up 을 사용해서 나만의 문장을 말해보세요">
 
+        <!-- 단어 일괄 추가 -->
         <div class="dv"></div>
-        <div style="font-size:12px;font-weight:600;margin-bottom:4px;">📚 단어 일괄 추가 <span style="font-size:11px;font-weight:400;color:var(--mu);">(저장 시 자동 추가)</span></div>
+        <div style="font-size:12px;font-weight:600;margin-bottom:4px;">📚 단어 일괄 추가 <span style="font-size:11px;font-weight:400;color:var(--mu);">(최대 30개 — 저장 시 자동 추가)</span></div>
         <div style="font-size:11px;color:var(--mu);margin-bottom:7px;">영어,한국어 형식으로 줄마다 — 대상 반을 선택하세요</div>
         <div id="ls-vocab-tgt" style="background:var(--sf);border-radius:10px;padding:9px 11px;margin-bottom:7px;border:1.5px solid var(--brd);display:flex;flex-wrap:wrap;gap:7px;">
           <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;">
             <input type="checkbox" id="lv-all" onchange="lvAllToggle(this)" style="accent-color:var(--g);">전체
           </label>
         </div>
-        <textarea id="ls-vocab" placeholder="ask out,데이트 신청하다&#10;come with me,나랑 같이 가다&#10;it's on me,내가 살게" style="height:90px;"></textarea>
+        <textarea id="ls-vocab" placeholder="ask out,데이트 신청하다&#10;come with me,나랑 같이 가다&#10;it's on me,내가 살게" style="height:120px;"></textarea>
         <div id="ls-vocab-preview" style="font-size:11px;color:var(--gm);margin-top:4px;margin-bottom:4px;"></div>
 
         <div id="ls-form-btns">
@@ -2705,7 +2713,7 @@ async function saveLesson(){
     }
   }
   // 폼 초기화
-  ['lt','lu','ls-script','ls-answers','ls-guide','ls-expressions','ls-subtitles','ls-vocab'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ['lt','lu','ls-subtitles','ls-vocab'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';}); 
   const spv=document.getElementById('subtitle-preview');if(spv)spv.textContent='';
   const lvpv=document.getElementById('ls-vocab-preview');if(lvpv)lvpv.textContent='';
   editLessonId=null;lsClsState={};
@@ -2728,12 +2736,7 @@ function editLesson(id){
       previewSubtitles(document.getElementById('ls-subtitles').value);
     }catch{}
   }
-  if(document.getElementById('ls-expressions')&&l.key_expressions){
-    try{
-      const exps=JSON.parse(l.key_expressions);
-      document.getElementById('ls-expressions').value=exps.map(e=>e.english+(e.korean?','+e.korean:'')).join('\n');
-    }catch{}
-  }
+
   if(document.getElementById('ls-guide'))document.getElementById('ls-guide').value=l.guide||'';
   if(document.getElementById('ls-answers')&&l.blanks){
     try{const b=JSON.parse(l.blanks);document.getElementById('ls-answers').value=(b.answers||[]).join(', ');}catch{}
