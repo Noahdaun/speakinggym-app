@@ -2024,7 +2024,33 @@ function sAdCls(cls,btn){
   if(btn)btn.classList.add('on');
   const td=new Date().toISOString().slice(0,10);
   sb.from('review_logs').select('student_id').eq('completed',true).gte('completed_at',td).then(({data:lg})=>{
-    renderSList(cls,new Set((lg||[]).map(l=>l.student_id)));
+    const doneSet=new Set((lg||[]).map(l=>l.student_id));
+    renderSList(cls,doneSet);
+    // 선택된 반 기준으로 미완료 계산
+    const targetSts=cls==='all'?sts:sts.filter(s=>s.class_name===cls);
+    const missing=targetSts.filter(s=>!doneSet.has(s.id));
+    const alertDiv=document.getElementById('missing-alert');
+    if(alertDiv){
+      if(!missing.length){
+        alertDiv.innerHTML=`<div style="background:var(--gl);border-radius:11px;padding:11px 13px;border:1.5px solid #C0E8D8;display:flex;align-items:center;gap:8px;">
+          <div style="font-size:20px;">🎉</div>
+          <div><div style="font-size:12px;font-weight:700;color:var(--gd);">전원 완료!</div><div style="font-size:11px;color:var(--gm);margin-top:1px;">오늘 모든 학생이 리뷰를 완료했어요</div></div>
+        </div>`;
+      } else {
+        alertDiv.innerHTML=`<div style="background:#FFF8F0;border-radius:11px;padding:11px 13px;border:1.5px solid #FAC775;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;">
+            <div style="font-size:12px;font-weight:700;color:var(--amd);">⚠️ 미완료 학생 ${missing.length}명</div>
+            <div onclick="openNotify(null)" style="font-size:11px;color:#854F0B;background:var(--aml);padding:4px 10px;border-radius:8px;cursor:pointer;font-weight:600;">전체 알림</div>
+          </div>
+          <div style="display:flex;gap:5px;flex-wrap:wrap;">
+            ${missing.map(s=>`<div style="background:#fff;border-radius:99px;padding:4px 11px;font-size:11px;border:1px solid #FAC775;display:flex;align-items:center;gap:5px;">
+              ${dispName(s.name,s.email)}
+              <div onclick="openNotify('${s.id}')" style="font-size:10px;color:#854F0B;background:var(--aml);padding:1px 7px;border-radius:99px;cursor:pointer;font-weight:600;">알림</div>
+            </div>`).join('')}
+          </div>
+        </div>`;
+      }
+    }
   });
 }
 
@@ -2316,7 +2342,7 @@ async function adTab(t,b){
   ['st','cl','ls','at','vo'].forEach(x=>{const el=document.getElementById(`ad-${x}`);if(el)el.style.display=x===t?'block':'none';});
   document.querySelectorAll('#pad>.tbb .tbn').forEach(x=>x.classList.remove('on'));
   if(b)b.classList.add('on');
-  if(t==='cl'){await loadClasses();await loadStudents();renderClsList();}
+  if(t==='cl'){rClsList();}
   if(t==='ls'){rLsList();renderLsRows();lsVocabRenderTgt();}
   if(t==='at'){document.getElementById('atd').value=new Date().toISOString().slice(0,10);rAtCls();}
   if(t==='vo'){rVTgt();}
