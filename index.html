@@ -3195,33 +3195,32 @@ function setProfilePhoto(url, posX, posY, scale){
 
 
 function showPhotoPositionEditor(url){
-  // img: 원본사진, FRAME: 고정 정사각형 프레임
-  // 사진이 프레임 위에서 움직임 (인스타 방식)
-  const FRAME = 300;
-  let tx=0, ty=0, sc=1, minSc=1;
+  const FRAME = 300; // 고정 정사각형 크롭 프레임
+  let tx=0, ty=0, sc=1, minSc=0.1;
   let imgNW=0, imgNH=0;
   let drag=false, lx=0, ly=0;
   let pinch=false, ld=0;
+  const tmp = new Image();
+  tmp.crossOrigin = 'anonymous';
 
   const pop = document.createElement('div');
-  pop.style.cssText = 'position:fixed;inset:0;z-index:9999;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;max-width:480px;margin:0 auto;padding:20px;';
-
+  pop.style.cssText = 'position:fixed;inset:0;z-index:9999;background:#000;display:flex;flex-direction:column;align-items:center;overflow-y:auto;padding:20px;max-width:480px;margin:0 auto;';
   pop.innerHTML = `
-    <div style="color:#fff;font-size:15px;font-weight:700;margin-bottom:6px;">프로필 사진 설정</div>
-    <div style="color:rgba(255,255,255,.5);font-size:12px;margin-bottom:16px;">두 손가락으로 확대/축소 · 드래그로 이동</div>
-    <div style="position:relative;width:${FRAME}px;height:${FRAME}px;overflow:hidden;border-radius:20px;border:3px solid rgba(255,255,255,.4);background:#111;touch-action:none;cursor:grab;" id="pe">
-      <img id="pi" src="${url}" style="position:absolute;transform-origin:0 0;will-change:transform;user-select:none;-webkit-user-select:none;pointer-events:none;">
+    <div style="color:#fff;font-size:15px;font-weight:700;margin:16px 0 4px;">프로필 사진 설정</div>
+    <div style="color:rgba(255,255,255,.5);font-size:12px;margin-bottom:16px;text-align:center;">사진 원본이 표시됩니다<br>드래그로 이동 · 두 손가락 또는 +/− 로 확대/축소</div>
+    <!-- 뷰포트: 고정 크기, 사진이 그 위에서 움직임 -->
+    <div style="position:relative;width:${FRAME}px;height:${FRAME}px;overflow:hidden;border-radius:20px;border:3px solid rgba(255,255,255,.5);background:#111;touch-action:none;cursor:grab;flex-shrink:0;" id="pe">
+      <img id="pi" src="${url}" style="position:absolute;transform-origin:0 0;will-change:transform;-webkit-user-drag:none;pointer-events:none;">
     </div>
-    <div style="color:rgba(255,255,255,.4);font-size:11px;margin-top:10px;margin-bottom:16px;" id="pzl">로딩 중...</div>
+    <div style="color:rgba(255,255,255,.4);font-size:11px;margin:10px 0;" id="pzl">로딩 중...</div>
     <div style="display:flex;gap:12px;margin-bottom:16px;">
-      <button id="pzo" style="width:44px;height:44px;border-radius:12px;background:rgba(255,255,255,.15);color:#fff;border:none;font-size:22px;cursor:pointer;font-family:inherit;">−</button>
-      <button id="pzi" style="width:44px;height:44px;border-radius:12px;background:rgba(255,255,255,.15);color:#fff;border:none;font-size:22px;cursor:pointer;font-family:inherit;">+</button>
+      <button id="pzo" style="width:44px;height:44px;border-radius:12px;background:rgba(255,255,255,.15);color:#fff;border:none;font-size:22px;cursor:pointer;">−</button>
+      <button id="pzi" style="width:44px;height:44px;border-radius:12px;background:rgba(255,255,255,.15);color:#fff;border:none;font-size:22px;cursor:pointer;">+</button>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;width:${FRAME}px;">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;width:${FRAME}px;margin-bottom:20px;">
       <button id="pcan" style="padding:14px;border-radius:12px;background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.2);font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">취소</button>
       <button id="psv" style="padding:14px;border-radius:12px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;">저장</button>
     </div>`;
-
   document.body.appendChild(pop);
   document.getElementById('pcan').onclick = () => pop.remove();
 
@@ -3231,128 +3230,94 @@ function showPhotoPositionEditor(url){
 
   function applyT(){
     img.style.transform = `translate(${tx}px,${ty}px) scale(${sc})`;
-    lbl.textContent = Math.round(sc / minSc * 100) + '% — 프레임 안 부분이 저장돼요';
+    lbl.textContent = `원본 ${Math.round(sc*100)}% 크기 · 프레임 안 부분이 저장됩니다`;
   }
 
   function clampT(){
-    const w = imgNW * sc, h = imgNH * sc;
-    if(w >= FRAME){ tx = Math.min(0, Math.max(FRAME - w, tx)); }
-    else { tx = (FRAME - w) / 2; }
-    if(h >= FRAME){ ty = Math.min(0, Math.max(FRAME - h, ty)); }
-    else { ty = (FRAME - h) / 2; }
+    const w=imgNW*sc, h=imgNH*sc;
+    if(w>=FRAME){ tx=Math.min(0,Math.max(FRAME-w,tx)); }
+    else { tx=(FRAME-w)/2; }
+    if(h>=FRAME){ ty=Math.min(0,Math.max(FRAME-h,ty)); }
+    else { ty=(FRAME-h)/2; }
   }
 
   function doZoom(newSc, cx, cy){
     newSc = Math.max(minSc, Math.min(8, newSc));
-    const r = newSc / sc;
-    tx = cx - (cx - tx) * r;
-    ty = cy - (cy - ty) * r;
+    const r = newSc/sc;
+    tx = cx-(cx-tx)*r;
+    ty = cy-(cy-ty)*r;
     sc = newSc;
-    clampT();
-    applyT();
+    clampT(); applyT();
   }
 
-  // 이미지 로드
-  const tmp = new Image();
   tmp.onload = () => {
     imgNW = tmp.naturalWidth;
     imgNH = tmp.naturalHeight;
-    img.style.width = imgNW + 'px';
-    img.style.height = imgNH + 'px';
-    // 처음엔 사진 전체가 프레임 안에 보이게 (fit)
-    minSc = Math.max(FRAME / imgNW, FRAME / imgNH); // cover 최소값
-    const fitSc = Math.min(FRAME / imgNW, FRAME / imgNH); // fit
-    sc = fitSc;
-    tx = (FRAME - imgNW * sc) / 2;
-    ty = (FRAME - imgNH * sc) / 2;
-    applyT();
+    img.style.width = imgNW+'px';
+    img.style.height = imgNH+'px';
+    // minSc: 프레임을 꽉 채우는 최소 스케일 (cover)
+    minSc = Math.max(FRAME/imgNW, FRAME/imgNH);
+    // 시작은 원본 100% (sc=1) — 단 프레임보다 작으면 fit
+    sc = Math.max(1, minSc);
+    tx = (FRAME-imgNW*sc)/2;
+    ty = (FRAME-imgNH*sc)/2;
+    clampT(); applyT();
   };
   tmp.src = url;
 
-  // 버튼
-  document.getElementById('pzi').onclick = () => doZoom(sc * 1.2, FRAME/2, FRAME/2);
-  document.getElementById('pzo').onclick = () => doZoom(sc / 1.2, FRAME/2, FRAME/2);
+  document.getElementById('pzi').onclick = () => doZoom(sc*1.2, FRAME/2, FRAME/2);
+  document.getElementById('pzo').onclick = () => doZoom(sc/1.2, FRAME/2, FRAME/2);
 
   // 마우스
-  el.addEventListener('mousedown', e => {
-    drag = true; lx = e.clientX; ly = e.clientY;
-    el.style.cursor = 'grabbing'; e.preventDefault();
-  });
-  el.addEventListener('mousemove', e => {
-    if(!drag) return;
-    tx += e.clientX - lx; ty += e.clientY - ly;
-    lx = e.clientX; ly = e.clientY;
-    clampT(); applyT(); e.preventDefault();
-  });
-  el.addEventListener('mouseup', () => { drag=false; el.style.cursor='grab'; });
-  el.addEventListener('mouseleave', () => { drag=false; el.style.cursor='grab'; });
-  el.addEventListener('wheel', e => {
-    const r = el.getBoundingClientRect();
-    doZoom(sc * (e.deltaY < 0 ? 1.1 : 0.9), e.clientX - r.left, e.clientY - r.top);
-    e.preventDefault();
-  }, {passive:false});
+  el.addEventListener('mousedown', e=>{drag=true;lx=e.clientX;ly=e.clientY;el.style.cursor='grabbing';e.preventDefault();});
+  el.addEventListener('mousemove', e=>{if(!drag)return;tx+=e.clientX-lx;ty+=e.clientY-ly;lx=e.clientX;ly=e.clientY;clampT();applyT();e.preventDefault();});
+  el.addEventListener('mouseup', ()=>{drag=false;el.style.cursor='grab';});
+  el.addEventListener('mouseleave', ()=>{drag=false;el.style.cursor='grab';});
+  el.addEventListener('wheel', e=>{const r=el.getBoundingClientRect();doZoom(sc*(e.deltaY<0?1.1:0.9),e.clientX-r.left,e.clientY-r.top);e.preventDefault();},{passive:false});
 
   // 터치
-  el.addEventListener('touchstart', e => {
-    if(e.touches.length === 1){
-      drag=true; pinch=false;
-      lx=e.touches[0].clientX; ly=e.touches[0].clientY;
-    } else if(e.touches.length === 2){
-      drag=false; pinch=true;
-      ld = Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY);
+  el.addEventListener('touchstart', e=>{
+    if(e.touches.length===1){drag=true;pinch=false;lx=e.touches[0].clientX;ly=e.touches[0].clientY;}
+    else if(e.touches.length===2){drag=false;pinch=true;ld=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);}
+    e.preventDefault();
+  },{passive:false});
+  el.addEventListener('touchmove', e=>{
+    if(e.touches.length===1&&drag){tx+=e.touches[0].clientX-lx;ty+=e.touches[0].clientY-ly;lx=e.touches[0].clientX;ly=e.touches[0].clientY;clampT();applyT();}
+    else if(e.touches.length===2&&pinch){
+      const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+      const r=el.getBoundingClientRect();
+      doZoom(sc*(d/ld),(e.touches[0].clientX+e.touches[1].clientX)/2-r.left,(e.touches[0].clientY+e.touches[1].clientY)/2-r.top);
+      ld=d;
     }
     e.preventDefault();
-  }, {passive:false});
+  },{passive:false});
+  el.addEventListener('touchend', e=>{if(e.touches.length<2)pinch=false;if(e.touches.length===0)drag=false;});
 
-  el.addEventListener('touchmove', e => {
-    if(e.touches.length === 1 && drag){
-      tx += e.touches[0].clientX - lx;
-      ty += e.touches[0].clientY - ly;
-      lx = e.touches[0].clientX; ly = e.touches[0].clientY;
-      clampT(); applyT();
-    } else if(e.touches.length === 2 && pinch){
-      const d = Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY);
-      const r = el.getBoundingClientRect();
-      const cx = (e.touches[0].clientX+e.touches[1].clientX)/2 - r.left;
-      const cy = (e.touches[0].clientY+e.touches[1].clientY)/2 - r.top;
-      doZoom(sc * (d/ld), cx, cy);
-      ld = d;
-    }
-    e.preventDefault();
-  }, {passive:false});
-
-  el.addEventListener('touchend', e => {
-    if(e.touches.length < 2) pinch = false;
-    if(e.touches.length === 0) drag = false;
-  });
-
-  // 저장: canvas로 프레임 안 부분만 크롭
+  // 저장
   document.getElementById('psv').onclick = async () => {
-    document.getElementById('psv').textContent = '저장 중...';
-    document.getElementById('psv').disabled = true;
+    const btn = document.getElementById('psv');
+    btn.textContent='저장 중...'; btn.disabled=true;
     try {
       const out = document.createElement('canvas');
-      out.width = 600; out.height = 600;
+      out.width=600; out.height=600;
       const ctx = out.getContext('2d');
-      // tx,ty는 이미지의 화면상 위치, sc는 스케일
-      // 프레임(0,0)~(FRAME,FRAME) 영역을 원본 좌표로 변환
-      const srcX = -tx / sc;
-      const srcY = -ty / sc;
-      const srcW = FRAME / sc;
-      const srcH = FRAME / sc;
+      // 프레임(0,0~FRAME,FRAME) → 원본 좌표 변환
+      const srcX = -tx/sc;
+      const srcY = -ty/sc;
+      const srcW = FRAME/sc;
+      const srcH = FRAME/sc;
       ctx.drawImage(tmp, srcX, srcY, srcW, srcH, 0, 0, 600, 600);
-      out.toBlob(async blob => {
-        const {error} = await sb.storage.from('avatars').upload(`${U.id}/avatar`, blob, {upsert:true, contentType:'image/jpeg'});
-        if(error){ tst('저장 실패: '+error.message); pop.remove(); return; }
-        const {data:ud} = sb.storage.from('avatars').getPublicUrl(`${U.id}/avatar`);
-        pop.remove();
-        setProfilePhoto(ud.publicUrl+'?t='+Date.now());
-        tst('프로필 사진 저장됐어요! 📸');
-      }, 'image/jpeg', 0.92);
-    } catch(e) {
-      tst('오류: '+e.message);
-      pop.remove();
-    }
+      out.toBlob(async blob=>{
+        try{
+          const {error} = await sb.storage.from('avatars').upload(`${U.id}/avatar`,blob,{upsert:true,contentType:'image/jpeg'});
+          if(error){tst('저장 실패: '+error.message);pop.remove();return;}
+          const {data:ud} = sb.storage.from('avatars').getPublicUrl(`${U.id}/avatar`);
+          pop.remove();
+          setProfilePhoto(ud.publicUrl+'?t='+Date.now());
+          tst('프로필 사진 저장됐어요! 📸');
+        }catch(e2){tst('저장 오류: '+e2.message);pop.remove();}
+      },'image/jpeg',0.92);
+    }catch(e){tst('오류: '+e.message);pop.remove();}
   };
 }
 
