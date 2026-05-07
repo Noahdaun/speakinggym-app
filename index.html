@@ -3183,10 +3183,10 @@ async function loadProfilePhoto(){
   }catch(e){console.warn('프로필 사진 로드 실패',e);}
 }
 
-function setProfilePhoto(url, posX, posY){
+function setProfilePhoto(url, posX, posY, scale){
   const el=document.getElementById('profile-avatar');
   if(!el)return;
-  const x=posX??50, y=posY??50;
+  const x=posX??50, y=posY??50, s=scale??1;
   el.innerHTML=`<img src="${url}" style="width:100%;height:100%;object-fit:cover;object-position:${x}% ${y}%;border-radius:16px;" onerror="this.parentElement.innerHTML='<svg width=52 height=52 viewBox=\\'0 0 52 52\\' fill=\\'none\\'><circle cx=\\'26\\' cy=\\'18\\' r=\\'10\\' stroke=\\'rgba(255,255,255,.55)\\' stroke-width=\\'2.5\\'/><path d=\\'M7 47c0-10 8.5-18 19-18s19 8 19 18\\' stroke=\\'rgba(255,255,255,.55)\\' stroke-width=\\'2.5\\' stroke-linecap=\\'round\\'/></svg>'">`;
   // 홈 아바타도 업데이트
   const av=document.getElementById('uav');
@@ -3194,17 +3194,24 @@ function setProfilePhoto(url, posX, posY){
 }
 
 function showPhotoPositionEditor(url){
-  let offsetX=0, offsetY=0;
+  let offsetX=0, offsetY=0, scale=1;
+  let dragging=false, lastX=0, lastY=0;
+  let lastDist=0, pinching=false;
+
   const pop=document.createElement('div');
   pop.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;max-width:480px;margin:0 auto;';
   pop.innerHTML=`
     <div style="font-size:15px;font-weight:700;color:#fff;margin-bottom:6px;">사진 위치 조정</div>
-    <div style="font-size:12px;color:rgba(255,255,255,.5);margin-bottom:16px;">사진을 드래그해서 위치를 맞춰요</div>
-    <div id="pos-preview" style="width:240px;height:240px;border-radius:20px;overflow:hidden;border:2.5px solid rgba(255,255,255,.3);margin-bottom:20px;cursor:grab;position:relative;background:#111;">
-      <img id="pos-img" src="${url}" style="position:absolute;width:150%;height:150%;object-fit:cover;top:-25%;left:-25%;pointer-events:none;transform:translate(0px,0px);will-change:transform;">
+    <div style="font-size:12px;color:rgba(255,255,255,.5);margin-bottom:14px;">드래그로 이동 · 두 손가락으로 확대/축소</div>
+    <div id="pos-preview" style="width:260px;height:260px;border-radius:20px;overflow:hidden;border:2.5px solid rgba(255,255,255,.3);margin-bottom:16px;cursor:grab;position:relative;background:#111;touch-action:none;">
+      <img id="pos-img" src="${url}" style="position:absolute;width:100%;height:100%;object-fit:cover;top:0;left:0;pointer-events:none;transform-origin:center center;will-change:transform;">
     </div>
-    <div style="font-size:11px;color:rgba(255,255,255,.4);margin-bottom:14px;">← → ↑ ↓ 드래그로 조정</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;width:240px;">
+    <div style="display:flex;gap:10px;margin-bottom:14px;">
+      <button onclick="adjustScale(-0.1)" style="width:40px;height:40px;border-radius:10px;background:rgba(255,255,255,.15);color:#fff;border:none;font-size:18px;cursor:pointer;">−</button>
+      <div id="scale-label" style="width:60px;text-align:center;line-height:40px;color:rgba(255,255,255,.6);font-size:12px;">100%</div>
+      <button onclick="adjustScale(0.1)" style="width:40px;height:40px;border-radius:10px;background:rgba(255,255,255,.15);color:#fff;border:none;font-size:18px;cursor:pointer;">+</button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;width:260px;">
       <button onclick="this.closest('div[style*=fixed]').remove()" style="padding:13px;border-radius:12px;background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.2);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">취소</button>
       <button id="pos-save-btn" style="padding:13px;border-radius:12px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">저장</button>
     </div>`;
@@ -3213,54 +3220,89 @@ function showPhotoPositionEditor(url){
 
   const preview=document.getElementById('pos-preview');
   const img=document.getElementById('pos-img');
-  let dragging=false, lastX=0, lastY=0;
-  const maxOffset=preview.offsetWidth*0.25; // 25% 범위
 
-  function clamp(v){return Math.max(-maxOffset,Math.min(maxOffset,v));}
+  function updateTransform(){
+    img.style.transform=`translate(${offsetX}px,${offsetY}px) scale(${scale})`;
+    const lbl=document.getElementById('scale-label');
+    if(lbl)lbl.textContent=Math.round(scale*100)+'%';
+  }
 
-  function getXY(e){
-    if(e.touches&&e.touches.length)return{x:e.touches[0].clientX,y:e.touches[0].clientY};
-    return{x:e.clientX,y:e.clientY};
+  window.adjustScale=function(delta){
+    scale=Math.max(0.5,Math.min(4, scale+delta));
+    updateTransform();
+  };
+
+  function getDist(t){
+    return Math.hypot(t[0].clientX-t[1].clientX, t[0].clientY-t[1].clientY);
   }
 
   preview.addEventListener('mousedown',e=>{
-    dragging=true; const p=getXY(e); lastX=p.x; lastY=p.y;
-    preview.style.cursor='grabbing'; e.preventDefault();
-  });
-  preview.addEventListener('touchstart',e=>{
-    dragging=true; const p=getXY(e); lastX=p.x; lastY=p.y;
+    dragging=true;
+    lastX=e.clientX; lastY=e.clientY;
+    preview.style.cursor='grabbing';
     e.preventDefault();
-  },{passive:false});
+  });
+
   preview.addEventListener('mousemove',e=>{
     if(!dragging)return;
-    const p=getXY(e);
-    offsetX=clamp(offsetX+(p.x-lastX));
-    offsetY=clamp(offsetY+(p.y-lastY));
-    lastX=p.x; lastY=p.y;
-    img.style.transform=`translate(${offsetX}px,${offsetY}px)`;
+    offsetX+=e.clientX-lastX;
+    offsetY+=e.clientY-lastY;
+    lastX=e.clientX; lastY=e.clientY;
+    updateTransform();
     e.preventDefault();
   });
-  preview.addEventListener('touchmove',e=>{
-    if(!dragging)return;
-    const p=getXY(e);
-    offsetX=clamp(offsetX+(p.x-lastX));
-    offsetY=clamp(offsetY+(p.y-lastY));
-    lastX=p.x; lastY=p.y;
-    img.style.transform=`translate(${offsetX}px,${offsetY}px)`;
+
+  preview.addEventListener('mouseup',()=>{dragging=false;preview.style.cursor='grab';});
+  preview.addEventListener('mouseleave',()=>{dragging=false;preview.style.cursor='grab';});
+
+  // 터치: 1손가락=드래그, 2손가락=핀치줌
+  preview.addEventListener('touchstart',e=>{
+    if(e.touches.length===1){
+      dragging=true; pinching=false;
+      lastX=e.touches[0].clientX; lastY=e.touches[0].clientY;
+    } else if(e.touches.length===2){
+      dragging=false; pinching=true;
+      lastDist=getDist(e.touches);
+    }
     e.preventDefault();
   },{passive:false});
-  const endDrag=()=>{dragging=false;preview.style.cursor='grab';};
-  preview.addEventListener('mouseup',endDrag);
-  preview.addEventListener('touchend',endDrag);
-  preview.addEventListener('mouseleave',endDrag);
+
+  preview.addEventListener('touchmove',e=>{
+    if(e.touches.length===1&&dragging){
+      offsetX+=e.touches[0].clientX-lastX;
+      offsetY+=e.touches[0].clientY-lastY;
+      lastX=e.touches[0].clientX; lastY=e.touches[0].clientY;
+      updateTransform();
+    } else if(e.touches.length===2&&pinching){
+      const dist=getDist(e.touches);
+      scale=Math.max(0.5,Math.min(4, scale*(dist/lastDist)));
+      lastDist=dist;
+      updateTransform();
+    }
+    e.preventDefault();
+  },{passive:false});
+
+  preview.addEventListener('touchend',e=>{
+    if(e.touches.length<2)pinching=false;
+    if(e.touches.length===0)dragging=false;
+  });
+
+  // 마우스 휠로도 줌
+  preview.addEventListener('wheel',e=>{
+    scale=Math.max(0.5,Math.min(4, scale-(e.deltaY>0?0.1:-0.1)));
+    updateTransform();
+    e.preventDefault();
+  },{passive:false});
 
   document.getElementById('pos-save-btn').onclick=async()=>{
-    // offsetX,Y를 0~100% 포지션으로 변환
-    const posX=Math.round(50-offsetX/maxOffset*50);
-    const posY=Math.round(50-offsetY/maxOffset*50);
+    // transform 값을 object-position으로 변환
+    const size=260;
+    const posX=Math.round(50 - offsetX/size*100/scale);
+    const posY=Math.round(50 - offsetY/size*100/scale);
+    const clamp=(v)=>Math.max(0,Math.min(100,v));
     pop.remove();
-    setProfilePhoto(url, posX, posY);
-    try{await sb.from('profiles').update({avatar_pos_x:posX,avatar_pos_y:posY}).eq('id',U.id);}catch{}
+    setProfilePhoto(url, clamp(posX), clamp(posY), scale);
+    try{await sb.from('profiles').update({avatar_pos_x:clamp(posX),avatar_pos_y:clamp(posY),avatar_scale:scale}).eq('id',U.id);}catch{}
     tst('프로필 사진이 저장됐어요! 📸');
   };
 }
