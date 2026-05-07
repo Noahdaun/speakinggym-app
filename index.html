@@ -3196,107 +3196,80 @@ function setProfilePhoto(url, posX, posY, scale){
 
 function showPhotoPositionEditor(url){
   const FRAME=280;
-  let scale=1, minScale=1, offsetX=0, offsetY=0;
-  let imgNW=0, imgNH=0;
-  let dragging=false, lastX=0, lastY=0;
-  let pinching=false, lastDist=0;
+  let cropX=0,cropY=0,cropSize=0,dispW=0,dispH=0,dispScale=1;
+  let dragging=false,lastX=0,lastY=0;
 
   const pop=document.createElement('div');
   pop.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.95);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;max-width:480px;margin:0 auto;';
   pop.innerHTML=`
     <div style="font-size:15px;font-weight:700;color:#fff;margin-bottom:5px;">사진 위치 조정</div>
-    <div style="font-size:12px;color:rgba(255,255,255,.5);margin-bottom:14px;">드래그 이동 · 두 손가락 또는 버튼으로 확대/축소</div>
-    <div id="pf" style="width:${FRAME}px;height:${FRAME}px;border-radius:20px;overflow:hidden;border:2.5px solid rgba(255,255,255,.4);background:#111;position:relative;cursor:grab;touch-action:none;margin-bottom:14px;">
-      <canvas id="pc" width="${FRAME}" height="${FRAME}" style="display:block;"></canvas>
+    <div style="font-size:12px;color:rgba(255,255,255,.5);margin-bottom:14px;">흰 박스를 드래그해서 원하는 부분 선택 · +/− 로 크기 조절</div>
+    <div id="pf" style="position:relative;margin-bottom:14px;display:inline-block;">
+      <img id="pimg" src="${url}" style="display:block;max-width:${FRAME}px;max-height:${FRAME}px;border-radius:8px;pointer-events:none;">
+      <div id="pdim" style="position:absolute;inset:0;background:rgba(0,0,0,.5);border-radius:8px;pointer-events:none;"></div>
+      <div id="pcrop" style="position:absolute;border:2.5px solid #fff;border-radius:12px;cursor:move;box-sizing:border-box;"></div>
     </div>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
       <button id="pzo" style="width:36px;height:36px;border-radius:9px;background:rgba(255,255,255,.15);color:#fff;border:none;font-size:20px;cursor:pointer;">−</button>
-      <div id="psl" style="width:48px;text-align:center;font-size:12px;color:rgba(255,255,255,.5);">100%</div>
+      <div id="psl" style="width:60px;text-align:center;font-size:12px;color:rgba(255,255,255,.5);"></div>
       <button id="pzi" style="width:36px;height:36px;border-radius:9px;background:rgba(255,255,255,.15);color:#fff;border:none;font-size:20px;cursor:pointer;">+</button>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;width:${FRAME}px;">
-      <button onclick="this.closest('div[style*=fixed]').remove()" style="padding:13px;border-radius:12px;background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.2);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">취소</button>
+      <button onclick="this.closest(\'div[style*=fixed]\').remove()" style="padding:13px;border-radius:12px;background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.2);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">취소</button>
       <button id="psv" style="padding:13px;border-radius:12px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">저장</button>
     </div>`;
   document.body.appendChild(pop);
 
-  const frame=document.getElementById('pf');
-  const canvas=document.getElementById('pc');
-  const ctx=canvas.getContext('2d');
-  const nImg=new Image();
-  nImg.crossOrigin='anonymous';
+  const pimg=document.getElementById('pimg');
+  const pcrop=document.getElementById('pcrop');
 
-  function draw(){
-    ctx.clearRect(0,0,FRAME,FRAME);
-    ctx.save();
-    ctx.translate(offsetX,offsetY);
-    ctx.scale(scale,scale);
-    ctx.drawImage(nImg,0,0,imgNW,imgNH);
-    ctx.restore();
+  function updateCrop(){
+    cropX=Math.max(0,Math.min(dispW-cropSize,cropX));
+    cropY=Math.max(0,Math.min(dispH-cropSize,cropY));
+    cropSize=Math.max(40,Math.min(Math.min(dispW,dispH),cropSize));
+    pcrop.style.left=cropX+'px';
+    pcrop.style.top=cropY+'px';
+    pcrop.style.width=cropSize+'px';
+    pcrop.style.height=cropSize+'px';
+    // 어두운 오버레이를 크롭 영역만 제외하고 표시 (clip-path)
+    const pdim=document.getElementById('pdim');
+    if(pdim)pdim.style.clipPath=`polygon(0% 0%, 0% 100%, ${cropX}px 100%, ${cropX}px ${cropY}px, ${cropX+cropSize}px ${cropY}px, ${cropX+cropSize}px ${cropY+cropSize}px, ${cropX}px ${cropY+cropSize}px, ${cropX}px 100%, 100% 100%, 100% 0%)`;
     const lbl=document.getElementById('psl');
-    if(lbl)lbl.textContent=Math.round(scale/minScale*100)+'%';
+    if(lbl)lbl.textContent=Math.round(cropSize/Math.min(dispW,dispH)*100)+'%';
   }
 
-  function clamp(){
-    const w=imgNW*scale, h=imgNH*scale;
-    offsetX=w>=FRAME?Math.min(0,Math.max(FRAME-w,offsetX)):(FRAME-w)/2;
-    offsetY=h>=FRAME?Math.min(0,Math.max(FRAME-h,offsetY)):(FRAME-h)/2;
+  function initCrop(){
+    dispW=pimg.offsetWidth; dispH=pimg.offsetHeight;
+    dispScale=pimg.naturalWidth/dispW;
+    cropSize=Math.min(dispW,dispH);
+    cropX=(dispW-cropSize)/2;
+    cropY=(dispH-cropSize)/2;
+    updateCrop();
   }
 
-  function zoom(newS, cx, cy){
-    newS=Math.max(minScale,Math.min(5,newS));
-    const r=newS/scale;
-    offsetX=cx-(cx-offsetX)*r;
-    offsetY=cy-(cy-offsetY)*r;
-    scale=newS;
-    clamp(); draw();
-  }
+  if(pimg.complete&&pimg.naturalWidth>0)initCrop();
+  else pimg.onload=initCrop;
 
-  nImg.onload=()=>{
-    imgNW=nImg.naturalWidth; imgNH=nImg.naturalHeight;
-    const fitS=Math.min(FRAME/imgNW,FRAME/imgNH);
-    minScale=Math.max(FRAME/imgNW,FRAME/imgNH);
-    scale=fitS;
-    offsetX=(FRAME-imgNW*scale)/2;
-    offsetY=(FRAME-imgNH*scale)/2;
-    draw();
-  };
-  nImg.src=url;
+  function getXY(e){return e.touches?{x:e.touches[0].clientX,y:e.touches[0].clientY}:{x:e.clientX,y:e.clientY};}
 
-  document.getElementById('pzi').onclick=()=>zoom(scale*1.15,FRAME/2,FRAME/2);
-  document.getElementById('pzo').onclick=()=>zoom(scale/1.15,FRAME/2,FRAME/2);
+  pcrop.addEventListener('mousedown',e=>{dragging=true;const p=getXY(e);lastX=p.x;lastY=p.y;e.preventDefault();e.stopPropagation();});
+  pcrop.addEventListener('touchstart',e=>{dragging=true;const p=getXY(e);lastX=p.x;lastY=p.y;e.preventDefault();e.stopPropagation();},{passive:false});
+  document.addEventListener('mousemove',e=>{if(!dragging)return;const p=getXY(e);cropX+=p.x-lastX;cropY+=p.y-lastY;lastX=p.x;lastY=p.y;updateCrop();});
+  document.addEventListener('touchmove',e=>{if(!dragging)return;const p=getXY(e);cropX+=p.x-lastX;cropY+=p.y-lastY;lastX=p.x;lastY=p.y;updateCrop();e.preventDefault();},{passive:false});
+  document.addEventListener('mouseup',()=>dragging=false);
+  document.addEventListener('touchend',()=>dragging=false);
 
-  frame.addEventListener('mousedown',e=>{dragging=true;lastX=e.clientX;lastY=e.clientY;frame.style.cursor='grabbing';e.preventDefault();});
-  frame.addEventListener('mousemove',e=>{if(!dragging)return;offsetX+=e.clientX-lastX;offsetY+=e.clientY-lastY;lastX=e.clientX;lastY=e.clientY;clamp();draw();e.preventDefault();});
-  frame.addEventListener('mouseup',()=>{dragging=false;frame.style.cursor='grab';});
-  frame.addEventListener('mouseleave',()=>{dragging=false;frame.style.cursor='grab';});
-  frame.addEventListener('wheel',e=>{const r=frame.getBoundingClientRect();zoom(scale*(e.deltaY<0?1.1:0.9),e.clientX-r.left,e.clientY-r.top);e.preventDefault();},{passive:false});
-
-  frame.addEventListener('touchstart',e=>{
-    if(e.touches.length===1){dragging=true;pinching=false;lastX=e.touches[0].clientX;lastY=e.touches[0].clientY;}
-    else if(e.touches.length===2){dragging=false;pinching=true;lastDist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);}
-    e.preventDefault();
-  },{passive:false});
-  frame.addEventListener('touchmove',e=>{
-    if(e.touches.length===1&&dragging){offsetX+=e.touches[0].clientX-lastX;offsetY+=e.touches[0].clientY-lastY;lastX=e.touches[0].clientX;lastY=e.touches[0].clientY;clamp();draw();}
-    else if(e.touches.length===2&&pinching){
-      const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
-      const r=frame.getBoundingClientRect();
-      zoom(scale*(d/lastDist),(e.touches[0].clientX+e.touches[1].clientX)/2-r.left,(e.touches[0].clientY+e.touches[1].clientY)/2-r.top);
-      lastDist=d;
-    }
-    e.preventDefault();
-  },{passive:false});
-  frame.addEventListener('touchend',e=>{if(e.touches.length<2)pinching=false;if(e.touches.length===0)dragging=false;});
+  document.getElementById('pzi').onclick=()=>{cropSize=Math.min(Math.min(dispW,dispH),cropSize*1.15);updateCrop();};
+  document.getElementById('pzo').onclick=()=>{cropSize=Math.max(40,cropSize/1.15);updateCrop();};
 
   document.getElementById('psv').onclick=async()=>{
-    // 크롭해서 저장
     const out=document.createElement('canvas');
     out.width=600;out.height=600;
     const octx=out.getContext('2d');
-    const cropX=-offsetX/scale, cropY=-offsetY/scale;
-    const cropW=FRAME/scale, cropH=FRAME/scale;
-    octx.drawImage(nImg,cropX,cropY,cropW,cropH,0,0,600,600);
+    const srcX=cropX*dispScale;
+    const srcY=cropY*dispScale;
+    const srcSize=cropSize*dispScale;
+    octx.drawImage(pimg,srcX,srcY,srcSize,srcSize,0,0,600,600);
     out.toBlob(async(blob)=>{
       pop.remove();
       tst('저장 중...');
@@ -3308,6 +3281,7 @@ function showPhotoPositionEditor(url){
     },'image/jpeg',0.92);
   };
 }
+
 
 async function uploadProfilePhoto(input){
   const file=input.files?.[0];if(!file)return;
