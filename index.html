@@ -3193,117 +3193,119 @@ function setProfilePhoto(url, posX, posY, scale){
   if(av){av.style.backgroundImage=`url(${url})`;av.style.backgroundSize='cover';av.style.backgroundPosition=`${x}% ${y}%`;av.textContent='';}
 }
 
+
 function showPhotoPositionEditor(url){
-  let offsetX=0, offsetY=0, scale=1;
+  const FRAME=280;
+  let scale=1, minScale=1, offsetX=0, offsetY=0;
+  let imgNW=0, imgNH=0;
   let dragging=false, lastX=0, lastY=0;
-  let lastDist=0, pinching=false;
+  let pinching=false, lastDist=0;
 
   const pop=document.createElement('div');
-  pop.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;max-width:480px;margin:0 auto;';
+  pop.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.95);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;max-width:480px;margin:0 auto;';
   pop.innerHTML=`
-    <div style="font-size:15px;font-weight:700;color:#fff;margin-bottom:6px;">사진 위치 조정</div>
-    <div style="font-size:12px;color:rgba(255,255,255,.5);margin-bottom:14px;">드래그로 이동 · 두 손가락으로 확대/축소</div>
-    <div id="pos-preview" style="width:260px;height:260px;border-radius:20px;overflow:hidden;border:2.5px solid rgba(255,255,255,.3);margin-bottom:16px;cursor:grab;position:relative;background:#111;touch-action:none;">
-      <img id="pos-img" src="${url}" style="position:absolute;width:100%;height:100%;object-fit:cover;top:0;left:0;pointer-events:none;transform-origin:center center;will-change:transform;">
+    <div style="font-size:15px;font-weight:700;color:#fff;margin-bottom:5px;">사진 위치 조정</div>
+    <div style="font-size:12px;color:rgba(255,255,255,.5);margin-bottom:14px;">드래그 이동 · 두 손가락 또는 버튼으로 확대/축소</div>
+    <div id="pf" style="width:${FRAME}px;height:${FRAME}px;border-radius:20px;overflow:hidden;border:2.5px solid rgba(255,255,255,.4);background:#111;position:relative;cursor:grab;touch-action:none;margin-bottom:14px;">
+      <canvas id="pc" width="${FRAME}" height="${FRAME}" style="display:block;"></canvas>
     </div>
-    <div style="display:flex;gap:10px;margin-bottom:14px;">
-      <button onclick="adjustScale(-0.1)" style="width:40px;height:40px;border-radius:10px;background:rgba(255,255,255,.15);color:#fff;border:none;font-size:18px;cursor:pointer;">−</button>
-      <div id="scale-label" style="width:60px;text-align:center;line-height:40px;color:rgba(255,255,255,.6);font-size:12px;">100%</div>
-      <button onclick="adjustScale(0.1)" style="width:40px;height:40px;border-radius:10px;background:rgba(255,255,255,.15);color:#fff;border:none;font-size:18px;cursor:pointer;">+</button>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+      <button id="pzo" style="width:36px;height:36px;border-radius:9px;background:rgba(255,255,255,.15);color:#fff;border:none;font-size:20px;cursor:pointer;">−</button>
+      <div id="psl" style="width:48px;text-align:center;font-size:12px;color:rgba(255,255,255,.5);">100%</div>
+      <button id="pzi" style="width:36px;height:36px;border-radius:9px;background:rgba(255,255,255,.15);color:#fff;border:none;font-size:20px;cursor:pointer;">+</button>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;width:260px;">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;width:${FRAME}px;">
       <button onclick="this.closest('div[style*=fixed]').remove()" style="padding:13px;border-radius:12px;background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.2);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">취소</button>
-      <button id="pos-save-btn" style="padding:13px;border-radius:12px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">저장</button>
+      <button id="psv" style="padding:13px;border-radius:12px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">저장</button>
     </div>`;
-
   document.body.appendChild(pop);
 
-  const preview=document.getElementById('pos-preview');
-  const img=document.getElementById('pos-img');
+  const frame=document.getElementById('pf');
+  const canvas=document.getElementById('pc');
+  const ctx=canvas.getContext('2d');
+  const nImg=new Image();
+  nImg.crossOrigin='anonymous';
 
-  function updateTransform(){
-    img.style.transform=`translate(${offsetX}px,${offsetY}px) scale(${scale})`;
-    const lbl=document.getElementById('scale-label');
-    if(lbl)lbl.textContent=Math.round(scale*100)+'%';
+  function draw(){
+    ctx.clearRect(0,0,FRAME,FRAME);
+    ctx.save();
+    ctx.translate(offsetX,offsetY);
+    ctx.scale(scale,scale);
+    ctx.drawImage(nImg,0,0,imgNW,imgNH);
+    ctx.restore();
+    const lbl=document.getElementById('psl');
+    if(lbl)lbl.textContent=Math.round(scale/minScale*100)+'%';
   }
 
-  window.adjustScale=function(delta){
-    scale=Math.max(0.5,Math.min(4, scale+delta));
-    updateTransform();
+  function clamp(){
+    const w=imgNW*scale, h=imgNH*scale;
+    offsetX=w>=FRAME?Math.min(0,Math.max(FRAME-w,offsetX)):(FRAME-w)/2;
+    offsetY=h>=FRAME?Math.min(0,Math.max(FRAME-h,offsetY)):(FRAME-h)/2;
+  }
+
+  function zoom(newS, cx, cy){
+    newS=Math.max(minScale,Math.min(5,newS));
+    const r=newS/scale;
+    offsetX=cx-(cx-offsetX)*r;
+    offsetY=cy-(cy-offsetY)*r;
+    scale=newS;
+    clamp(); draw();
+  }
+
+  nImg.onload=()=>{
+    imgNW=nImg.naturalWidth; imgNH=nImg.naturalHeight;
+    const fitS=Math.min(FRAME/imgNW,FRAME/imgNH);
+    minScale=Math.max(FRAME/imgNW,FRAME/imgNH);
+    scale=fitS;
+    offsetX=(FRAME-imgNW*scale)/2;
+    offsetY=(FRAME-imgNH*scale)/2;
+    draw();
   };
+  nImg.src=url;
 
-  function getDist(t){
-    return Math.hypot(t[0].clientX-t[1].clientX, t[0].clientY-t[1].clientY);
-  }
+  document.getElementById('pzi').onclick=()=>zoom(scale*1.15,FRAME/2,FRAME/2);
+  document.getElementById('pzo').onclick=()=>zoom(scale/1.15,FRAME/2,FRAME/2);
 
-  preview.addEventListener('mousedown',e=>{
-    dragging=true;
-    lastX=e.clientX; lastY=e.clientY;
-    preview.style.cursor='grabbing';
+  frame.addEventListener('mousedown',e=>{dragging=true;lastX=e.clientX;lastY=e.clientY;frame.style.cursor='grabbing';e.preventDefault();});
+  frame.addEventListener('mousemove',e=>{if(!dragging)return;offsetX+=e.clientX-lastX;offsetY+=e.clientY-lastY;lastX=e.clientX;lastY=e.clientY;clamp();draw();e.preventDefault();});
+  frame.addEventListener('mouseup',()=>{dragging=false;frame.style.cursor='grab';});
+  frame.addEventListener('mouseleave',()=>{dragging=false;frame.style.cursor='grab';});
+  frame.addEventListener('wheel',e=>{const r=frame.getBoundingClientRect();zoom(scale*(e.deltaY<0?1.1:0.9),e.clientX-r.left,e.clientY-r.top);e.preventDefault();},{passive:false});
+
+  frame.addEventListener('touchstart',e=>{
+    if(e.touches.length===1){dragging=true;pinching=false;lastX=e.touches[0].clientX;lastY=e.touches[0].clientY;}
+    else if(e.touches.length===2){dragging=false;pinching=true;lastDist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);}
     e.preventDefault();
-  });
-
-  preview.addEventListener('mousemove',e=>{
-    if(!dragging)return;
-    offsetX+=e.clientX-lastX;
-    offsetY+=e.clientY-lastY;
-    lastX=e.clientX; lastY=e.clientY;
-    updateTransform();
-    e.preventDefault();
-  });
-
-  preview.addEventListener('mouseup',()=>{dragging=false;preview.style.cursor='grab';});
-  preview.addEventListener('mouseleave',()=>{dragging=false;preview.style.cursor='grab';});
-
-  // 터치: 1손가락=드래그, 2손가락=핀치줌
-  preview.addEventListener('touchstart',e=>{
-    if(e.touches.length===1){
-      dragging=true; pinching=false;
-      lastX=e.touches[0].clientX; lastY=e.touches[0].clientY;
-    } else if(e.touches.length===2){
-      dragging=false; pinching=true;
-      lastDist=getDist(e.touches);
+  },{passive:false});
+  frame.addEventListener('touchmove',e=>{
+    if(e.touches.length===1&&dragging){offsetX+=e.touches[0].clientX-lastX;offsetY+=e.touches[0].clientY-lastY;lastX=e.touches[0].clientX;lastY=e.touches[0].clientY;clamp();draw();}
+    else if(e.touches.length===2&&pinching){
+      const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+      const r=frame.getBoundingClientRect();
+      zoom(scale*(d/lastDist),(e.touches[0].clientX+e.touches[1].clientX)/2-r.left,(e.touches[0].clientY+e.touches[1].clientY)/2-r.top);
+      lastDist=d;
     }
     e.preventDefault();
   },{passive:false});
+  frame.addEventListener('touchend',e=>{if(e.touches.length<2)pinching=false;if(e.touches.length===0)dragging=false;});
 
-  preview.addEventListener('touchmove',e=>{
-    if(e.touches.length===1&&dragging){
-      offsetX+=e.touches[0].clientX-lastX;
-      offsetY+=e.touches[0].clientY-lastY;
-      lastX=e.touches[0].clientX; lastY=e.touches[0].clientY;
-      updateTransform();
-    } else if(e.touches.length===2&&pinching){
-      const dist=getDist(e.touches);
-      scale=Math.max(0.5,Math.min(4, scale*(dist/lastDist)));
-      lastDist=dist;
-      updateTransform();
-    }
-    e.preventDefault();
-  },{passive:false});
-
-  preview.addEventListener('touchend',e=>{
-    if(e.touches.length<2)pinching=false;
-    if(e.touches.length===0)dragging=false;
-  });
-
-  // 마우스 휠로도 줌
-  preview.addEventListener('wheel',e=>{
-    scale=Math.max(0.5,Math.min(4, scale-(e.deltaY>0?0.1:-0.1)));
-    updateTransform();
-    e.preventDefault();
-  },{passive:false});
-
-  document.getElementById('pos-save-btn').onclick=async()=>{
-    // transform 값을 object-position으로 변환
-    const size=260;
-    const posX=Math.round(50 - offsetX/size*100/scale);
-    const posY=Math.round(50 - offsetY/size*100/scale);
-    const clamp=(v)=>Math.max(0,Math.min(100,v));
-    pop.remove();
-    setProfilePhoto(url, clamp(posX), clamp(posY), scale);
-    try{await sb.from('profiles').update({avatar_pos_x:clamp(posX),avatar_pos_y:clamp(posY),avatar_scale:scale}).eq('id',U.id);}catch{}
-    tst('프로필 사진이 저장됐어요! 📸');
+  document.getElementById('psv').onclick=async()=>{
+    // 크롭해서 저장
+    const out=document.createElement('canvas');
+    out.width=600;out.height=600;
+    const octx=out.getContext('2d');
+    const cropX=-offsetX/scale, cropY=-offsetY/scale;
+    const cropW=FRAME/scale, cropH=FRAME/scale;
+    octx.drawImage(nImg,cropX,cropY,cropW,cropH,0,0,600,600);
+    out.toBlob(async(blob)=>{
+      pop.remove();
+      tst('저장 중...');
+      const{error}=await sb.storage.from('avatars').upload(`${U.id}/avatar`,blob,{upsert:true,contentType:'image/jpeg'});
+      if(error){tst('저장 실패: '+error.message);return;}
+      const{data:ud}=sb.storage.from('avatars').getPublicUrl(`${U.id}/avatar`);
+      setProfilePhoto(ud.publicUrl+'?t='+Date.now());
+      tst('프로필 사진이 저장됐어요! 📸');
+    },'image/jpeg',0.92);
   };
 }
 
