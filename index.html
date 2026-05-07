@@ -3195,90 +3195,164 @@ function setProfilePhoto(url, posX, posY, scale){
 
 
 function showPhotoPositionEditor(url){
-  const FRAME=280;
-  let cropX=0,cropY=0,cropSize=0,dispW=0,dispH=0,dispScale=1;
-  let dragging=false,lastX=0,lastY=0;
+  // img: 원본사진, FRAME: 고정 정사각형 프레임
+  // 사진이 프레임 위에서 움직임 (인스타 방식)
+  const FRAME = 300;
+  let tx=0, ty=0, sc=1, minSc=1;
+  let imgNW=0, imgNH=0;
+  let drag=false, lx=0, ly=0;
+  let pinch=false, ld=0;
 
-  const pop=document.createElement('div');
-  pop.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.95);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;max-width:480px;margin:0 auto;';
-  pop.innerHTML=`
-    <div style="font-size:15px;font-weight:700;color:#fff;margin-bottom:5px;">사진 위치 조정</div>
-    <div style="font-size:12px;color:rgba(255,255,255,.5);margin-bottom:14px;">흰 박스를 드래그해서 원하는 부분 선택 · +/− 로 크기 조절</div>
-    <div id="pf" style="position:relative;margin-bottom:14px;display:inline-block;">
-      <img id="pimg" src="${url}" style="display:block;max-width:${FRAME}px;max-height:${FRAME}px;border-radius:8px;pointer-events:none;">
-      <div id="pdim" style="position:absolute;inset:0;background:rgba(0,0,0,.5);border-radius:8px;pointer-events:none;"></div>
-      <div id="pcrop" style="position:absolute;border:2.5px solid #fff;border-radius:12px;cursor:move;box-sizing:border-box;"></div>
+  const pop = document.createElement('div');
+  pop.style.cssText = 'position:fixed;inset:0;z-index:9999;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;max-width:480px;margin:0 auto;padding:20px;';
+
+  pop.innerHTML = `
+    <div style="color:#fff;font-size:15px;font-weight:700;margin-bottom:6px;">프로필 사진 설정</div>
+    <div style="color:rgba(255,255,255,.5);font-size:12px;margin-bottom:16px;">두 손가락으로 확대/축소 · 드래그로 이동</div>
+    <div style="position:relative;width:${FRAME}px;height:${FRAME}px;overflow:hidden;border-radius:20px;border:3px solid rgba(255,255,255,.4);background:#111;touch-action:none;cursor:grab;" id="pe">
+      <img id="pi" src="${url}" style="position:absolute;transform-origin:0 0;will-change:transform;user-select:none;-webkit-user-select:none;pointer-events:none;">
     </div>
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
-      <button id="pzo" style="width:36px;height:36px;border-radius:9px;background:rgba(255,255,255,.15);color:#fff;border:none;font-size:20px;cursor:pointer;">−</button>
-      <div id="psl" style="width:60px;text-align:center;font-size:12px;color:rgba(255,255,255,.5);"></div>
-      <button id="pzi" style="width:36px;height:36px;border-radius:9px;background:rgba(255,255,255,.15);color:#fff;border:none;font-size:20px;cursor:pointer;">+</button>
+    <div style="color:rgba(255,255,255,.4);font-size:11px;margin-top:10px;margin-bottom:16px;" id="pzl">로딩 중...</div>
+    <div style="display:flex;gap:12px;margin-bottom:16px;">
+      <button id="pzo" style="width:44px;height:44px;border-radius:12px;background:rgba(255,255,255,.15);color:#fff;border:none;font-size:22px;cursor:pointer;font-family:inherit;">−</button>
+      <button id="pzi" style="width:44px;height:44px;border-radius:12px;background:rgba(255,255,255,.15);color:#fff;border:none;font-size:22px;cursor:pointer;font-family:inherit;">+</button>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;width:${FRAME}px;">
-      <button onclick="this.closest(\'div[style*=fixed]\').remove()" style="padding:13px;border-radius:12px;background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.2);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">취소</button>
-      <button id="psv" style="padding:13px;border-radius:12px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">저장</button>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;width:${FRAME}px;">
+      <button id="pcan" style="padding:14px;border-radius:12px;background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.2);font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">취소</button>
+      <button id="psv" style="padding:14px;border-radius:12px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;">저장</button>
     </div>`;
+
   document.body.appendChild(pop);
+  document.getElementById('pcan').onclick = () => pop.remove();
 
-  const pimg=document.getElementById('pimg');
-  const pcrop=document.getElementById('pcrop');
+  const el = document.getElementById('pe');
+  const img = document.getElementById('pi');
+  const lbl = document.getElementById('pzl');
 
-  function updateCrop(){
-    cropX=Math.max(0,Math.min(dispW-cropSize,cropX));
-    cropY=Math.max(0,Math.min(dispH-cropSize,cropY));
-    cropSize=Math.max(40,Math.min(Math.min(dispW,dispH),cropSize));
-    pcrop.style.left=cropX+'px';
-    pcrop.style.top=cropY+'px';
-    pcrop.style.width=cropSize+'px';
-    pcrop.style.height=cropSize+'px';
-    // 어두운 오버레이를 크롭 영역만 제외하고 표시 (clip-path)
-    const pdim=document.getElementById('pdim');
-    if(pdim)pdim.style.clipPath=`polygon(0% 0%, 0% 100%, ${cropX}px 100%, ${cropX}px ${cropY}px, ${cropX+cropSize}px ${cropY}px, ${cropX+cropSize}px ${cropY+cropSize}px, ${cropX}px ${cropY+cropSize}px, ${cropX}px 100%, 100% 100%, 100% 0%)`;
-    const lbl=document.getElementById('psl');
-    if(lbl)lbl.textContent=Math.round(cropSize/Math.min(dispW,dispH)*100)+'%';
+  function applyT(){
+    img.style.transform = `translate(${tx}px,${ty}px) scale(${sc})`;
+    lbl.textContent = Math.round(sc / minSc * 100) + '% — 프레임 안 부분이 저장돼요';
   }
 
-  function initCrop(){
-    dispW=pimg.offsetWidth; dispH=pimg.offsetHeight;
-    dispScale=pimg.naturalWidth/dispW;
-    cropSize=Math.min(dispW,dispH);
-    cropX=(dispW-cropSize)/2;
-    cropY=(dispH-cropSize)/2;
-    updateCrop();
+  function clampT(){
+    const w = imgNW * sc, h = imgNH * sc;
+    if(w >= FRAME){ tx = Math.min(0, Math.max(FRAME - w, tx)); }
+    else { tx = (FRAME - w) / 2; }
+    if(h >= FRAME){ ty = Math.min(0, Math.max(FRAME - h, ty)); }
+    else { ty = (FRAME - h) / 2; }
   }
 
-  if(pimg.complete&&pimg.naturalWidth>0)initCrop();
-  else pimg.onload=initCrop;
+  function doZoom(newSc, cx, cy){
+    newSc = Math.max(minSc, Math.min(8, newSc));
+    const r = newSc / sc;
+    tx = cx - (cx - tx) * r;
+    ty = cy - (cy - ty) * r;
+    sc = newSc;
+    clampT();
+    applyT();
+  }
 
-  function getXY(e){return e.touches?{x:e.touches[0].clientX,y:e.touches[0].clientY}:{x:e.clientX,y:e.clientY};}
+  // 이미지 로드
+  const tmp = new Image();
+  tmp.onload = () => {
+    imgNW = tmp.naturalWidth;
+    imgNH = tmp.naturalHeight;
+    img.style.width = imgNW + 'px';
+    img.style.height = imgNH + 'px';
+    // 처음엔 사진 전체가 프레임 안에 보이게 (fit)
+    minSc = Math.max(FRAME / imgNW, FRAME / imgNH); // cover 최소값
+    const fitSc = Math.min(FRAME / imgNW, FRAME / imgNH); // fit
+    sc = fitSc;
+    tx = (FRAME - imgNW * sc) / 2;
+    ty = (FRAME - imgNH * sc) / 2;
+    applyT();
+  };
+  tmp.src = url;
 
-  pcrop.addEventListener('mousedown',e=>{dragging=true;const p=getXY(e);lastX=p.x;lastY=p.y;e.preventDefault();e.stopPropagation();});
-  pcrop.addEventListener('touchstart',e=>{dragging=true;const p=getXY(e);lastX=p.x;lastY=p.y;e.preventDefault();e.stopPropagation();},{passive:false});
-  document.addEventListener('mousemove',e=>{if(!dragging)return;const p=getXY(e);cropX+=p.x-lastX;cropY+=p.y-lastY;lastX=p.x;lastY=p.y;updateCrop();});
-  document.addEventListener('touchmove',e=>{if(!dragging)return;const p=getXY(e);cropX+=p.x-lastX;cropY+=p.y-lastY;lastX=p.x;lastY=p.y;updateCrop();e.preventDefault();},{passive:false});
-  document.addEventListener('mouseup',()=>dragging=false);
-  document.addEventListener('touchend',()=>dragging=false);
+  // 버튼
+  document.getElementById('pzi').onclick = () => doZoom(sc * 1.2, FRAME/2, FRAME/2);
+  document.getElementById('pzo').onclick = () => doZoom(sc / 1.2, FRAME/2, FRAME/2);
 
-  document.getElementById('pzi').onclick=()=>{cropSize=Math.min(Math.min(dispW,dispH),cropSize*1.15);updateCrop();};
-  document.getElementById('pzo').onclick=()=>{cropSize=Math.max(40,cropSize/1.15);updateCrop();};
+  // 마우스
+  el.addEventListener('mousedown', e => {
+    drag = true; lx = e.clientX; ly = e.clientY;
+    el.style.cursor = 'grabbing'; e.preventDefault();
+  });
+  el.addEventListener('mousemove', e => {
+    if(!drag) return;
+    tx += e.clientX - lx; ty += e.clientY - ly;
+    lx = e.clientX; ly = e.clientY;
+    clampT(); applyT(); e.preventDefault();
+  });
+  el.addEventListener('mouseup', () => { drag=false; el.style.cursor='grab'; });
+  el.addEventListener('mouseleave', () => { drag=false; el.style.cursor='grab'; });
+  el.addEventListener('wheel', e => {
+    const r = el.getBoundingClientRect();
+    doZoom(sc * (e.deltaY < 0 ? 1.1 : 0.9), e.clientX - r.left, e.clientY - r.top);
+    e.preventDefault();
+  }, {passive:false});
 
-  document.getElementById('psv').onclick=async()=>{
-    const out=document.createElement('canvas');
-    out.width=600;out.height=600;
-    const octx=out.getContext('2d');
-    const srcX=cropX*dispScale;
-    const srcY=cropY*dispScale;
-    const srcSize=cropSize*dispScale;
-    octx.drawImage(pimg,srcX,srcY,srcSize,srcSize,0,0,600,600);
-    out.toBlob(async(blob)=>{
+  // 터치
+  el.addEventListener('touchstart', e => {
+    if(e.touches.length === 1){
+      drag=true; pinch=false;
+      lx=e.touches[0].clientX; ly=e.touches[0].clientY;
+    } else if(e.touches.length === 2){
+      drag=false; pinch=true;
+      ld = Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY);
+    }
+    e.preventDefault();
+  }, {passive:false});
+
+  el.addEventListener('touchmove', e => {
+    if(e.touches.length === 1 && drag){
+      tx += e.touches[0].clientX - lx;
+      ty += e.touches[0].clientY - ly;
+      lx = e.touches[0].clientX; ly = e.touches[0].clientY;
+      clampT(); applyT();
+    } else if(e.touches.length === 2 && pinch){
+      const d = Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY);
+      const r = el.getBoundingClientRect();
+      const cx = (e.touches[0].clientX+e.touches[1].clientX)/2 - r.left;
+      const cy = (e.touches[0].clientY+e.touches[1].clientY)/2 - r.top;
+      doZoom(sc * (d/ld), cx, cy);
+      ld = d;
+    }
+    e.preventDefault();
+  }, {passive:false});
+
+  el.addEventListener('touchend', e => {
+    if(e.touches.length < 2) pinch = false;
+    if(e.touches.length === 0) drag = false;
+  });
+
+  // 저장: canvas로 프레임 안 부분만 크롭
+  document.getElementById('psv').onclick = async () => {
+    document.getElementById('psv').textContent = '저장 중...';
+    document.getElementById('psv').disabled = true;
+    try {
+      const out = document.createElement('canvas');
+      out.width = 600; out.height = 600;
+      const ctx = out.getContext('2d');
+      // tx,ty는 이미지의 화면상 위치, sc는 스케일
+      // 프레임(0,0)~(FRAME,FRAME) 영역을 원본 좌표로 변환
+      const srcX = -tx / sc;
+      const srcY = -ty / sc;
+      const srcW = FRAME / sc;
+      const srcH = FRAME / sc;
+      ctx.drawImage(tmp, srcX, srcY, srcW, srcH, 0, 0, 600, 600);
+      out.toBlob(async blob => {
+        const {error} = await sb.storage.from('avatars').upload(`${U.id}/avatar`, blob, {upsert:true, contentType:'image/jpeg'});
+        if(error){ tst('저장 실패: '+error.message); pop.remove(); return; }
+        const {data:ud} = sb.storage.from('avatars').getPublicUrl(`${U.id}/avatar`);
+        pop.remove();
+        setProfilePhoto(ud.publicUrl+'?t='+Date.now());
+        tst('프로필 사진 저장됐어요! 📸');
+      }, 'image/jpeg', 0.92);
+    } catch(e) {
+      tst('오류: '+e.message);
       pop.remove();
-      tst('저장 중...');
-      const{error}=await sb.storage.from('avatars').upload(`${U.id}/avatar`,blob,{upsert:true,contentType:'image/jpeg'});
-      if(error){tst('저장 실패: '+error.message);return;}
-      const{data:ud}=sb.storage.from('avatars').getPublicUrl(`${U.id}/avatar`);
-      setProfilePhoto(ud.publicUrl+'?t='+Date.now());
-      tst('프로필 사진이 저장됐어요! 📸');
-    },'image/jpeg',0.92);
+    }
   };
 }
 
