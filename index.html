@@ -3257,8 +3257,8 @@ function showPhotoPositionEditor(url){
     img.style.height = imgNH+'px';
     // minSc: 프레임을 꽉 채우는 최소 스케일 (cover)
     minSc = Math.max(FRAME/imgNW, FRAME/imgNH);
-    // 시작은 원본 100% (sc=1) — 단 프레임보다 작으면 fit
-    sc = Math.max(1, minSc);
+    // 시작은 원본 100%
+    sc = 1;
     tx = (FRAME-imgNW*sc)/2;
     ty = (FRAME-imgNH*sc)/2;
     clampT(); applyT();
