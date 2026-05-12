@@ -1689,7 +1689,7 @@ async function lRec(){
     const lesson=les.find(l=>l.id===lid);if(!lesson)return'';
     const sorted=lgs.sort((a,b)=>(b.completed_at||'').localeCompare(a.completed_at||''));
     return`<div class="card" style="margin-bottom:9px;">
-      <div style="font-size:13px;font-weight:600;margin-bottom:8px;">${lesson.title}</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;"><div style="font-size:13px;font-weight:600;">${lesson.title}</div><button onclick="startReviewByLesson('${lid}')" style="font-size:11px;font-weight:600;padding:5px 11px;border-radius:99px;background:var(--gl);color:var(--gd);border:1.5px solid #C0E8D8;cursor:pointer;font-family:inherit;white-space:nowrap;">다시 복습 →</button></div>
       ${sorted.slice(0,4).map(l=>{
         const dots=Array(5).fill(0).map((_,i)=>`<div style="width:11px;height:11px;border-radius:50%;background:${i<l.count?'var(--g)':'var(--brd)'};"></div>`).join('');
         return`<div style="display:flex;align-items:center;gap:7px;padding:5px 0;border-bottom:1.5px solid var(--brd);">
@@ -3271,6 +3271,17 @@ async function showDailySummary(){
     renderGroup(done,'✅ 완료','var(--gl)','var(--gd)',s=>vocabSet.has(s.id)?'리뷰+단어':'리뷰 완료')+
     renderGroup(inProgress,'⏳ 진행중','#EEF5FC','#185FA5',s=>vocabSet.has(s.id)?'단어 완료':'진행중')+
     renderGroup(notStarted,'⚠️ 아직 안 함','var(--aml)','var(--amd)',()=>'오늘 접속 없음');
+}
+
+async function startReviewByLesson(lid){
+  const lesson=les.find(l=>l.id===lid);
+  if(!lesson){tst('레슨을 찾을 수 없어요');return;}
+  const{data:logs}=await sb.from('review_logs').select('review_round,completed').eq('student_id',U.id).eq('lesson_id',lid);
+  const doneRounds=new Set((logs||[]).filter(l=>l.completed).map(l=>l.review_round));
+  const allRounds=[1,2,3,5,7];
+  const nextRound=allRounds.find(r=>!doneRounds.has(r))||1;
+  await startSes(lesson, nextRound);
+  gp('review');
 }
 
 // 리뷰 완료 후 강제 새로고침용 (tapRSC에서 호출)
