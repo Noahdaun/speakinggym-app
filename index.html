@@ -375,7 +375,7 @@ function doUpdate(){
             <!-- 이름 + 레벨 + XP -->
             <div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:space-between;">
               <div>
-                <div id="profile-name" style="font-size:19px;font-weight:800;color:#fff;letter-spacing:-.4px;margin-bottom:3px;word-break:keep-all;line-height:1.3;">-</div>
+                <div id="profile-name" onclick="editMyName()" style="font-size:19px;font-weight:800;color:#fff;letter-spacing:-.4px;margin-bottom:3px;word-break:keep-all;line-height:1.3;cursor:pointer;display:flex;align-items:center;gap:6px;">-<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 10h1.8l4-4L5.8 4 2 7.8V10z" stroke="rgba(255,255,255,.5)" stroke-width="1.1"/><line x1="5.8" y1="4" x2="8.5" y2="6.7" stroke="rgba(255,255,255,.5)" stroke-width="1.1"/></svg></div>
                 <div id="profile-class" style="font-size:12px;color:rgba(255,255,255,.5);margin-bottom:10px;">-</div>
                 <div id="profile-level-badge" style="display:inline-flex;align-items:center;gap:5px;background:linear-gradient(135deg,#FFB347,#E8940A);border-radius:99px;padding:5px 13px;box-shadow:0 3px 10px rgba(255,179,71,.4);">
                   <span style="font-size:14px;">🔥</span>
@@ -2047,6 +2047,27 @@ function sAdCls(cls,btn){
   });
 }
 
+async function adminEditName(sid, curName){
+  const newName=prompt('학생 이름을 변경해주세요',curName);
+  if(!newName||newName.trim()===curName)return;
+  const{error}=await sb.from('profiles').update({name:newName.trim()}).eq('id',sid);
+  if(error){tst('변경 실패: '+error.message);return;}
+  const stu=sts.find(s=>s.id===sid);
+  if(stu)stu.name=newName.trim();
+  sdName=newName.trim();
+  tst('이름이 변경됐어요!');
+  await renderSD();
+}
+
+async function adminChangeCls(sid, newCls){
+  const{error}=await sb.from('profiles').update({class_name:newCls||null}).eq('id',sid);
+  if(error){tst('변경 실패: '+error.message);return;}
+  const stu=sts.find(s=>s.id===sid);
+  if(stu)stu.class_name=newCls||null;
+  tst(newCls?`${newCls}으로 변경됐어요!`:'반 배정이 해제됐어요');
+  lAdm();
+}
+
 // ── STUDENT DETAIL POPUP ──
 let sdY,sdM,sdSid,sdName;
 async function openSD(sid,name,cls){
@@ -2114,16 +2135,29 @@ async function renderSD(){
       <div style="background:linear-gradient(160deg,#1a2940,#243054);border-radius:18px;padding:16px;margin-bottom:12px;display:flex;align-items:center;gap:13px;">
         <div style="width:72px;height:72px;border-radius:16px;background:linear-gradient(135deg,#1D9E75,#159468);overflow:hidden;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 4px 14px rgba(0,0,0,.35);border:2px solid rgba(255,255,255,.12);">${avatarHtml}</div>
         <div style="flex:1;min-width:0;">
-          <div style="font-size:17px;font-weight:800;color:#fff;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${sdName}</div>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">
+            <div style="font-size:17px;font-weight:800;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${sdName}</div>
+            <div onclick="adminEditName('${sdSid}','${sdName}')" style="width:22px;height:22px;border-radius:7px;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;">
+              <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M2 9h1.6l3.6-3.6L5.8 4 2 7.6V9z" stroke="white" stroke-width="1.1"/><line x1="5.8" y1="4" x2="8" y2="6.2" stroke="white" stroke-width="1.1"/></svg>
+            </div>
+          </div>
           <div style="background:linear-gradient(135deg,#FFB347,#E8940A);border-radius:99px;padding:3px 11px;display:inline-block;margin-bottom:8px;">
             <span style="font-size:11px;font-weight:700;color:#fff;">${stuLvInfo.cur.emoji} Lv.${stuLvInfo.cur.level} ${stuLvInfo.cur.name}</span>
           </div>
-          <div style="display:flex;gap:10px;">
+          <div style="display:flex;gap:10px;align-items:center;">
             <div><div style="font-size:14px;font-weight:800;color:#fff;">${attP}%</div><div style="font-size:9px;color:rgba(255,255,255,.4);">출석</div></div>
             <div><div style="font-size:14px;font-weight:800;color:#FFB347;">${stuXP.toLocaleString()}</div><div style="font-size:9px;color:rgba(255,255,255,.4);">XP</div></div>
             <div><div style="font-size:14px;font-weight:800;color:#4ADE80;">${hwP}%</div><div style="font-size:9px;color:rgba(255,255,255,.4);">숙제</div></div>
           </div>
         </div>
+      </div>
+      <!-- 반 변경 -->
+      <div style="background:rgba(255,255,255,.07);border-radius:11px;padding:9px 12px;margin-bottom:12px;display:flex;align-items:center;gap:8px;">
+        <div style="font-size:12px;color:rgba(255,255,255,.6);flex-shrink:0;">반 변경</div>
+        <select id="sd-cls-select" onchange="adminChangeCls('${sdSid}',this.value)" style="flex:1;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);border-radius:8px;color:#fff;font-size:12px;padding:5px 8px;font-family:inherit;cursor:pointer;">
+          <option value="" style="background:#1a2940;">반 없음</option>
+          ${classes.map(c=>`<option value="${c}" ${stu?.class_name===c?'selected':''} style="background:#1a2940;">${c}</option>`).join('')}
+        </select>
       </div>
       <!-- 탭 -->
       <div class="tbb" style="margin-bottom:12px;">
@@ -3264,6 +3298,18 @@ function playMemSeg(start,end){
   const ytId=ses.url.match(/(?:youtu\.be\/|v=)([^&\s]+)/)?.[1];
   if(ytId){window.open(`https://www.youtube.com/watch?v=${ytId}&t=${Math.floor(start)}s`,'_blank');}
   else{window.open(ses.url,'_blank');}
+}
+
+async function editMyName(){
+  const cur=P?.name||'';
+  const newName=prompt('이름을 입력해주세요 (예: 김지수/Sienna)',cur);
+  if(!newName||newName.trim()===cur)return;
+  const{error}=await sb.from('profiles').update({name:newName.trim()}).eq('id',U.id);
+  if(error){tst('변경 실패: '+error.message);return;}
+  P.name=newName.trim();
+  const el=document.getElementById('profile-name');
+  if(el)el.childNodes[0].textContent=newName.trim();
+  tst('이름이 변경됐어요!');
 }
 
 // ── 프로필 사진 ──
