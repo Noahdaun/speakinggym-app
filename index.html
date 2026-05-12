@@ -350,6 +350,15 @@ function doUpdate(){
       <div id="rhs"><div class="loading">로딩중...</div></div>
     </div>
 
+    <!-- RANK -->
+    <div id="prk" class="pg">
+      <div style="padding:14px 14px 0;">
+        <div style="font-size:22px;font-weight:800;letter-spacing:-.5px;margin-bottom:14px;">랭킹</div>
+        <div id="rank-my" style="margin-bottom:10px;"></div>
+        <div id="rank-list"><div class="loading">로딩중...</div></div>
+      </div>
+    </div>
+
     <!-- RECORD -->
     <div id="prc" class="pg">
       <!-- 프로필 히어로 -->
@@ -440,11 +449,15 @@ function doUpdate(){
 
       <!-- 학생현황 -->
       <div id="ad-st" style="display:block;">
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin-bottom:12px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin-bottom:10px;">
           <div style="background:var(--gl);border-radius:11px;padding:11px;border:1.5px solid #C0E8D8;text-align:center;"><div style="font-size:18px;font-weight:700;color:var(--gd);" id="a-tot">-</div><div style="font-size:10px;color:var(--gm);">전체</div></div>
           <div style="background:#F0FAF6;border-radius:11px;padding:11px;border:1.5px solid #C0E8D8;text-align:center;"><div style="font-size:18px;font-weight:700;color:var(--gd);" id="a-done">-</div><div style="font-size:10px;color:var(--gm);">리뷰완료</div></div>
           <div style="background:var(--aml);border-radius:11px;padding:11px;border:1.5px solid #FAC775;text-align:center;"><div style="font-size:18px;font-weight:700;color:var(--amd);" id="a-todo">-</div><div style="font-size:10px;color:#854F0B;">미완료</div></div>
         </div>
+        <button onclick="showDailySummary()" style="width:100%;padding:11px;border-radius:11px;background:var(--sf);border:1.5px solid var(--brd);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;color:var(--text);margin-bottom:10px;display:flex;align-items:center;justify-content:center;gap:6px;">
+          <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><rect x="1" y="2" width="13" height="11" rx="2" stroke="currentColor" stroke-width="1.3"/><line x1="4" y1="5.5" x2="11" y2="5.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><line x1="4" y1="8" x2="9" y2="8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+          오늘 학습 요약
+        </button>
         <div class="pills" id="adcp"></div>
         <div id="adsl"><div class="loading">로딩중...</div></div>
       </div>
@@ -563,6 +576,10 @@ function doUpdate(){
     <button class="bni" onclick="gp('record')">
       <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><polyline points="3,15 7,9 10,12 13,7 17,11" stroke="#1D9E75" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
       <span>기록</span>
+    </button>
+    <button class="bni" onclick="gp('rank')">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="2" y="11" width="4" height="7" rx="1" stroke="#1D9E75" stroke-width="1.6"/><rect x="8" y="7" width="4" height="11" rx="1" stroke="#1D9E75" stroke-width="1.6"/><rect x="14" y="3" width="4" height="15" rx="1" stroke="#1D9E75" stroke-width="1.6"/></svg>
+      <span>랭킹</span>
     </button>
   </nav>
 </div><!-- as -->
@@ -3111,9 +3128,9 @@ let loaded={vocab:false,review:false,record:false};
 function gp(n){
   document.querySelectorAll('.pg').forEach(p=>p.classList.remove('on'));
   document.querySelectorAll('.bni').forEach(b=>b.classList.remove('on'));
-  const ids={home:'ph',vocab:'pv',review:'pr',record:'prc',admin:'pad'};
+  const ids={home:'ph',vocab:'pv',review:'pr',record:'prc',rank:'prk',admin:'pad'};
   const pg=document.getElementById(ids[n]);if(pg)pg.classList.add('on');
-  const ord=['home','vocab','review','record','admin'];
+  const ord=['home','vocab','review','record','rank','admin'];
   const idx=ord.indexOf(n);
   const btns=document.querySelectorAll('.bni');if(btns[idx])btns[idx].classList.add('on');
   const tt={home:'홈',vocab:'단어 학습',review:'리뷰',record:'기록',admin:'관리자'};
@@ -3145,10 +3162,115 @@ function gp(n){
       lRec();
     }
   }
+  if(n==='rank'){
+    lRank();
+  }
   if(n==='admin'){
     if(!classes.length)loadClasses().then(()=>loadStudents().then(()=>{lAdm();adTab('st',document.querySelector('#pad>.tbb .tbn'));}));
     else{lAdm();adTab('st',document.querySelector('#pad>.tbb .tbn'));}
   }
+}
+
+// ── 랭킹 ──
+async function lRank(){
+  const myEl=document.getElementById('rank-my');
+  const listEl=document.getElementById('rank-list');
+  if(!listEl)return;
+  listEl.innerHTML='<div class="loading">로딩중...</div>';
+  const{data:xpData}=await sb.from('user_xp').select('student_id,total_xp,level').order('total_xp',{ascending:false});
+  const{data:profiles}=await sb.from('profiles').select('id,name,email').eq('role','student');
+  if(!xpData?.length){listEl.innerHTML='<div class="empty">아직 랭킹 데이터가 없어요</div>';return;}
+  const profMap={};(profiles||[]).forEach(p=>profMap[p.id]=p);
+  const myRank=xpData.findIndex(x=>x.student_id===U.id)+1;
+  const myData=xpData.find(x=>x.student_id===U.id);
+  const myLvInfo=getLevelInfo(myData?.total_xp||0);
+  if(myEl&&myData){
+    const myProf=profMap[U.id];
+    const myName=dispName(myProf?.name,myProf?.email)||'나';
+    myEl.innerHTML=`<div style="background:linear-gradient(135deg,#1a2940,#243054);border-radius:16px;padding:14px 16px;display:flex;align-items:center;gap:12px;margin-bottom:10px;">
+      <div style="font-size:24px;font-weight:800;color:#FFB347;width:32px;text-align:center;">${myRank}</div>
+      <div style="width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,#1D9E75,#159468);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff;flex-shrink:0;">${myName.slice(0,2)}</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:14px;font-weight:800;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${myName}</div>
+        <div style="font-size:10px;color:rgba(255,255,255,.5);">내 순위</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0;">
+        <div style="font-size:15px;font-weight:800;color:#FFB347;">${(myData.total_xp||0).toLocaleString()} XP</div>
+        <div style="font-size:10px;color:rgba(255,255,255,.5);">${myLvInfo.cur.emoji} Lv.${myLvInfo.cur.level} ${myLvInfo.cur.name}</div>
+      </div>
+    </div>`;
+  }
+  listEl.innerHTML=xpData.map((x,i)=>{
+    const rank=i+1;
+    const prof=profMap[x.student_id];
+    const name=dispName(prof?.name,prof?.email)||'?';
+    const lvInfo=getLevelInfo(x.total_xp||0);
+    const isMe=x.student_id===U.id;
+    const rankColor=rank===1?'#EF9F27':rank===2?'#B4B2A9':rank===3?'#D85A30':'var(--mu)';
+    const style=isMe?'border:2px solid #1D9E75;':'background:var(--sf);border:1.5px solid var(--brd);';
+    return `<div style="${style}border-radius:13px;padding:10px 13px;display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+      <div style="font-size:${rank<=3?18:15}px;font-weight:800;color:${rankColor};width:28px;text-align:center;">${rank}</div>
+      <div style="width:38px;height:38px;border-radius:10px;background:${isMe?'linear-gradient(135deg,#1D9E75,#159468)':'var(--brd)'};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:${isMe?'#fff':'var(--text)'};flex-shrink:0;">${name.slice(0,2)}</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:5px;">${name}${isMe?'<span style="font-size:9px;background:var(--gl);color:var(--gd);padding:1px 6px;border-radius:99px;">나</span>':''}</div>
+        <div style="font-size:10px;color:var(--mu);">${lvInfo.cur.emoji} Lv.${lvInfo.cur.level} ${lvInfo.cur.name}</div>
+      </div>
+      <div style="font-size:13px;font-weight:700;color:var(--text);flex-shrink:0;">${(x.total_xp||0).toLocaleString()} XP</div>
+    </div>`;
+  }).join('');
+}
+
+// ── 오늘 학습 요약 ──
+async function showDailySummary(){
+  const pop=document.createElement('div');
+  pop.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9000;display:flex;align-items:flex-end;justify-content:center;';
+  pop.innerHTML=`<div style="background:var(--bg);border-radius:20px 20px 0 0;width:100%;max-width:480px;max-height:85vh;overflow-y:auto;padding:16px 14px 30px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <div style="font-size:16px;font-weight:800;">오늘 학습 요약</div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div style="font-size:11px;color:var(--mu);">${new Date().toLocaleDateString('ko-KR',{month:'long',day:'numeric'})} 기준</div>
+        <div onclick="this.closest('div[style*=fixed]').remove()" style="width:28px;height:28px;border-radius:8px;background:var(--sf);display:flex;align-items:center;justify-content:center;cursor:pointer;">
+          <svg width="12" height="12" viewBox="0 0 12 12"><line x1="1" y1="1" x2="11" y2="11" stroke="#888" stroke-width="1.8"/><line x1="11" y1="1" x2="1" y2="11" stroke="#888" stroke-width="1.8"/></svg>
+        </div>
+      </div>
+    </div>
+    <div id="summary-body"><div class="loading">로딩중...</div></div>
+  </div>`;
+  document.body.appendChild(pop);
+  pop.addEventListener('click',e=>{if(e.target===pop)pop.remove();});
+
+  const today=new Date().toISOString().slice(0,10);
+  const{data:xpToday}=await sb.from('xp_logs').select('student_id').gte('created_at',today+'T00:00:00').lt('created_at',today+'T23:59:59');
+  const{data:revToday}=await sb.from('review_logs').select('student_id').eq('completed',true).gte('completed_at',today+'T00:00:00');
+  const{data:vocabToday}=await sb.from('xp_logs').select('student_id').eq('reason',`vocab_today_${today}`);
+
+  const revDoneSet=new Set((revToday||[]).map(r=>r.student_id));
+  const xpSet=new Set((xpToday||[]).map(x=>x.student_id));
+  const vocabSet=new Set((vocabToday||[]).map(v=>v.student_id));
+
+  const assignedSts=sts.filter(s=>s.class_name);
+  const done=assignedSts.filter(s=>revDoneSet.has(s.id));
+  const inProgress=assignedSts.filter(s=>xpSet.has(s.id)&&!revDoneSet.has(s.id));
+  const notStarted=assignedSts.filter(s=>!xpSet.has(s.id));
+
+  const renderGroup=(list,label,bg,color,note)=>!list.length?'':
+    `<div style="margin-bottom:12px;">
+      <div style="font-size:12px;font-weight:700;color:${color};margin-bottom:6px;">${label} (${list.length}명)</div>
+      ${list.map(s=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;background:${bg};border-radius:11px;margin-bottom:4px;">
+        <div style="font-size:13px;font-weight:600;color:${color};">${dispName(s.name,s.email)}</div>
+        <div style="font-size:11px;color:${color};opacity:.8;">${note(s)}</div>
+      </div>`).join('')}
+    </div>`;
+
+  document.getElementById('summary-body').innerHTML=
+    `<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-bottom:14px;">
+      <div style="background:var(--gl);border-radius:12px;padding:11px 8px;text-align:center;border:1.5px solid #C0E8D8;"><div style="font-size:22px;font-weight:800;color:var(--gd);">${done.length}</div><div style="font-size:10px;color:var(--gm);margin-top:2px;">완료</div></div>
+      <div style="background:#EEF5FC;border-radius:12px;padding:11px 8px;text-align:center;border:1.5px solid #B5D4F4;"><div style="font-size:22px;font-weight:800;color:#185FA5;">${inProgress.length}</div><div style="font-size:10px;color:#185FA5;margin-top:2px;">진행중</div></div>
+      <div style="background:var(--aml);border-radius:12px;padding:11px 8px;text-align:center;border:1.5px solid #FAC775;"><div style="font-size:22px;font-weight:800;color:var(--amd);">${notStarted.length}</div><div style="font-size:10px;color:#854F0B;margin-top:2px;">안 함</div></div>
+    </div>`+
+    renderGroup(done,'✅ 완료','var(--gl)','var(--gd)',s=>vocabSet.has(s.id)?'리뷰+단어':'리뷰 완료')+
+    renderGroup(inProgress,'⏳ 진행중','#EEF5FC','#185FA5',s=>vocabSet.has(s.id)?'단어 완료':'진행중')+
+    renderGroup(notStarted,'⚠️ 아직 안 함','var(--aml)','var(--amd)',()=>'오늘 접속 없음');
 }
 
 // 리뷰 완료 후 강제 새로고침용 (tapRSC에서 호출)
