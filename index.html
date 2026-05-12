@@ -896,7 +896,7 @@ async function anFC(ok){
   const nb=ok?Math.min(c.box_level+1,5):1;
   const iv=[0,1,2,4,8,16];
   const nr=new Date();nr.setDate(nr.getDate()+iv[nb]);
-  await sb.from('vocab_cards').update({box_level:nb,next_review:nr.toISOString().slice(0,10)}).eq('id',c.id);
+  await sb.from('vocab_cards').update({box_level:nb,next_review:nr.toISOString().slice(0,10),review_count:(c.review_count||0)+1}).eq('id',c.id);
   c.box_level=nb;
   if(ok)doneToday++;
   ci++;fl=false;
@@ -2129,6 +2129,7 @@ async function renderSD(){
       <div class="tbb" style="margin-bottom:12px;">
         <button class="tbn on" onclick="sdTab('cal',this)">달력</button>
         <button class="tbn" onclick="sdTab('rev',this)">리뷰 기록</button>
+        <button class="tbn" onclick="sdTab('stat',this)">학습현황</button>
         <button class="tbn" onclick="sdTab('notify',this)">알림</button>
       </div>
       <!-- 달력 탭 -->
@@ -2155,6 +2156,10 @@ async function renderSD(){
       <div id="sd-rev" style="display:none;">
         <div id="sd-rev-content"><div class="loading">로딩중...</div></div>
       </div>
+      <!-- 학습현황 탭 -->
+      <div id="sd-stat" style="display:none;">
+        <div id="sd-stat-content"><div class="loading">로딩중...</div></div>
+      </div>
       <!-- 알림 탭 -->
       <div id="sd-notify" style="display:none;" class="sd-notify-wrap"></div>
     </div>`;
@@ -2167,9 +2172,105 @@ async function sdMv(d){sdM+=d;if(sdM>11){sdM=0;sdY++;}if(sdM<0){sdM=11;sdY--;}aw
 function closeSD(){document.getElementById('sdp').classList.remove('on');}
 
 function sdTab(t,b){
-  ['cal','rev','notify'].forEach(x=>{const el=document.getElementById(`sd-${x}`);if(el)el.style.display=x===t?'block':'none';});
+  ['cal','rev','stat','notify'].forEach(x=>{const el=document.getElementById(`sd-${x}`);if(el)el.style.display=x===t?'block':'none';});
   document.querySelectorAll('#sdp .tbb .tbn').forEach(x=>x.classList.remove('on'));
   if(b)b.classList.add('on');
+  if(t==='stat')loadSDStat();
+}
+
+async function loadSDStat(){
+  const el=document.getElementById('sd-stat-content');
+  if(!el)return;
+  el.innerHTML='<div class="loading">로딩중...</div>';
+
+  // 1. 요일별 학습 패턴 (xp_logs 최근 30일)
+  const since=new Date();since.setDate(since.getDate()-30);
+  const{data:xpL}=await sb.from('xp_logs').select('created_at').eq('student_id',sdSid).gte('created_at',since.toISOString());
+  const dayCnt=[0,0,0,0,0,0,0]; // 일~토
+  (xpL||[]).forEach(l=>{const d=new Date(l.created_at);dayCnt[d.getDay()]++;});
+  const dayMax=Math.max(...dayCnt,1);
+  const dayNames=['일','월','화','수','목','금','토'];
+
+  // 2. 단어 현황
+  const{data:vCards}=await sb.from('vocab_cards').select('box,review_count').eq('student_id',sdSid);
+  const totalV=(vCards||[]).length;
+  const masterV=(vCards||[]).filter(v=>v.box>=5).length;
+  const boxCnt=[0,0,0,0,0];
+  (vCards||[]).forEach(v=>{const b=Math.min(5,Math.max(1,v.box||1));boxCnt[b-1]++;});
+  const boxColors=['#E24B4A','#EF9F27','#639922','#1D9E75','#085041'];
+  const boxMax=Math.max(...boxCnt,1);
+
+  // 3. 리뷰 회차별 완료 현황
+  const{data:rvL}=await sb.from('review_logs').select('lesson_id,review_round,completed').eq('student_id',sdSid).eq('completed',true);
+  const lessonMap={};
+  (rvL||[]).forEach(r=>{
+    if(!lessonMap[r.lesson_id])lessonMap[r.lesson_id]={rounds:new Set()};
+    lessonMap[r.lesson_id].rounds.add(r.review_round);
+  });
+  const lessonIds=Object.keys(lessonMap);
+  let lessonRows='';
+  if(lessonIds.length){
+    const{data:lesData}=await sb.from('lessons').select('id,title').in('id',lessonIds);
+    (lesData||[]).forEach(l=>{
+      const rounds=lessonMap[l.id]?.rounds||new Set();
+      const maxR=Math.max(...rounds,0);
+      const dots=[1,2,3,4,5,6,7].map(r=>`<div style="flex:1;height:6px;border-radius:99px;background:${rounds.has(r)?'#1D9E75':'#E1F5EE'};border:${rounds.has(r)?'none':'0.5px solid #C0E8D8'};"></div>`).join('');
+      lessonRows+=`<div style="margin-bottom:10px;">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+          <div style="font-size:11px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;">${l.title}</div>
+          <div style="font-size:11px;color:var(--mu);">${maxR}회차까지</div>
+        </div>
+        <div style="display:flex;gap:3px;">${dots}</div>
+        <div style="display:flex;gap:3px;margin-top:2px;">${[1,2,3,4,5,6,7].map(r=>`<div style="flex:1;font-size:9px;color:var(--mu);text-align:center;">${r}</div>`).join('')}</div>
+      </div>`;
+    });
+  } else {
+    lessonRows='<div style="font-size:12px;color:var(--mu);">리뷰 기록이 없어요</div>';
+  }
+
+  el.innerHTML=`
+    <!-- 요일별 학습 패턴 -->
+    <div class="card" style="margin-bottom:10px;">
+      <div style="font-size:12px;font-weight:600;margin-bottom:10px;color:var(--text);">요일별 학습 패턴 <span style="font-size:10px;font-weight:400;color:var(--mu);">(최근 30일)</span></div>
+      <div style="display:flex;align-items:flex-end;gap:5px;height:60px;">
+        ${dayCnt.map((cnt,i)=>`
+          <div style="display:flex;flex-direction:column;align-items:center;gap:3px;flex:1;">
+            <div style="background:${cnt>0?'#1D9E75':'#E1F5EE'};border-radius:4px 4px 0 0;width:100%;height:${Math.max(8,Math.round(cnt/dayMax*52))}px;border:${cnt>0?'none':'0.5px solid #C0E8D8'};"></div>
+            <div style="font-size:10px;color:var(--mu);">${dayNames[i]}</div>
+            <div style="font-size:9px;color:var(--mu);">${cnt}</div>
+          </div>`).join('')}
+      </div>
+    </div>
+
+    <!-- 단어 현황 -->
+    <div class="card" style="margin-bottom:10px;">
+      <div style="font-size:12px;font-weight:600;margin-bottom:10px;color:var(--text);">단어 학습 현황</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
+        <div style="background:var(--sf);border-radius:10px;padding:10px;text-align:center;border:1.5px solid var(--brd);">
+          <div style="font-size:20px;font-weight:700;color:var(--gd);">${totalV}</div>
+          <div style="font-size:10px;color:var(--mu);margin-top:2px;">총 단어</div>
+        </div>
+        <div style="background:var(--sf);border-radius:10px;padding:10px;text-align:center;border:1.5px solid var(--brd);">
+          <div style="font-size:20px;font-weight:700;color:var(--pud);">${masterV}</div>
+          <div style="font-size:10px;color:var(--mu);margin-top:2px;">마스터 (5번 박스)</div>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--mu);margin-bottom:7px;">Leitner 박스 분포</div>
+      ${boxCnt.map((cnt,i)=>`
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">
+          <div style="font-size:10px;color:var(--mu);width:20px;">${i+1}번</div>
+          <div style="flex:1;background:var(--sf);border-radius:99px;height:7px;border:1px solid var(--brd);">
+            <div style="background:${boxColors[i]};border-radius:99px;height:7px;width:${Math.round(cnt/boxMax*100)}%;"></div>
+          </div>
+          <div style="font-size:10px;color:var(--mu);width:24px;text-align:right;">${cnt}개</div>
+        </div>`).join('')}
+    </div>
+
+    <!-- 리뷰 회차 현황 -->
+    <div class="card">
+      <div style="font-size:12px;font-weight:600;margin-bottom:10px;color:var(--text);">레슨별 리뷰 회차</div>
+      ${lessonRows}
+    </div>`;
 }
 
 async function loadSDRev(){
