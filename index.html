@@ -1039,6 +1039,7 @@ function renderRH(logs){
           <div class="mu" style="font-size:11px;">${it.completed_at?.slice(0,10)} · ${it.review_round}회차</div>
         </div>
         <div style="display:flex;gap:3px;">${dots}</div>
+        <button onclick="startReviewByLesson('${it.lesson.id}')" style="font-size:11px;font-weight:600;padding:4px 10px;border-radius:99px;background:var(--gl);color:var(--gd);border:1.5px solid #C0E8D8;cursor:pointer;font-family:inherit;white-space:nowrap;flex-shrink:0;">다시 →</button>
       </div>`;
     });
   });
@@ -3280,8 +3281,7 @@ async function startReviewByLesson(lid){
   const doneRounds=new Set((logs||[]).filter(l=>l.completed).map(l=>l.review_round));
   const allRounds=[1,2,3,5,7];
   const nextRound=allRounds.find(r=>!doneRounds.has(r))||1;
-  await startSes(lesson, nextRound);
-  gp('review');
+  oSes(lid, lesson.title, lesson.url, nextRound);
 }
 
 // 리뷰 완료 후 강제 새로고침용 (tapRSC에서 호출)
