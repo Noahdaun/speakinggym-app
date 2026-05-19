@@ -3382,29 +3382,58 @@ function previewCert(type, input){
 }
 
 async function submitCert(){
-  if(!certStartBlob||!certEndBlob){tst('시작/종료 사진을 모두 올려주세요');return;}
+  if(!certStartBlob){tst('시작 사진을 올려주세요');return;}
+  if(!certEndBlob){tst('종료 사진을 올려주세요');return;}
   const dur=parseInt(document.getElementById('cert-duration')?.value)||0;
   if(dur<1){tst('공부 시간을 입력해주세요');return;}
   tst('인증 저장 중...');
   try{
     const today=new Date().toISOString().slice(0,10);
     const ts=Date.now();
-    // 이미지 업로드
-    const{data:s1}=await sb.storage.from('recordings').upload(`cert/${U.id}/${ts}_start.jpg`,certStartBlob,{upsert:true,contentType:'image/jpeg'});
-    const{data:s2}=await sb.storage.from('recordings').upload(`cert/${U.id}/${ts}_end.jpg`,certEndBlob,{upsert:true,contentType:'image/jpeg'});
-    const{data:u1}=sb.storage.from('recordings').getPublicUrl(`cert/${U.id}/${ts}_start.jpg`);
-    const{data:u2}=sb.storage.from('recordings').getPublicUrl(`cert/${U.id}/${ts}_end.jpg`);
-    await sb.from('study_logs').insert({student_id:U.id,photo_start:u1.publicUrl,photo_end:u2.publicUrl,study_date:today,duration_min:dur});
+    let startUrl='', endUrl='';
+
+    // 이미지 업로드 (있을 때만)
+    if(certStartBlob){
+      const{error:e1}=await sb.storage.from('recordings').upload(`cert/${U.id}/${ts}_start.jpg`,certStartBlob,{upsert:true,contentType:'image/jpeg'});
+      if(e1){tst('시작 사진 업로드 실패: '+e1.message);return;}
+      const{data:u1}=sb.storage.from('recordings').getPublicUrl(`cert/${U.id}/${ts}_start.jpg`);
+      startUrl=u1.publicUrl;
+    }
+    if(certEndBlob){
+      const{error:e2}=await sb.storage.from('recordings').upload(`cert/${U.id}/${ts}_end.jpg`,certEndBlob,{upsert:true,contentType:'image/jpeg'});
+      if(e2){tst('종료 사진 업로드 실패: '+e2.message);return;}
+      const{data:u2}=sb.storage.from('recordings').getPublicUrl(`cert/${U.id}/${ts}_end.jpg`);
+      endUrl=u2.publicUrl;
+    }
+
+    // study_logs 저장
+    const{error:dbErr}=await sb.from('study_logs').insert({
+      student_id:U.id,
+      photo_start:startUrl||null,
+      photo_end:endUrl||null,
+      study_date:today,
+      duration_min:dur
+    });
+    if(dbErr){tst('저장 실패: '+dbErr.message);return;}
+
     earnXP(30,`cert_${today}_${ts}`);
     certStartBlob=null;certEndBlob=null;
-    document.getElementById('cert-start-preview').innerHTML=`<svg width="28" height="28" viewBox="0 0 28 28" fill="none"><rect x="2" y="6" width="24" height="18" rx="3" stroke="var(--mu)" stroke-width="1.6"/><circle cx="14" cy="15" r="5" stroke="var(--mu)" stroke-width="1.6"/><path d="M10 6l1.5-3h5L18 6" stroke="var(--mu)" stroke-width="1.6"/></svg><span style="font-size:11px;color:var(--mu);">시작</span>`;
-    document.getElementById('cert-end-preview').innerHTML=`<svg width="28" height="28" viewBox="0 0 28 28" fill="none"><rect x="2" y="6" width="24" height="18" rx="3" stroke="var(--mu)" stroke-width="1.6"/><circle cx="14" cy="15" r="5" stroke="var(--mu)" stroke-width="1.6"/><path d="M10 6l1.5-3h5L18 6" stroke="var(--mu)" stroke-width="1.6"/></svg><span style="font-size:11px;color:var(--mu);">종료</span>`;
+
+    // 미리보기 초기화
+    ['start','end'].forEach(t=>{
+      const el=document.getElementById(`cert-${t}-preview`);
+      if(el)el.innerHTML=`<svg width="28" height="28" viewBox="0 0 28 28" fill="none"><rect x="2" y="6" width="24" height="18" rx="3" stroke="var(--mu)" stroke-width="1.6"/><circle cx="14" cy="15" r="5" stroke="var(--mu)" stroke-width="1.6"/><path d="M10 6l1.5-3h5L18 6" stroke="var(--mu)" stroke-width="1.6"/></svg><span style="font-size:11px;color:var(--mu);">${t==='start'?'시작':'종료'}</span>`;
+    });
     document.getElementById('cert-duration').value='';
+
     tst('인증 완료! +30 XP 🎉');
     await renderCertWeekStat();
     await renderCertLeaderboard();
     await renderCertHistory();
-  }catch(e){tst('오류: '+e.message);}
+  }catch(e){
+    console.error('submitCert error:',e);
+    tst('오류: '+e.message);
+  }
 }
 
 function showCertPhoto(start, end){
