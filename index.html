@@ -350,6 +350,55 @@ function doUpdate(){
       <div id="rhs"><div class="loading">로딩중...</div></div>
     </div>
 
+    <!-- CERT -->
+    <div id="pct" class="pg">
+      <div style="padding:14px 14px 0;">
+        <div style="font-size:22px;font-weight:800;letter-spacing:-.5px;margin-bottom:4px;">공부 인증 📸</div>
+        <div style="font-size:12px;color:var(--mu);margin-bottom:14px;">스노우 앱으로 시작/종료 사진을 찍어 인증하세요</div>
+        <div id="cert-goal-banner" style="margin-bottom:12px;"></div>
+        <div id="cert-week-stat" style="margin-bottom:12px;"></div>
+        <!-- 인증 업로드 -->
+        <div class="card" style="margin-bottom:12px;">
+          <div style="font-size:13px;font-weight:700;margin-bottom:12px;">오늘 인증하기</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+            <div>
+              <div style="font-size:11px;color:var(--mu);margin-bottom:5px;">시작 사진</div>
+              <label style="display:block;aspect-ratio:1;border:2px dashed var(--brd);border-radius:12px;cursor:pointer;overflow:hidden;background:var(--sf);" id="cert-start-label">
+                <input type="file" accept="image/*" id="cert-start-input" style="display:none;" onchange="previewCert('start',this)">
+                <div id="cert-start-preview" style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;">
+                  <svg width="28" height="28" viewBox="0 0 28 28" fill="none"><rect x="2" y="6" width="24" height="18" rx="3" stroke="var(--mu)" stroke-width="1.6"/><circle cx="14" cy="15" r="5" stroke="var(--mu)" stroke-width="1.6"/><path d="M10 6l1.5-3h5L18 6" stroke="var(--mu)" stroke-width="1.6"/></svg>
+                  <span style="font-size:11px;color:var(--mu);">시작</span>
+                </div>
+              </label>
+            </div>
+            <div>
+              <div style="font-size:11px;color:var(--mu);margin-bottom:5px;">종료 사진</div>
+              <label style="display:block;aspect-ratio:1;border:2px dashed var(--brd);border-radius:12px;cursor:pointer;overflow:hidden;background:var(--sf);" id="cert-end-label">
+                <input type="file" accept="image/*" id="cert-end-input" style="display:none;" onchange="previewCert('end',this)">
+                <div id="cert-end-preview" style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;">
+                  <svg width="28" height="28" viewBox="0 0 28 28" fill="none"><rect x="2" y="6" width="24" height="18" rx="3" stroke="var(--mu)" stroke-width="1.6"/><circle cx="14" cy="15" r="5" stroke="var(--mu)" stroke-width="1.6"/><path d="M10 6l1.5-3h5L18 6" stroke="var(--mu)" stroke-width="1.6"/></svg>
+                  <span style="font-size:11px;color:var(--mu);">종료</span>
+                </div>
+              </label>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;margin-bottom:10px;">
+            <div style="flex:1;">
+              <div style="font-size:11px;color:var(--mu);margin-bottom:4px;">공부 시간 (분)</div>
+              <input class="inp" type="number" id="cert-duration" placeholder="예: 45" min="1" style="margin-bottom:0;">
+            </div>
+          </div>
+          <button onclick="submitCert()" style="width:100%;padding:13px;border-radius:12px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;">인증 제출 +30 XP</button>
+        </div>
+        <!-- 이번 주 리더보드 -->
+        <div class="sec">이번 주 랭킹</div>
+        <div id="cert-leaderboard"><div class="loading">로딩중...</div></div>
+        <!-- 내 인증 기록 -->
+        <div class="sec" style="margin-top:12px;">내 인증 기록</div>
+        <div id="cert-history" style="padding-bottom:20px;"><div class="loading">로딩중...</div></div>
+      </div>
+    </div>
+
     <!-- RANK -->
     <div id="prk" class="pg">
       <div style="padding:14px 14px 0;">
@@ -580,6 +629,10 @@ function doUpdate(){
     <button class="bni" onclick="gp('rank')">
       <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="2" y="11" width="4" height="7" rx="1" stroke="#1D9E75" stroke-width="1.6"/><rect x="8" y="7" width="4" height="11" rx="1" stroke="#1D9E75" stroke-width="1.6"/><rect x="14" y="3" width="4" height="15" rx="1" stroke="#1D9E75" stroke-width="1.6"/></svg>
       <span>랭킹</span>
+    </button>
+    <button class="bni" onclick="gp('cert')">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="3" y="3" width="14" height="14" rx="2" stroke="#1D9E75" stroke-width="1.6"/><circle cx="10" cy="9" r="3" stroke="#1D9E75" stroke-width="1.6"/><path d="M5 17c0-2.8 2.2-5 5-5s5 2.2 5 5" stroke="#1D9E75" stroke-width="1.6" stroke-linecap="round"/></svg>
+      <span>인증</span>
     </button>
   </nav>
 </div><!-- as -->
@@ -3129,9 +3182,9 @@ let loaded={vocab:false,review:false,record:false};
 function gp(n){
   document.querySelectorAll('.pg').forEach(p=>p.classList.remove('on'));
   document.querySelectorAll('.bni').forEach(b=>b.classList.remove('on'));
-  const ids={home:'ph',vocab:'pv',review:'pr',record:'prc',rank:'prk',admin:'pad'};
+  const ids={home:'ph',vocab:'pv',review:'pr',record:'prc',rank:'prk',cert:'pct',admin:'pad'};
   const pg=document.getElementById(ids[n]);if(pg)pg.classList.add('on');
-  const ord=['home','vocab','review','record','rank','admin'];
+  const ord=['home','vocab','review','record','rank','cert','admin'];
   const idx=ord.indexOf(n);
   const btns=document.querySelectorAll('.bni');if(btns[idx])btns[idx].classList.add('on');
   const tt={home:'홈',vocab:'단어 학습',review:'리뷰',record:'기록',admin:'관리자'};
@@ -3163,16 +3216,208 @@ function gp(n){
       lRec();
     }
   }
-  if(n==='rank'){
-    lRank();
-  }
+  if(n==='rank') lRank();
+  if(n==='cert') lCert();
   if(n==='admin'){
     if(!classes.length)loadClasses().then(()=>loadStudents().then(()=>{lAdm();adTab('st',document.querySelector('#pad>.tbb .tbn'));}));
     else{lAdm();adTab('st',document.querySelector('#pad>.tbb .tbn'));}
   }
 }
 
-// ── 랭킹 ──
+// ── 공부 인증 ──
+let certStartBlob=null, certEndBlob=null;
+
+function getWeekStart(d=new Date()){
+  const day=d.getDay(); // 0=일
+  const diff=d.getDate()-(day===0?6:day-1); // 월요일 기준
+  const mon=new Date(d);mon.setDate(diff);
+  return mon.toISOString().slice(0,10);
+}
+
+async function lCert(){
+  await checkWeeklyGoal();
+  await renderCertWeekStat();
+  await renderCertLeaderboard();
+  await renderCertHistory();
+}
+
+async function checkWeeklyGoal(){
+  const ws=getWeekStart();
+  const{data:goal}=await sb.from('study_goals').select('*').eq('student_id',U.id).eq('week_start',ws).single();
+  const banner=document.getElementById('cert-goal-banner');
+  if(!banner)return;
+  if(!goal){
+    // 이번 주 목표 미설정
+    banner.innerHTML=`<div style="background:linear-gradient(135deg,#1a2940,#243054);border-radius:14px;padding:14px 16px;">
+      <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:4px;">이번 주 목표를 설정해주세요 💪</div>
+      <div style="font-size:11px;color:rgba(255,255,255,.5);margin-bottom:12px;">최소 주 2시간 이상</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+        <div>
+          <div style="font-size:11px;color:rgba(255,255,255,.6);margin-bottom:4px;">횟수 목표</div>
+          <input type="number" id="goal-sessions" value="4" min="1" style="width:100%;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);border-radius:8px;color:#fff;font-size:13px;padding:7px 10px;font-family:inherit;">
+        </div>
+        <div>
+          <div style="font-size:11px;color:rgba(255,255,255,.6);margin-bottom:4px;">시간 목표 (시간)</div>
+          <input type="number" id="goal-hours" value="2" min="2" step="0.5" style="width:100%;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);border-radius:8px;color:#fff;font-size:13px;padding:7px 10px;font-family:inherit;">
+        </div>
+      </div>
+      <button onclick="saveWeeklyGoal()" style="width:100%;padding:11px;border-radius:10px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">목표 설정하기</button>
+    </div>`;
+  } else {
+    banner.innerHTML=`<div style="background:var(--gl);border-radius:14px;padding:12px 14px;border:1.5px solid #C0E8D8;display:flex;align-items:center;gap:10px;">
+      <div style="font-size:22px;">🎯</div>
+      <div style="flex:1;">
+        <div style="font-size:12px;font-weight:700;color:var(--gd);">이번 주 목표</div>
+        <div style="font-size:11px;color:var(--gm);">주 ${goal.sessions_goal}회 · ${goal.hours_goal}시간 이상</div>
+      </div>
+      <button onclick="resetWeeklyGoal()" style="font-size:11px;color:var(--gm);background:none;border:none;cursor:pointer;font-family:inherit;text-decoration:underline;">변경</button>
+    </div>`;
+  }
+}
+
+async function saveWeeklyGoal(){
+  const sessions=parseInt(document.getElementById('goal-sessions')?.value)||4;
+  const hours=parseFloat(document.getElementById('goal-hours')?.value)||2;
+  if(hours<2){tst('최소 2시간 이상 설정해주세요');return;}
+  const ws=getWeekStart();
+  await sb.from('study_goals').upsert({student_id:U.id,week_start:ws,sessions_goal:sessions,hours_goal:hours},{onConflict:'student_id,week_start'});
+  tst('목표 설정됐어요! 💪');
+  await lCert();
+}
+
+async function resetWeeklyGoal(){
+  const ws=getWeekStart();
+  await sb.from('study_goals').delete().eq('student_id',U.id).eq('week_start',ws);
+  await lCert();
+}
+
+async function renderCertWeekStat(){
+  const ws=getWeekStart();
+  const we=new Date(ws);we.setDate(we.getDate()+6);
+  const{data:logs}=await sb.from('study_logs').select('duration_min,study_date').eq('student_id',U.id).gte('study_date',ws).lte('study_date',we.toISOString().slice(0,10));
+  const{data:goal}=await sb.from('study_goals').select('*').eq('student_id',U.id).eq('week_start',ws).single();
+  const el=document.getElementById('cert-week-stat');if(!el)return;
+  const totalMin=(logs||[]).reduce((s,l)=>s+(l.duration_min||0),0);
+  const totalHr=(totalMin/60).toFixed(1);
+  const sessions=(logs||[]).length;
+  const goalHr=goal?.hours_goal||2;
+  const goalSes=goal?.sessions_goal||4;
+  const pctHr=Math.min(100,Math.round(totalMin/60/goalHr*100));
+  el.innerHTML=`<div class="card">
+    <div style="font-size:12px;font-weight:700;margin-bottom:10px;">이번 주 달성 현황</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+      <div style="background:var(--sf);border-radius:10px;padding:10px;text-align:center;border:1.5px solid var(--brd);">
+        <div style="font-size:20px;font-weight:800;color:var(--gd);">${sessions}<span style="font-size:12px;color:var(--mu);">/${goalSes}회</span></div>
+        <div style="font-size:10px;color:var(--mu);margin-top:2px;">횟수</div>
+      </div>
+      <div style="background:var(--sf);border-radius:10px;padding:10px;text-align:center;border:1.5px solid var(--brd);">
+        <div style="font-size:20px;font-weight:800;color:var(--gd);">${totalHr}<span style="font-size:12px;color:var(--mu);">/${goalHr}h</span></div>
+        <div style="font-size:10px;color:var(--mu);margin-top:2px;">시간</div>
+      </div>
+    </div>
+    <div style="background:var(--brd);border-radius:99px;height:8px;">
+      <div style="background:${pctHr>=100?'var(--g)':'#1D9E75'};border-radius:99px;height:8px;width:${pctHr}%;transition:width .4s;"></div>
+    </div>
+    <div style="font-size:11px;color:var(--mu);text-align:right;margin-top:4px;">${pctHr>=100?'🎉 목표 달성!':goalHr+'시간 목표 중 '+totalHr+'시간'}</div>
+  </div>`;
+}
+
+async function renderCertLeaderboard(){
+  const ws=getWeekStart();
+  const we=new Date(ws);we.setDate(we.getDate()+6);
+  const{data:logs}=await sb.from('study_logs').select('student_id,duration_min').gte('study_date',ws).lte('study_date',we.toISOString().slice(0,10));
+  const{data:profiles}=await sb.from('profiles').select('id,name,email').eq('role','student');
+  const el=document.getElementById('cert-leaderboard');if(!el)return;
+  const map={};
+  (logs||[]).forEach(l=>{
+    if(!map[l.student_id])map[l.student_id]={min:0,cnt:0};
+    map[l.student_id].min+=l.duration_min||0;
+    map[l.student_id].cnt++;
+  });
+  const profMap={};(profiles||[]).forEach(p=>profMap[p.id]=p);
+  const sorted=Object.entries(map).sort((a,b)=>b[1].min-a[1].min);
+  if(!sorted.length){el.innerHTML='<div class="empty">아직 이번 주 인증이 없어요</div>';return;}
+  el.innerHTML=sorted.map(([sid,d],i)=>{
+    const rank=i+1;
+    const prof=profMap[sid];
+    const name=dispName(prof?.name,prof?.email)||'?';
+    const isMe=sid===U.id;
+    const hr=(d.min/60).toFixed(1);
+    const style=isMe?'border:2px solid #1D9E75;':'background:var(--sf);border:1.5px solid var(--brd);';
+    return`<div style="${style}border-radius:12px;padding:10px 13px;display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+      <div style="font-size:16px;font-weight:800;color:${rank===1?'#EF9F27':rank===2?'#B4B2A9':rank===3?'#D85A30':'var(--mu)'};width:24px;text-align:center;">${rank}</div>
+      <div style="width:34px;height:34px;border-radius:9px;background:${isMe?'linear-gradient(135deg,#1D9E75,#159468)':'var(--brd)'};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:${isMe?'#fff':'var(--text)'};">${name.slice(0,2)}</div>
+      <div style="flex:1;">
+        <div style="font-size:13px;font-weight:700;color:var(--text);">${name}${isMe?'<span style="font-size:9px;background:var(--gl);color:var(--gd);padding:1px 6px;border-radius:99px;margin-left:4px;">나</span>':''}</div>
+        <div style="font-size:10px;color:var(--mu);">${d.cnt}회 인증</div>
+      </div>
+      <div style="font-size:13px;font-weight:700;color:var(--text);">${hr}h</div>
+    </div>`;
+  }).join('');
+}
+
+async function renderCertHistory(){
+  const{data:logs}=await sb.from('study_logs').select('*').eq('student_id',U.id).order('created_at',{ascending:false}).limit(20);
+  const el=document.getElementById('cert-history');if(!el)return;
+  if(!logs?.length){el.innerHTML='<div class="empty">인증 기록이 없어요</div>';return;}
+  el.innerHTML=logs.map(l=>`<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1.5px solid var(--brd);">
+    <div style="display:flex;gap:5px;">
+      ${l.photo_start?`<img src="${l.photo_start}" style="width:48px;height:48px;border-radius:8px;object-fit:cover;" onclick="showCertPhoto('${l.photo_start}','${l.photo_end||''}')">`:'' }
+      ${l.photo_end?`<img src="${l.photo_end}" style="width:48px;height:48px;border-radius:8px;object-fit:cover;" onclick="showCertPhoto('${l.photo_start||''}','${l.photo_end}')">`:'' }
+    </div>
+    <div style="flex:1;">
+      <div style="font-size:12px;font-weight:600;">${l.study_date}</div>
+      <div style="font-size:11px;color:var(--mu);">${l.duration_min}분 공부</div>
+    </div>
+  </div>`).join('');
+}
+
+function previewCert(type, input){
+  const file=input.files?.[0];if(!file)return;
+  const url=URL.createObjectURL(file);
+  const previewEl=document.getElementById(`cert-${type}-preview`);
+  if(previewEl)previewEl.innerHTML=`<img src="${url}" style="width:100%;height:100%;object-fit:cover;">`;
+  if(type==='start')certStartBlob=file;
+  else certEndBlob=file;
+}
+
+async function submitCert(){
+  if(!certStartBlob||!certEndBlob){tst('시작/종료 사진을 모두 올려주세요');return;}
+  const dur=parseInt(document.getElementById('cert-duration')?.value)||0;
+  if(dur<1){tst('공부 시간을 입력해주세요');return;}
+  tst('인증 저장 중...');
+  try{
+    const today=new Date().toISOString().slice(0,10);
+    const ts=Date.now();
+    // 이미지 업로드
+    const{data:s1}=await sb.storage.from('recordings').upload(`cert/${U.id}/${ts}_start.jpg`,certStartBlob,{upsert:true,contentType:'image/jpeg'});
+    const{data:s2}=await sb.storage.from('recordings').upload(`cert/${U.id}/${ts}_end.jpg`,certEndBlob,{upsert:true,contentType:'image/jpeg'});
+    const{data:u1}=sb.storage.from('recordings').getPublicUrl(`cert/${U.id}/${ts}_start.jpg`);
+    const{data:u2}=sb.storage.from('recordings').getPublicUrl(`cert/${U.id}/${ts}_end.jpg`);
+    await sb.from('study_logs').insert({student_id:U.id,photo_start:u1.publicUrl,photo_end:u2.publicUrl,study_date:today,duration_min:dur});
+    earnXP(30,`cert_${today}_${ts}`);
+    certStartBlob=null;certEndBlob=null;
+    document.getElementById('cert-start-preview').innerHTML=`<svg width="28" height="28" viewBox="0 0 28 28" fill="none"><rect x="2" y="6" width="24" height="18" rx="3" stroke="var(--mu)" stroke-width="1.6"/><circle cx="14" cy="15" r="5" stroke="var(--mu)" stroke-width="1.6"/><path d="M10 6l1.5-3h5L18 6" stroke="var(--mu)" stroke-width="1.6"/></svg><span style="font-size:11px;color:var(--mu);">시작</span>`;
+    document.getElementById('cert-end-preview').innerHTML=`<svg width="28" height="28" viewBox="0 0 28 28" fill="none"><rect x="2" y="6" width="24" height="18" rx="3" stroke="var(--mu)" stroke-width="1.6"/><circle cx="14" cy="15" r="5" stroke="var(--mu)" stroke-width="1.6"/><path d="M10 6l1.5-3h5L18 6" stroke="var(--mu)" stroke-width="1.6"/></svg><span style="font-size:11px;color:var(--mu);">종료</span>`;
+    document.getElementById('cert-duration').value='';
+    tst('인증 완료! +30 XP 🎉');
+    await renderCertWeekStat();
+    await renderCertLeaderboard();
+    await renderCertHistory();
+  }catch(e){tst('오류: '+e.message);}
+}
+
+function showCertPhoto(start, end){
+  const pop=document.createElement('div');
+  pop.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:9999;display:flex;align-items:center;justify-content:center;gap:10px;padding:20px;';
+  pop.onclick=()=>pop.remove();
+  pop.innerHTML=`
+    ${start?`<img src="${start}" style="max-width:48%;max-height:80vh;border-radius:12px;object-fit:contain;">`:''}
+    ${end?`<img src="${end}" style="max-width:48%;max-height:80vh;border-radius:12px;object-fit:contain;">`:''}`;
+  document.body.appendChild(pop);
+}
+
+
 async function lRank(){
   const myEl=document.getElementById('rank-my');
   const listEl=document.getElementById('rank-list');
