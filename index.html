@@ -3280,9 +3280,21 @@ async function saveWeeklyGoal(){
   const hours=parseFloat(document.getElementById('goal-hours')?.value)||2;
   if(hours<2){tst('최소 2시간 이상 설정해주세요');return;}
   const ws=getWeekStart();
-  await sb.from('study_goals').upsert({student_id:U.id,week_start:ws,sessions_goal:sessions,hours_goal:hours},{onConflict:'student_id,week_start'});
+  const{error}=await sb.from('study_goals').upsert({student_id:U.id,week_start:ws,sessions_goal:sessions,hours_goal:hours},{onConflict:'student_id,week_start'});
+  if(error){tst('저장 실패: '+error.message);return;}
   tst('목표 설정됐어요! 💪');
-  await lCert();
+  // 배너 즉시 교체
+  const banner=document.getElementById('cert-goal-banner');
+  if(banner){
+    banner.innerHTML=`<div style="background:linear-gradient(135deg,#1a2940,#243054);border-radius:14px;padding:14px 16px;display:flex;align-items:center;gap:12px;">
+      <div style="font-size:28px;">🎯</div>
+      <div style="flex:1;">
+        <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:2px;">이번 주 목표</div>
+        <div style="font-size:12px;color:rgba(255,255,255,.6);">주 ${sessions}회 · ${hours}시간 이상</div>
+      </div>
+      <div style="font-size:10px;color:rgba(255,255,255,.3);">${ws} ~</div>
+    </div>`;
+  }
 }
 
 async function resetWeeklyGoal(){
