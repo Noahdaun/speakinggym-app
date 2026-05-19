@@ -3264,13 +3264,13 @@ async function checkWeeklyGoal(){
       <button onclick="saveWeeklyGoal()" style="width:100%;padding:11px;border-radius:10px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">목표 설정하기</button>
     </div>`;
   } else {
-    banner.innerHTML=`<div style="background:var(--gl);border-radius:14px;padding:12px 14px;border:1.5px solid #C0E8D8;display:flex;align-items:center;gap:10px;">
-      <div style="font-size:22px;">🎯</div>
+    banner.innerHTML=`<div style="background:linear-gradient(135deg,#1a2940,#243054);border-radius:14px;padding:14px 16px;display:flex;align-items:center;gap:12px;">
+      <div style="font-size:28px;">🎯</div>
       <div style="flex:1;">
-        <div style="font-size:12px;font-weight:700;color:var(--gd);">이번 주 목표</div>
-        <div style="font-size:11px;color:var(--gm);">주 ${goal.sessions_goal}회 · ${goal.hours_goal}시간 이상</div>
+        <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:2px;">이번 주 목표</div>
+        <div style="font-size:12px;color:rgba(255,255,255,.6);">주 ${goal.sessions_goal}회 · ${goal.hours_goal}시간 이상</div>
       </div>
-      <button onclick="resetWeeklyGoal()" style="font-size:11px;color:var(--gm);background:none;border:none;cursor:pointer;font-family:inherit;text-decoration:underline;">변경</button>
+      <div style="font-size:10px;color:rgba(255,255,255,.3);">${goal.week_start} ~</div>
     </div>`;
   }
 }
