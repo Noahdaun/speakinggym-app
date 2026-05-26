@@ -494,6 +494,7 @@ function doUpdate(){
         <button class="tbn" onclick="adTab('ls',this)">레슨</button>
         <button class="tbn" onclick="adTab('at',this)">출석</button>
         <button class="tbn" onclick="adTab('vo',this)">단어</button>
+        <button class="tbn" onclick="adTab('ct',this)">인증현황</button>
       </div>
 
       <!-- 학생현황 -->
@@ -604,6 +605,10 @@ function doUpdate(){
         <div style="font-size:11px;color:var(--mu);margin-bottom:7px;">영어,한국어 형식으로 줄마다</div>
         <textarea id="vbulk" placeholder="I can't resist,~하지 않을 수가 없어&#10;hit differently,색다르게 느껴지다"></textarea>
         <button class="btn btn-p" onclick="admBulkV()" style="margin-top:8px;">일괄 추가</button>
+      </div>
+      <!-- 인증현황 -->
+      <div id="ad-ct" style="display:none;">
+        <div id="admin-cert-body"><div class="loading">로딩중...</div></div>
       </div>
     </div>
 
@@ -2283,6 +2288,77 @@ function sdTab(t,b){
   if(t==='stat')loadSDStat();
 }
 
+async function loadAdminCert(){
+  const el=document.getElementById('admin-cert-body');
+  if(!el)return;
+  el.innerHTML='<div class="loading">로딩중...</div>';
+  const ws=getWeekStart();
+  const we=new Date(ws);we.setDate(we.getDate()+6);
+  const dayNames=['월','화','수','목','금','토','일'];
+
+  const{data:goals}=await sb.from('study_goals').select('*').eq('week_start',ws);
+  const{data:logs}=await sb.from('study_logs').select('student_id,duration_min').gte('study_date',ws).lte('study_date',we.toISOString().slice(0,10));
+
+  const goalMap={};(goals||[]).forEach(g=>goalMap[g.student_id]=g);
+  const logMap={};
+  (logs||[]).forEach(l=>{
+    if(!logMap[l.student_id])logMap[l.student_id]={min:0,cnt:0};
+    logMap[l.student_id].min+=l.duration_min||0;
+    logMap[l.student_id].cnt++;
+  });
+
+  const assignedSts=sts.filter(s=>s.class_name);
+  const achieved=assignedSts.filter(s=>{
+    const g=goalMap[s.id];const l=logMap[s.id];
+    return g&&l&&(l.min/60)>=g.hours_goal;
+  });
+  const below=assignedSts.filter(s=>{
+    const g=goalMap[s.id];
+    return g&&!(logMap[s.id]&&(logMap[s.id].min/60)>=(g.hours_goal));
+  });
+  const noGoal=assignedSts.filter(s=>!goalMap[s.id]);
+
+  const renderStu=(s,color,bg)=>{
+    const g=goalMap[s.id];
+    const l=logMap[s.id];
+    const days=(g?.study_days||'').split(',').filter(Boolean);
+    const dayBadges=dayNames.map((d,i)=>days.includes(String(i))?
+      `<span style="font-size:10px;background:${color}22;color:${color};padding:1px 6px;border-radius:99px;">${d}</span>`:''
+    ).join('');
+    return `<div style="display:flex;align-items:center;gap:8px;padding:9px 11px;background:${bg};border-radius:11px;margin-bottom:5px;" onclick="showCertDetail('${s.id}','${(s.name||s.email||'?').replace(/'/g,"\\'")}')">
+      <div style="width:32px;height:32px;border-radius:9px;background:${color}22;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:${color};">${(dispName(s.name,s.email)||'?').slice(0,2)}</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:12px;font-weight:600;color:var(--text);">${dispName(s.name,s.email)||'?'}</div>
+        <div style="display:flex;gap:3px;margin-top:2px;">${dayBadges}</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0;">
+        <div style="font-size:12px;font-weight:700;color:${color};">${l?`${l.cnt}회 · ${(l.min/60).toFixed(1)}h`:'0회'}</div>
+        ${g?`<div style="font-size:10px;color:var(--mu);">목표 ${g.hours_goal}h</div>`:''}
+      </div>
+    </div>`;
+  };
+
+  el.innerHTML=`
+    <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-bottom:14px;">
+      <div style="background:var(--gl);border-radius:11px;padding:10px 8px;text-align:center;border:1.5px solid #C0E8D8;">
+        <div style="font-size:20px;font-weight:800;color:var(--gd);">${achieved.length}</div>
+        <div style="font-size:10px;color:var(--gm);margin-top:2px;">달성</div>
+      </div>
+      <div style="background:var(--aml);border-radius:11px;padding:10px 8px;text-align:center;border:1.5px solid #FAC775;">
+        <div style="font-size:20px;font-weight:800;color:var(--amd);">${below.length}</div>
+        <div style="font-size:10px;color:#854F0B;margin-top:2px;">미달</div>
+      </div>
+      <div style="background:var(--sf);border-radius:11px;padding:10px 8px;text-align:center;border:1.5px solid var(--brd);">
+        <div style="font-size:20px;font-weight:800;color:var(--mu);">${noGoal.length}</div>
+        <div style="font-size:10px;color:var(--mu);margin-top:2px;">미선언</div>
+      </div>
+    </div>
+    ${achieved.length?`<div style="font-size:12px;font-weight:700;color:var(--gd);margin-bottom:6px;">✅ 달성 (${achieved.length}명)</div>${achieved.map(s=>renderStu(s,'#1D9E75','var(--gl)')).join('')}`:''}
+    ${below.length?`<div style="font-size:12px;font-weight:700;color:var(--amd);margin-bottom:6px;margin-top:8px;">⚠️ 미달 (${below.length}명)</div>${below.map(s=>renderStu(s,'#E8940A','var(--aml)')).join('')}`:''}
+    ${noGoal.length?`<div style="font-size:12px;font-weight:700;color:var(--mu);margin-bottom:6px;margin-top:8px;">— 미선언 (${noGoal.length}명)</div>${noGoal.map(s=>renderStu(s,'var(--mu)','var(--sf)')).join('')}`:''}
+  `;
+}
+
 async function loadSDStat(){
   const el=document.getElementById('sd-stat-content');
   if(!el)return;
@@ -2538,7 +2614,7 @@ function closeNotifyPopup(){const p=document.getElementById('notify-popup');if(p
 
 
 async function adTab(t,b){
-  ['st','cl','ls','at','vo'].forEach(x=>{
+  ['st','cl','ls','at','vo','ct'].forEach(x=>{
     const el=document.getElementById(`ad-${x}`);
     if(el)el.style.display=x===t?'block':'none';
   });
@@ -2552,6 +2628,7 @@ async function adTab(t,b){
   if(t==='ls'){rLsList();renderLsRows();lsVocabRenderTgt();}
   if(t==='at'){document.getElementById('atd').value=new Date().toISOString().slice(0,10);rAtCls();}
   if(t==='vo'){rVTgt();}
+  if(t==='ct'){loadAdminCert();}
 }
 
 // ── AI 자동 가공 ──
@@ -3246,12 +3323,12 @@ async function checkWeeklyGoal(){
   const{data:goal}=await sb.from('study_goals').select('*').eq('student_id',U.id).eq('week_start',ws).single();
   const banner=document.getElementById('cert-goal-banner');
   if(!banner)return;
+  const dayNames=['월','화','수','목','금','토','일'];
   if(!goal){
-    // 이번 주 목표 미설정
     banner.innerHTML=`<div style="background:linear-gradient(135deg,#1a2940,#243054);border-radius:14px;padding:14px 16px;">
       <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:4px;">이번 주 목표를 설정해주세요 💪</div>
       <div style="font-size:11px;color:rgba(255,255,255,.5);margin-bottom:12px;">최소 주 2시간 이상</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
         <div>
           <div style="font-size:11px;color:rgba(255,255,255,.6);margin-bottom:4px;">횟수 목표</div>
           <input type="number" id="goal-sessions" value="4" min="1" style="width:100%;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);border-radius:8px;color:#fff;font-size:13px;padding:7px 10px;font-family:inherit;">
@@ -3261,17 +3338,40 @@ async function checkWeeklyGoal(){
           <input type="number" id="goal-hours" value="2" min="2" step="0.5" style="width:100%;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);border-radius:8px;color:#fff;font-size:13px;padding:7px 10px;font-family:inherit;">
         </div>
       </div>
+      <div style="font-size:11px;color:rgba(255,255,255,.6);margin-bottom:8px;">공부 요일 선택</div>
+      <div style="display:flex;gap:6px;margin-bottom:14px;" id="day-btns">
+        ${dayNames.map((d,i)=>`<button onclick="toggleDay(${i})" id="day-btn-${i}" style="width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,.1);border:1.5px solid rgba(255,255,255,.2);color:rgba(255,255,255,.6);font-size:13px;cursor:pointer;font-family:inherit;flex-shrink:0;">${d}</button>`).join('')}
+      </div>
       <button onclick="saveWeeklyGoal()" style="width:100%;padding:11px;border-radius:10px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">목표 설정하기</button>
     </div>`;
   } else {
-    banner.innerHTML=`<div style="background:linear-gradient(135deg,#1a2940,#243054);border-radius:14px;padding:14px 16px;display:flex;align-items:center;gap:12px;">
-      <div style="font-size:28px;">🎯</div>
-      <div style="flex:1;">
-        <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:2px;">이번 주 목표</div>
-        <div style="font-size:12px;color:rgba(255,255,255,.6);">주 ${goal.sessions_goal}회 · ${goal.hours_goal}시간 이상</div>
+    const days=(goal.study_days||'').split(',').filter(Boolean);
+    const dayBadges=dayNames.map((d,i)=>{
+      const sel=days.includes(String(i));
+      return sel?`<div style="width:30px;height:30px;border-radius:8px;background:#1D9E75;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;">${d}</div>`
+               :`<div style="width:30px;height:30px;border-radius:8px;background:rgba(255,255,255,.07);display:flex;align-items:center;justify-content:center;font-size:12px;color:rgba(255,255,255,.3);">${d}</div>`;
+    }).join('');
+    banner.innerHTML=`<div style="background:linear-gradient(135deg,#1a2940,#243054);border-radius:14px;padding:14px 16px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+        <div style="font-size:24px;">🎯</div>
+        <div style="flex:1;">
+          <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:2px;">이번 주 목표</div>
+          <div style="font-size:12px;color:rgba(255,255,255,.5);">주 ${goal.sessions_goal}회 · ${goal.hours_goal}시간 이상</div>
+        </div>
       </div>
-      <div style="font-size:10px;color:rgba(255,255,255,.3);">${goal.week_start} ~</div>
+      <div style="display:flex;gap:5px;">${dayBadges}</div>
     </div>`;
+  }
+}
+
+let _selectedDays=new Set();
+function toggleDay(i){
+  if(_selectedDays.has(i))_selectedDays.delete(i);
+  else _selectedDays.add(i);
+  const btn=document.getElementById(`day-btn-${i}`);
+  if(btn){
+    if(_selectedDays.has(i)){btn.style.background='#1D9E75';btn.style.color='#fff';btn.style.borderColor='#1D9E75';}
+    else{btn.style.background='rgba(255,255,255,.1)';btn.style.color='rgba(255,255,255,.6)';btn.style.borderColor='rgba(255,255,255,.2)';}
   }
 }
 
@@ -3279,20 +3379,30 @@ async function saveWeeklyGoal(){
   const sessions=parseInt(document.getElementById('goal-sessions')?.value)||4;
   const hours=parseFloat(document.getElementById('goal-hours')?.value)||2;
   if(hours<2){tst('최소 2시간 이상 설정해주세요');return;}
+  const study_days=[..._selectedDays].sort().join(',');
   const ws=getWeekStart();
-  const{error}=await sb.from('study_goals').upsert({student_id:U.id,week_start:ws,sessions_goal:sessions,hours_goal:hours},{onConflict:'student_id,week_start'});
+  const{error}=await sb.from('study_goals').upsert({student_id:U.id,week_start:ws,sessions_goal:sessions,hours_goal:hours,study_days},{onConflict:'student_id,week_start'});
   if(error){tst('저장 실패: '+error.message);return;}
+  _selectedDays=new Set();
   tst('목표 설정됐어요! 💪');
-  // 배너 즉시 교체
+  const dayNames=['월','화','수','목','금','토','일'];
+  const days=study_days.split(',').filter(Boolean);
+  const dayBadges=dayNames.map((d,i)=>{
+    const sel=days.includes(String(i));
+    return sel?`<div style="width:30px;height:30px;border-radius:8px;background:#1D9E75;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;">${d}</div>`
+             :`<div style="width:30px;height:30px;border-radius:8px;background:rgba(255,255,255,.07);display:flex;align-items:center;justify-content:center;font-size:12px;color:rgba(255,255,255,.3);">${d}</div>`;
+  }).join('');
   const banner=document.getElementById('cert-goal-banner');
   if(banner){
-    banner.innerHTML=`<div style="background:linear-gradient(135deg,#1a2940,#243054);border-radius:14px;padding:14px 16px;display:flex;align-items:center;gap:12px;">
-      <div style="font-size:28px;">🎯</div>
-      <div style="flex:1;">
-        <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:2px;">이번 주 목표</div>
-        <div style="font-size:12px;color:rgba(255,255,255,.6);">주 ${sessions}회 · ${hours}시간 이상</div>
+    banner.innerHTML=`<div style="background:linear-gradient(135deg,#1a2940,#243054);border-radius:14px;padding:14px 16px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+        <div style="font-size:24px;">🎯</div>
+        <div style="flex:1;">
+          <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:2px;">이번 주 목표</div>
+          <div style="font-size:12px;color:rgba(255,255,255,.5);">주 ${sessions}회 · ${hours}시간 이상</div>
+        </div>
       </div>
-      <div style="font-size:10px;color:rgba(255,255,255,.3);">${ws} ~</div>
+      <div style="display:flex;gap:5px;">${dayBadges}</div>
     </div>`;
   }
 }
@@ -3495,7 +3605,7 @@ async function lRank(){
     const isMe=x.student_id===U.id;
     const rankColor=rank===1?'#EF9F27':rank===2?'#B4B2A9':rank===3?'#D85A30':'var(--mu)';
     const style=isMe?'border:2px solid #1D9E75;':'background:var(--sf);border:1.5px solid var(--brd);';
-    return `<div style="${style}border-radius:13px;padding:10px 13px;display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+    return `<div style="${style}border-radius:13px;padding:10px 13px;display:flex;align-items:center;gap:10px;margin-bottom:6px;cursor:pointer;" onclick="showCertDetail('${x.student_id}','${name.replace(/'/g,"\\'")}')">
       <div style="font-size:${rank<=3?18:15}px;font-weight:800;color:${rankColor};width:28px;text-align:center;">${rank}</div>
       <div style="width:38px;height:38px;border-radius:10px;background:${isMe?'linear-gradient(135deg,#1D9E75,#159468)':'var(--brd)'};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:${isMe?'#fff':'var(--text)'};flex-shrink:0;">${name.slice(0,2)}</div>
       <div style="flex:1;min-width:0;">
@@ -3505,6 +3615,59 @@ async function lRank(){
       <div style="font-size:13px;font-weight:700;color:var(--text);flex-shrink:0;">${(x.total_xp||0).toLocaleString()} XP</div>
     </div>`;
   }).join('');
+}
+
+async function showCertDetail(sid, name){
+  const pop=document.createElement('div');
+  pop.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9000;display:flex;align-items:flex-end;justify-content:center;';
+  pop.innerHTML=`<div style="background:var(--bg);border-radius:20px 20px 0 0;width:100%;max-width:480px;max-height:88vh;overflow-y:auto;padding:16px 14px 30px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <div style="font-size:15px;font-weight:800;">${name}</div>
+      <div onclick="this.closest('div[style*=fixed]').remove()" style="width:28px;height:28px;border-radius:8px;background:var(--sf);display:flex;align-items:center;justify-content:center;cursor:pointer;">
+        <svg width="12" height="12" viewBox="0 0 12 12"><line x1="1" y1="1" x2="11" y2="11" stroke="#888" stroke-width="1.8"/><line x1="11" y1="1" x2="1" y2="11" stroke="#888" stroke-width="1.8"/></svg>
+      </div>
+    </div>
+    <div id="cert-detail-body"><div class="loading">로딩중...</div></div>
+  </div>`;
+  document.body.appendChild(pop);
+  pop.addEventListener('click',e=>{if(e.target===pop)pop.remove();});
+
+  const ws=getWeekStart();
+  const dayNames=['월','화','수','목','금','토','일'];
+  const{data:goal}=await sb.from('study_goals').select('*').eq('student_id',sid).eq('week_start',ws).single();
+  const{data:logs}=await sb.from('study_logs').select('*').eq('student_id',sid).order('created_at',{ascending:false});
+
+  const days=(goal?.study_days||'').split(',').filter(Boolean);
+  const dayBadges=dayNames.map((d,i)=>{
+    const sel=days.includes(String(i));
+    return `<div style="width:34px;height:34px;border-radius:9px;background:${sel?'#1D9E75':'var(--sf)'};border:1.5px solid ${sel?'#1D9E75':'var(--brd)'};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:${sel?700:400};color:${sel?'#fff':'var(--mu)'};">${d}</div>`;
+  }).join('');
+
+  const logsHtml=(logs||[]).map(l=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1.5px solid var(--brd);">
+      <div style="display:flex;gap:5px;">
+        ${l.photo_start?`<img src="${l.photo_start}" style="width:56px;height:56px;border-radius:9px;object-fit:cover;cursor:pointer;" onclick="showCertPhoto('${l.photo_start}','${l.photo_end||''}')">`:
+        `<div style="width:56px;height:56px;border-radius:9px;background:var(--sf);border:1.5px solid var(--brd);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--mu);">없음</div>`}
+        ${l.photo_end?`<img src="${l.photo_end}" style="width:56px;height:56px;border-radius:9px;object-fit:cover;cursor:pointer;" onclick="showCertPhoto('${l.photo_start||''}','${l.photo_end}')">`:
+        `<div style="width:56px;height:56px;border-radius:9px;background:var(--sf);border:1.5px solid var(--brd);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--mu);">없음</div>`}
+      </div>
+      <div style="flex:1;">
+        <div style="font-size:12px;font-weight:600;">${l.study_date||'-'}</div>
+        <div style="font-size:11px;color:var(--mu);">${l.duration_min}분 공부</div>
+      </div>
+    </div>`).join('');
+
+  document.getElementById('cert-detail-body').innerHTML=`
+    <div class="card" style="margin-bottom:10px;">
+      <div style="font-size:12px;font-weight:700;margin-bottom:8px;">공부 요일</div>
+      ${goal?`<div style="display:flex;gap:5px;">${dayBadges}</div>
+      <div style="font-size:11px;color:var(--mu);margin-top:8px;">주 ${goal.sessions_goal}회 · ${goal.hours_goal}시간 목표</div>`
+      :'<div style="font-size:12px;color:var(--mu);">목표 미설정</div>'}
+    </div>
+    <div class="card">
+      <div style="font-size:12px;font-weight:700;margin-bottom:8px;">인증 기록 (${(logs||[]).length}개)</div>
+      ${logsHtml||'<div class="empty">인증 기록이 없어요</div>'}
+    </div>`;
 }
 
 // ── 오늘 학습 요약 ──
