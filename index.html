@@ -435,6 +435,10 @@ function doUpdate(){
               <div>
                 <div id="profile-name" onclick="editMyName()" style="font-size:19px;font-weight:800;color:#fff;letter-spacing:-.4px;margin-bottom:3px;word-break:keep-all;line-height:1.3;cursor:pointer;display:flex;align-items:center;gap:6px;">-<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 10h1.8l4-4L5.8 4 2 7.8V10z" stroke="rgba(255,255,255,.5)" stroke-width="1.1"/><line x1="5.8" y1="4" x2="8.5" y2="6.7" stroke="rgba(255,255,255,.5)" stroke-width="1.1"/></svg></div>
                 <div id="profile-class" style="font-size:12px;color:rgba(255,255,255,.5);margin-bottom:10px;">-</div>
+                <div onclick="changePassword()" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:rgba(255,255,255,.4);cursor:pointer;margin-top:-6px;margin-bottom:8px;">
+                  <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><rect x="2" y="5" width="7" height="5" rx="1" stroke="rgba(255,255,255,.4)" stroke-width="1.1"/><path d="M3.5 5V3.5a2 2 0 014 0V5" stroke="rgba(255,255,255,.4)" stroke-width="1.1"/></svg>
+                  비밀번호 변경
+                </div>
                 <div id="profile-level-badge" style="display:inline-flex;align-items:center;gap:5px;background:linear-gradient(135deg,#FFB347,#E8940A);border-radius:99px;padding:5px 13px;box-shadow:0 3px 10px rgba(255,179,71,.4);">
                   <span style="font-size:14px;">🔥</span>
                   <span style="font-size:12px;font-weight:700;color:#fff;">Lv.- -</span>
@@ -446,13 +450,20 @@ function doUpdate(){
           </div>
         </div>
 
-        <!-- 연속 + 통계 3개 -->
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px;">
+        <!-- 연속 + 통계 4개 -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
           <div id="rec-streak" style="background:linear-gradient(135deg,#FF8C42,#F06020);border-radius:14px;padding:12px 8px;text-align:center;box-shadow:0 4px 14px rgba(240,96,32,.3);position:relative;overflow:hidden;">
             <div style="font-size:20px;margin-bottom:2px;">🔥</div>
             <div style="font-size:20px;font-weight:800;color:#fff;line-height:1;">-</div>
             <div style="font-size:9px;color:rgba(255,255,255,.8);margin-top:3px;font-weight:600;">연속일</div>
           </div>
+          <div style="background:linear-gradient(135deg,#3C3489,#2D2870);border-radius:14px;padding:12px 8px;text-align:center;box-shadow:0 4px 14px rgba(60,52,137,.3);">
+            <div style="font-size:20px;margin-bottom:2px;">⏱️</div>
+            <div style="font-size:20px;font-weight:800;color:#fff;line-height:1;" id="rv-study-time">-</div>
+            <div style="font-size:9px;color:rgba(255,255,255,.8);margin-top:3px;font-weight:600;">총 공부시간</div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
           <div style="background:#fff;border-radius:14px;padding:12px 8px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.07);">
             <div style="font-size:20px;margin-bottom:2px;">📚</div>
             <div style="font-size:20px;font-weight:800;color:#085041;line-height:1;" id="rv-total">-</div>
@@ -678,6 +689,7 @@ let aMap={},rMap={};// 달력용
 let vc=[],tv=[],ci=0,fl=false,doneToday=0;
 let les=[],sts=[],classes=[];
 let ses=null;
+let sesStartTime=null;
 let todayRevItems=[];
 let lsClsState={},editLessonId=null;
 let selSignupCls='';
@@ -973,10 +985,21 @@ async function anFC(ok){
   const nr=new Date();nr.setDate(nr.getDate()+iv[nb]);
   await sb.from('vocab_cards').update({box_level:nb,next_review:nr.toISOString().slice(0,10),review_count:(c.review_count||0)+1}).eq('id',c.id);
   c.box_level=nb;
-  if(ok)doneToday++;
+
+  const today=new Date().toISOString().slice(0,10);
+
+  // 오늘 첫 번째 카드 → 시작 보너스 +5 XP
+  if(ci===0) earnXP(5,'vocab_start_'+today);
+
+  if(ok){
+    doneToday++;
+    // 마일스톤 보너스 (10/20/50개)
+    if(doneToday===10) earnXP(10,'vocab_bonus10_'+today);
+    else if(doneToday===20) earnXP(10,'vocab_bonus20_'+today);
+    else if(doneToday===50) earnXP(10,'vocab_bonus50_'+today);
+  }
+
   ci++;fl=false;
-  // 오늘 처음 단어 완료 시 XP
-  if(doneToday===1)earnXP(XP_TABLE.vocab,'vocab_today_'+new Date().toISOString().slice(0,10));
   renderVHead();renderFC();
 }
 function vtab(t,b){
@@ -1118,7 +1141,8 @@ function getRoundLabel(round){
 }
 
 async function oSes(lid,title,url,round){
-  ses={lid,title,url,round};
+  ses={lid,title,url,round,startedAt:Date.now()};
+  sesStartTime=Date.now();
   const lbl=getRoundLabel(round);
   document.getElementById('rs-title').textContent=title;
   document.getElementById('rs-badge').textContent=`${round}회 전`;
@@ -1209,9 +1233,10 @@ function renderRSC(n){
 async function tapRSC(n){
   if(!ses)return;
   const done=n>=5,now=new Date().toISOString();
+  const durSec=ses.startedAt?Math.round((Date.now()-ses.startedAt)/1000):0;
   const{data:ex}=await sb.from('review_logs').select('id').eq('student_id',U.id).eq('lesson_id',ses.lid).eq('review_round',ses.round).single();
-  if(ex)await sb.from('review_logs').update({count:n,completed:done,completed_at:done?now:null}).eq('id',ex.id);
-  else await sb.from('review_logs').insert({student_id:U.id,lesson_id:ses.lid,review_round:ses.round,count:n,completed:done,completed_at:done?now:null});
+  if(ex)await sb.from('review_logs').update({count:n,completed:done,completed_at:done?now:null,duration_sec:durSec}).eq('id',ex.id);
+  else await sb.from('review_logs').insert({student_id:U.id,lesson_id:ses.lid,review_round:ses.round,count:n,completed:done,completed_at:done?now:null,duration_sec:durSec});
   renderRSC(n);
   if(done){
     earnXP(XP_TABLE.follow,'follow_complete_'+ses.lid+'_'+ses.round);
@@ -1764,6 +1789,13 @@ async function lRec(){
   renderVDist();
   if(document.getElementById('rv-total'))document.getElementById('rv-total').textContent=vc.length;
   if(document.getElementById('rv-master'))document.getElementById('rv-master').textContent=vc.filter(v=>v.box_level===5).length;
+  // 총 공부 시간 (review_logs duration_sec 합산)
+  const{data:durData}=await sb.from('review_logs').select('duration_sec').eq('student_id',U.id);
+  const totalSec=(durData||[]).reduce((s,l)=>s+(l.duration_sec||0),0);
+  const totalMin=Math.round(totalSec/60);
+  const timeStr=totalMin>=60?`${Math.floor(totalMin/60)}h ${totalMin%60}m`:`${totalMin}m`;
+  const timeEl=document.getElementById('rv-study-time');
+  if(timeEl)timeEl.textContent=totalMin>0?timeStr:'-';
 
   // 연속 학습일 계산
   await calcStreak();
@@ -2409,6 +2441,12 @@ async function loadSDStat(){
     lessonRows='<div style="font-size:12px;color:var(--mu);">리뷰 기록이 없어요</div>';
   }
 
+  // 총 공부 시간
+  const{data:durData}=await sb.from('review_logs').select('duration_sec').eq('student_id',sdSid);
+  const totalSec=(durData||[]).reduce((s,l)=>s+(l.duration_sec||0),0);
+  const totalMin=Math.round(totalSec/60);
+  const timeStr=totalMin>=60?`${Math.floor(totalMin/60)}h ${totalMin%60}m`:`${totalMin}m`;
+
   el.innerHTML=`
     <!-- 요일별 학습 패턴 -->
     <div class="card" style="margin-bottom:10px;">
@@ -2433,7 +2471,11 @@ async function loadSDStat(){
         </div>
         <div style="background:var(--sf);border-radius:10px;padding:10px;text-align:center;border:1.5px solid var(--brd);">
           <div style="font-size:20px;font-weight:700;color:var(--pud);">${masterV}</div>
-          <div style="font-size:10px;color:var(--mu);margin-top:2px;">마스터 (5번 박스)</div>
+          <div style="font-size:10px;color:var(--mu);margin-top:2px;">마스터</div>
+        </div>
+        <div style="background:linear-gradient(135deg,#3C3489,#2D2870);border-radius:10px;padding:10px;text-align:center;">
+          <div style="font-size:18px;font-weight:700;color:#fff;">${totalMin>0?timeStr:'-'}</div>
+          <div style="font-size:10px;color:rgba(255,255,255,.7);margin-top:2px;">총 공부시간</div>
         </div>
       </div>
       <div style="font-size:11px;color:var(--mu);margin-bottom:7px;">Leitner 박스 분포</div>
@@ -3882,8 +3924,38 @@ function playMemSeg(start,end){
   else{window.open(ses.url,'_blank');}
 }
 
+async function changePassword(){
+  const pop=document.createElement('div');
+  pop.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+  pop.innerHTML=`<div style="background:var(--bg);border-radius:20px;width:100%;max-width:360px;padding:20px;">
+    <div style="font-size:16px;font-weight:800;margin-bottom:16px;">비밀번호 변경</div>
+    <div style="font-size:12px;color:var(--mu);margin-bottom:6px;">새 비밀번호</div>
+    <input type="password" id="pw-new" class="inp" placeholder="새 비밀번호 (6자 이상)" style="margin-bottom:10px;">
+    <div style="font-size:12px;color:var(--mu);margin-bottom:6px;">비밀번호 확인</div>
+    <input type="password" id="pw-confirm" class="inp" placeholder="비밀번호 재입력" style="margin-bottom:16px;">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <button onclick="this.closest('div[style*=fixed]').remove()" style="padding:12px;border-radius:11px;background:var(--sf);border:1.5px solid var(--brd);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">취소</button>
+      <button id="pw-save-btn" onclick="savePW()" style="padding:12px;border-radius:11px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">변경하기</button>
+    </div>
+  </div>`;
+  document.body.appendChild(pop);
+}
+
+async function savePW(){
+  const pw=document.getElementById('pw-new')?.value;
+  const confirm=document.getElementById('pw-confirm')?.value;
+  if(!pw||pw.length<6){tst('6자 이상 입력해주세요');return;}
+  if(pw!==confirm){tst('비밀번호가 일치하지 않아요');return;}
+  const btn=document.getElementById('pw-save-btn');
+  if(btn){btn.textContent='변경 중...';btn.disabled=true;}
+  const{error}=await sb.auth.updateUser({password:pw});
+  if(error){tst('변경 실패: '+error.message);if(btn){btn.textContent='변경하기';btn.disabled=false;}return;}
+  document.querySelector('div[style*="position:fixed"][style*="9999"]')?.remove();
+  tst('비밀번호가 변경됐어요! ✅');
+}
+
+
 async function editMyName(){
-  const cur=P?.name||'';
   const newName=prompt('이름을 입력해주세요 (예: 김지수/Sienna)',cur);
   if(!newName||newName.trim()===cur)return;
   const{error}=await sb.from('profiles').update({name:newName.trim()}).eq('id',U.id);
