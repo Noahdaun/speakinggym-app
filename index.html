@@ -687,7 +687,18 @@ const SU='https://hrmiyejhhzptwjzbrzvv.supabase.co';
 const SK='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhybWl5ZWpoaHpwdHdqemJyenZ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYyODIxMzcsImV4cCI6MjA5MTg1ODEzN30.yL9kiPLI3LibWyEJitPliS4HbyWrGdGYh4YZ0lqjTZQ';
 const sb=supabase.createClient(SU,SK);
 
-// ── STATE ──
+// ── UTILS ──
+function dispName(name, email){
+  if(name&&name.trim())return name.trim();
+  if(email)return email.split('@')[0];
+  return '?';
+}
+function dispInitial(name, email){
+  const n=dispName(name,email);
+  return n.slice(0,2);
+}
+
+
 let U=null,P=null,cY,cM;
 let aMap={},rMap={};// 달력용
 let vc=[],tv=[],ci=0,fl=false,doneToday=0;
@@ -2560,6 +2571,477 @@ async function loadSDRev(){
     </div>`;
   }).join('');
   el.innerHTML=lessonHtml||'<div class="empty">기록이 없어요</div>';
+}
+
+
+// ── XP 시스템 ──
+const XP_TABLE = {attend:10,vocab:15,follow:20,memorize:30,apply:25,masterWord:5,streak7:50,streak30:200};
+const LEVELS = [
+  {level:1,name:'Rookie',emoji:'🌱',xp:0},
+  {level:2,name:'Learner',emoji:'📚',xp:500},
+  {level:3,name:'Speaker',emoji:'💬',xp:1500},
+  {level:4,name:'Trainer',emoji:'🔥',xp:3000},
+  {level:5,name:'Fluent',emoji:'⚡',xp:5000},
+  {level:6,name:'Master',emoji:'🏆',xp:7000},
+];
+let myXP=0,myLevel=1;
+
+function getLevelInfo(xp){
+  let cur=LEVELS[0],next=LEVELS[1];
+  for(let i=0;i<LEVELS.length;i++){if(xp>=LEVELS[i].xp){cur=LEVELS[i];next=LEVELS[i+1]||null;}}
+  return{cur,next};
+}
+
+async function loadXP(){
+  const{data}=await sb.from('user_xp').select('*').eq('student_id',U.id).single();
+  if(data){myXP=data.total_xp||0;myLevel=data.level||1;}
+  else{myXP=0;myLevel=1;}
+  renderXPBar();
+}
+
+async function earnXP(amount,reason){
+  const now=new Date().toISOString();
+  const today=now.slice(0,10);
+  try{
+    const{data:existing}=await sb.from('xp_logs').select('id').eq('student_id',U.id).eq('reason',reason).gte('created_at',today).single();
+    if(existing)return;
+  }catch(e){}
+  myXP+=amount;
+  const info=getLevelInfo(myXP);
+  const newLevel=info.cur.level;
+  const leveledUp=newLevel>myLevel;
+  myLevel=newLevel;
+  try{
+    const{data:ex}=await sb.from('user_xp').select('id').eq('student_id',U.id).single();
+    if(ex)await sb.from('user_xp').update({total_xp:myXP,level:myLevel,updated_at:now}).eq('student_id',U.id);
+    else await sb.from('user_xp').insert({student_id:U.id,total_xp:myXP,level:myLevel});
+    await sb.from('xp_logs').insert({student_id:U.id,xp:amount,reason,created_at:now});
+  }catch(e){console.warn('XP 저장 실패',e);}
+  renderXPBar();
+  showXPToast(amount,reason);
+  if(leveledUp)setTimeout(()=>showLevelUp(info.cur),800);
+}
+
+function renderXPBar(){
+  const el=document.getElementById('xp-bar-wrap');if(!el)return;
+  const info=getLevelInfo(myXP);const cur=info.cur,next=info.next;
+  const pct=next?Math.round((myXP-cur.xp)/(next.xp-cur.xp)*100):100;
+  el.innerHTML=`<div style="background:linear-gradient(135deg,#1a2940,#243054);border-radius:14px;padding:12px 14px;margin-bottom:10px;cursor:pointer;" onclick="gp('record')">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div style="width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,#FFB347,#E8940A);display:flex;align-items:center;justify-content:center;font-size:17px;">${cur.emoji}</div>
+        <div><div style="font-size:9px;color:rgba(255,255,255,.5);font-weight:600;">LEVEL ${cur.level}</div><div style="font-size:13px;font-weight:800;color:#fff;">${cur.name}</div></div>
+      </div>
+      <div style="text-align:right;"><div style="font-size:16px;font-weight:800;color:#FFB347;">${myXP.toLocaleString()}</div><div style="font-size:9px;color:rgba(255,255,255,.4);">XP</div></div>
+    </div>
+    <div style="background:rgba(255,255,255,.1);border-radius:99px;height:5px;margin-bottom:3px;">
+      <div style="background:linear-gradient(90deg,#FFB347,#FFD700);border-radius:99px;height:5px;width:${pct}%;transition:width .6s ease;"></div>
+    </div>
+    <div style="font-size:9px;color:rgba(255,255,255,.35);text-align:right;">${next?`다음 레벨까지 ${(next.xp-myXP).toLocaleString()} XP`:'🏆 최고 레벨 달성!'}</div>
+  </div>`;
+}
+
+let xpToastTimer=null;
+function showXPToast(amount,reason){
+  const t=document.getElementById('toast');if(!t)return;
+  t.innerHTML=`<span style="color:#FFB347;font-weight:800;">+${amount} XP</span>`;
+  t.classList.add('on');
+  clearTimeout(xpToastTimer);
+  xpToastTimer=setTimeout(()=>t.classList.remove('on'),2200);
+}
+
+function showLevelUp(levelInfo){
+  const pop=document.createElement('div');
+  pop.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9998;display:flex;align-items:center;justify-content:center;max-width:480px;margin:0 auto;';
+  pop.innerHTML=`<div style="background:linear-gradient(135deg,#1a2940,#0F172A);border-radius:24px;padding:28px 24px;text-align:center;width:85%;">
+    <div style="font-size:10px;color:rgba(255,255,255,.5);font-weight:700;letter-spacing:.12em;margin-bottom:10px;">LEVEL UP!</div>
+    <div style="font-size:38px;margin-bottom:12px;">${levelInfo.emoji}</div>
+    <div style="font-size:26px;font-weight:800;color:#fff;margin-bottom:4px;">${levelInfo.name}</div>
+    <div style="font-size:13px;color:rgba(255,255,255,.6);margin-bottom:20px;">Level ${levelInfo.level} 달성! 🎉</div>
+    <button onclick="this.parentElement.parentElement.remove()" style="padding:13px 32px;border-radius:12px;background:linear-gradient(135deg,#FFB347,#E8940A);color:#fff;border:none;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;">계속하기 →</button>
+  </div>`;
+  document.body.appendChild(pop);
+  setTimeout(()=>{if(pop.parentElement)pop.remove();},5000);
+}
+
+// ── TOAST ──
+function tst(msg,dur=2400){
+  const t=document.getElementById('toast');if(!t)return;
+  t.textContent=msg;t.classList.add('on');
+  clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('on'),dur);
+}
+
+// ── 프로필 사진 ──
+async function loadProfilePhoto(){
+  try{
+    const{data}=await sb.storage.from('avatars').list(U.id+'/');
+    if(data?.length){
+      const{data:url}=sb.storage.from('avatars').getPublicUrl(`${U.id}/avatar`);
+      setProfilePhoto(url.publicUrl+'?t='+Date.now());
+    }
+  }catch(e){console.warn('프로필 사진 로드 실패',e);}
+}
+
+function setProfilePhoto(url){
+  const el=document.getElementById('profile-avatar');
+  if(el)el.innerHTML=`<img src="${url}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
+  const av=document.getElementById('uav');
+  if(av){av.style.backgroundImage=`url(${url})`;av.style.backgroundSize='cover';av.style.backgroundPosition='center';av.textContent='';}
+}
+
+async function uploadProfilePhoto(input){
+  const file=input.files?.[0];if(!file)return;
+  if(file.size>5*1024*1024){tst('5MB 이하 사진만 올릴 수 있어요');return;}
+  tst('사진 업로드 중...');
+  try{
+    const img=await new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=URL.createObjectURL(file);});
+    const canvas=document.createElement('canvas');
+    const size=Math.min(img.width,img.height,400);
+    canvas.width=size;canvas.height=size;
+    const ctx=canvas.getContext('2d');
+    ctx.drawImage(img,(img.width-size)/2,(img.height-size)/2,size,size,0,0,size,size);
+    const blob=await new Promise(res=>canvas.toBlob(res,'image/jpeg',0.85));
+    const{error}=await sb.storage.from('avatars').upload(`${U.id}/avatar`,blob,{upsert:true,contentType:'image/jpeg'});
+    if(error){tst('업로드 실패: '+error.message);return;}
+    const{data:url}=sb.storage.from('avatars').getPublicUrl(`${U.id}/avatar`);
+    setProfilePhoto(url.publicUrl+'?t='+Date.now());
+    tst('프로필 사진이 변경됐어요! 📸');
+  }catch(e){tst('업로드 실패');console.error(e);}
+  input.value='';
+}
+
+// ── 비밀번호 변경 ──
+async function changePassword(){
+  const pop=document.createElement('div');
+  pop.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+  pop.innerHTML=`<div style="background:var(--bg);border-radius:20px;width:100%;max-width:360px;padding:20px;">
+    <div style="font-size:16px;font-weight:800;margin-bottom:16px;">비밀번호 변경</div>
+    <input type="password" id="pw-new" class="inp" placeholder="새 비밀번호 (6자 이상)" style="margin-bottom:10px;">
+    <input type="password" id="pw-confirm" class="inp" placeholder="비밀번호 재입력" style="margin-bottom:16px;">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <button onclick="this.closest('div[style*=fixed]').remove()" style="padding:12px;border-radius:11px;background:var(--sf);border:1.5px solid var(--brd);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">취소</button>
+      <button id="pw-save-btn" onclick="savePW()" style="padding:12px;border-radius:11px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">변경하기</button>
+    </div>
+  </div>`;
+  document.body.appendChild(pop);
+}
+
+async function savePW(){
+  const pw=document.getElementById('pw-new')?.value;
+  const confirm=document.getElementById('pw-confirm')?.value;
+  if(!pw||pw.length<6){tst('6자 이상 입력해주세요');return;}
+  if(pw!==confirm){tst('비밀번호가 일치하지 않아요');return;}
+  const btn=document.getElementById('pw-save-btn');
+  if(btn){btn.textContent='변경 중...';btn.disabled=true;}
+  const{error}=await sb.auth.updateUser({password:pw});
+  if(error){tst('변경 실패: '+error.message);if(btn){btn.textContent='변경하기';btn.disabled=false;}return;}
+  document.querySelector('div[style*="position:fixed"][style*="9999"]')?.remove();
+  tst('비밀번호가 변경됐어요! ✅');
+}
+
+// ── 이름 변경 ──
+async function editMyName(){
+  const cur=P?.name||'';
+  const newName=prompt('이름을 입력해주세요',cur);
+  if(!newName||newName.trim()===cur)return;
+  const{error}=await sb.from('profiles').update({name:newName.trim()}).eq('id',U.id);
+  if(error){tst('변경 실패: '+error.message);return;}
+  P.name=newName.trim();
+  const el=document.getElementById('profile-name');
+  if(el)el.childNodes[0].textContent=newName.trim();
+  tst('이름이 변경됐어요!');
+}
+
+// ── 관리자: 이름/반 변경 ──
+async function adminEditName(sid,curName){
+  const newName=prompt('학생 이름을 변경해주세요',curName);
+  if(!newName||newName.trim()===curName)return;
+  const{error}=await sb.from('profiles').update({name:newName.trim()}).eq('id',sid);
+  if(error){tst('변경 실패: '+error.message);return;}
+  const stu=sts.find(s=>s.id===sid);if(stu)stu.name=newName.trim();
+  tst('이름이 변경됐어요!');
+  await renderSD();
+}
+
+async function adminChangeCls(sid,newCls){
+  const{error}=await sb.from('profiles').update({class_name:newCls||null}).eq('id',sid);
+  if(error){tst('변경 실패: '+error.message);return;}
+  const stu=sts.find(s=>s.id===sid);if(stu)stu.class_name=newCls||null;
+  tst(newCls?`${newCls}으로 변경됐어요!`:'반 배정이 해제됐어요');
+  lAdm();
+}
+
+// ── 학생 삭제 ──
+async function delStudent(sid,name,e){
+  e?.stopPropagation();
+  if(!confirm(`${name} 학생을 삭제할까요?`))return;
+  await sb.from('profiles').delete().eq('id',sid);
+  sts=sts.filter(s=>s.id!==sid);
+  tst('삭제됐어요');
+  lAdm();
+}
+
+// ── 알림 ──
+function openNotify(sid){
+  const pop=document.createElement('div');
+  pop.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9000;display:flex;align-items:flex-end;justify-content:center;';
+  pop.innerHTML=`<div style="background:var(--bg);border-radius:20px 20px 0 0;width:100%;max-width:480px;padding:16px 14px 30px;">
+    <div style="font-size:15px;font-weight:800;margin-bottom:14px;">메시지 보내기</div>
+    <textarea id="notify-msg" class="inp" placeholder="메시지 입력..." style="height:80px;margin-bottom:12px;"></textarea>
+    <button onclick="sendNotify('${sid}',document.getElementById('notify-msg').value)" style="width:100%;padding:13px;border-radius:12px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;">보내기</button>
+    <button onclick="this.closest('div[style*=fixed]').remove()" style="width:100%;margin-top:8px;padding:11px;border-radius:12px;background:var(--sf);border:1.5px solid var(--brd);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">취소</button>
+  </div>`;
+  document.body.appendChild(pop);
+  pop.addEventListener('click',e=>{if(e.target===pop)pop.remove();});
+}
+
+async function sendNotify(sid,msg){
+  if(!msg?.trim()){tst('메시지를 입력해주세요');return;}
+  await sb.from('messages').insert({from_id:U.id,to_id:sid,content:msg.trim()});
+  document.querySelector('div[style*="position:fixed"][style*="9000"]')?.remove();
+  tst('메시지를 보냈어요!');
+}
+
+function renderSDNotify(stuList){
+  const el=document.querySelector('.sd-notify-wrap');if(!el)return;
+  el.innerHTML=`<div style="padding:8px 0;">
+    <button onclick="openNotify('${stuList[0]?.id||''}')" style="width:100%;padding:11px;border-radius:11px;background:var(--gl);color:var(--gd);border:1.5px solid #C0E8D8;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">💬 메시지 보내기</button>
+  </div>`;
+}
+
+// ── 리뷰 새로고침 ──
+async function refreshReview(){
+  loaded.review=false;
+  lRev();
+}
+
+// ── 피드백 저장 ──
+async function saveFeedback(logId,lessonId,round){
+  const el=document.getElementById(`fb-${logId}`);
+  const txt=el?.value?.trim();
+  if(!txt){tst('피드백을 입력해주세요');return;}
+  await sb.from('hw_submissions').upsert({student_id:sdSid,lesson_id:lessonId,review_round:round,feedback:txt,hw_type:'feedback'},{onConflict:'student_id,lesson_id,review_round'});
+  tst('피드백이 저장됐어요!');
+  loadSDRev();
+}
+
+// ── 다시 복습 ──
+async function startReviewByLesson(lid){
+  const lesson=les.find(l=>l.id===lid);
+  if(!lesson){tst('레슨을 찾을 수 없어요');return;}
+  const{data:logs}=await sb.from('review_logs').select('review_round,completed').eq('student_id',U.id).eq('lesson_id',lid);
+  const doneRounds=new Set((logs||[]).filter(l=>l.completed).map(l=>l.review_round));
+  const allRounds=[1,2,3,5,7];
+  const nextRound=allRounds.find(r=>!doneRounds.has(r))||1;
+  oSes(lid,lesson.title,lesson.url,nextRound);
+}
+
+// ── 오늘 요약 ──
+async function showDailySummary(){
+  const pop=document.createElement('div');
+  pop.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9000;display:flex;align-items:flex-end;justify-content:center;';
+  pop.innerHTML=`<div style="background:var(--bg);border-radius:20px 20px 0 0;width:100%;max-width:480px;max-height:85vh;overflow-y:auto;padding:16px 14px 30px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <div style="font-size:16px;font-weight:800;">오늘 학습 요약</div>
+      <div onclick="this.closest('div[style*=fixed]').remove()" style="width:28px;height:28px;border-radius:8px;background:var(--sf);display:flex;align-items:center;justify-content:center;cursor:pointer;">
+        <svg width="12" height="12" viewBox="0 0 12 12"><line x1="1" y1="1" x2="11" y2="11" stroke="#888" stroke-width="1.8"/><line x1="11" y1="1" x2="1" y2="11" stroke="#888" stroke-width="1.8"/></svg>
+      </div>
+    </div>
+    <div id="summary-body"><div class="loading">로딩중...</div></div>
+  </div>`;
+  document.body.appendChild(pop);
+  pop.addEventListener('click',e=>{if(e.target===pop)pop.remove();});
+  const today=new Date().toISOString().slice(0,10);
+  const{data:xpToday}=await sb.from('xp_logs').select('student_id').gte('created_at',today+'T00:00:00').lt('created_at',today+'T23:59:59');
+  const{data:revToday}=await sb.from('review_logs').select('student_id').eq('completed',true).gte('completed_at',today+'T00:00:00');
+  const{data:vocabToday}=await sb.from('xp_logs').select('student_id').eq('reason',`vocab_today_${today}`);
+  const revDoneSet=new Set((revToday||[]).map(r=>r.student_id));
+  const xpSet=new Set((xpToday||[]).map(x=>x.student_id));
+  const vocabSet=new Set((vocabToday||[]).map(v=>v.student_id));
+  const assignedSts=sts.filter(s=>s.class_name);
+  const done=assignedSts.filter(s=>revDoneSet.has(s.id));
+  const inProgress=assignedSts.filter(s=>xpSet.has(s.id)&&!revDoneSet.has(s.id));
+  const notStarted=assignedSts.filter(s=>!xpSet.has(s.id));
+  const renderGroup=(list,label,bg,color,note)=>!list.length?'':
+    `<div style="margin-bottom:12px;">
+      <div style="font-size:12px;font-weight:700;color:${color};margin-bottom:6px;">${label} (${list.length}명)</div>
+      ${list.map(s=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;background:${bg};border-radius:11px;margin-bottom:4px;">
+        <div style="font-size:13px;font-weight:600;color:${color};">${dispName(s.name,s.email)}</div>
+        <div style="font-size:11px;color:${color};opacity:.8;">${note(s)}</div>
+      </div>`).join('')}
+    </div>`;
+  document.getElementById('summary-body').innerHTML=
+    `<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-bottom:14px;">
+      <div style="background:var(--gl);border-radius:12px;padding:11px 8px;text-align:center;border:1.5px solid #C0E8D8;"><div style="font-size:22px;font-weight:800;color:var(--gd);">${done.length}</div><div style="font-size:10px;color:var(--gm);margin-top:2px;">완료</div></div>
+      <div style="background:#EEF5FC;border-radius:12px;padding:11px 8px;text-align:center;border:1.5px solid #B5D4F4;"><div style="font-size:22px;font-weight:800;color:#185FA5;">${inProgress.length}</div><div style="font-size:10px;color:#185FA5;margin-top:2px;">진행중</div></div>
+      <div style="background:var(--aml);border-radius:12px;padding:11px 8px;text-align:center;border:1.5px solid #FAC775;"><div style="font-size:22px;font-weight:800;color:var(--amd);">${notStarted.length}</div><div style="font-size:10px;color:#854F0B;margin-top:2px;">안 함</div></div>
+    </div>`+
+    renderGroup(done,'✅ 완료','var(--gl)','var(--gd)',s=>vocabSet.has(s.id)?'리뷰+단어':'리뷰 완료')+
+    renderGroup(inProgress,'⏳ 진행중','#EEF5FC','#185FA5',s=>vocabSet.has(s.id)?'단어 완료':'진행중')+
+    renderGroup(notStarted,'⚠️ 아직 안 함','var(--aml)','var(--amd)',()=>'오늘 접속 없음');
+}
+
+// ── 인증 사진 보기 ──
+function showCertPhoto(start,end){
+  const pop=document.createElement('div');
+  pop.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:9999;display:flex;align-items:center;justify-content:center;gap:10px;padding:20px;';
+  pop.onclick=()=>pop.remove();
+  pop.innerHTML=`${start?`<img src="${start}" style="max-width:48%;max-height:80vh;border-radius:12px;object-fit:contain;">`:''}${end?`<img src="${end}" style="max-width:48%;max-height:80vh;border-radius:12px;object-fit:contain;">`:''}`;
+  document.body.appendChild(pop);
+}
+
+// ── 인증 팝업 ──
+async function showCertDetail(sid,name){
+  const pop=document.createElement('div');
+  pop.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9000;display:flex;align-items:flex-end;justify-content:center;';
+  pop.innerHTML=`<div style="background:var(--bg);border-radius:20px 20px 0 0;width:100%;max-width:480px;max-height:88vh;overflow-y:auto;padding:16px 14px 30px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <div style="font-size:15px;font-weight:800;">${name}</div>
+      <div onclick="this.closest('div[style*=fixed]').remove()" style="width:28px;height:28px;border-radius:8px;background:var(--sf);display:flex;align-items:center;justify-content:center;cursor:pointer;">
+        <svg width="12" height="12" viewBox="0 0 12 12"><line x1="1" y1="1" x2="11" y2="11" stroke="#888" stroke-width="1.8"/><line x1="11" y1="1" x2="1" y2="11" stroke="#888" stroke-width="1.8"/></svg>
+      </div>
+    </div>
+    <div id="cert-detail-body"><div class="loading">로딩중...</div></div>
+  </div>`;
+  document.body.appendChild(pop);
+  pop.addEventListener('click',e=>{if(e.target===pop)pop.remove();});
+  const ws=getWeekStart();
+  const dayNames=['월','화','수','목','금','토','일'];
+  const{data:goal}=await sb.from('study_goals').select('*').eq('student_id',sid).eq('week_start',ws).single().catch(()=>({data:null}));
+  const{data:logs}=await sb.from('study_logs').select('*').eq('student_id',sid).order('created_at',{ascending:false});
+  const days=(goal?.study_days||'').split(',').filter(Boolean);
+  const dayBadges=dayNames.map((d,i)=>{
+    const sel=days.includes(String(i));
+    return `<div style="width:34px;height:34px;border-radius:9px;background:${sel?'#1D9E75':'var(--sf)'};border:1.5px solid ${sel?'#1D9E75':'var(--brd)'};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:${sel?700:400};color:${sel?'#fff':'var(--mu)'};">${d}</div>`;
+  }).join('');
+  const logsHtml=(logs||[]).map(l=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1.5px solid var(--brd);">
+      <div style="display:flex;gap:5px;">
+        ${l.photo_start?`<img src="${l.photo_start}" style="width:56px;height:56px;border-radius:9px;object-fit:cover;cursor:pointer;" onclick="showCertPhoto('${l.photo_start}','${l.photo_end||''}')">`:
+        `<div style="width:56px;height:56px;border-radius:9px;background:var(--sf);border:1.5px solid var(--brd);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--mu);">없음</div>`}
+        ${l.photo_end?`<img src="${l.photo_end}" style="width:56px;height:56px;border-radius:9px;object-fit:cover;cursor:pointer;" onclick="showCertPhoto('${l.photo_start||''}','${l.photo_end}')">`:
+        `<div style="width:56px;height:56px;border-radius:9px;background:var(--sf);border:1.5px solid var(--brd);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--mu);">없음</div>`}
+      </div>
+      <div style="flex:1;">
+        <div style="font-size:12px;font-weight:600;">${l.study_date||'-'}</div>
+        <div style="font-size:11px;color:var(--mu);">${l.duration_min}분 공부</div>
+      </div>
+    </div>`).join('');
+  document.getElementById('cert-detail-body').innerHTML=`
+    <div class="card" style="margin-bottom:10px;">
+      <div style="font-size:12px;font-weight:700;margin-bottom:8px;">공부 요일</div>
+      ${goal?`<div style="display:flex;gap:5px;">${dayBadges}</div><div style="font-size:11px;color:var(--mu);margin-top:8px;">주 ${goal.sessions_goal}회 · ${goal.hours_goal}시간 목표</div>`:'<div style="font-size:12px;color:var(--mu);">목표 미설정</div>'}
+    </div>
+    <div class="card">
+      <div style="font-size:12px;font-weight:700;margin-bottom:8px;">인증 기록 (${(logs||[]).length}개)</div>
+      ${logsHtml||'<div class="empty">인증 기록이 없어요</div>'}
+    </div>`;
+}
+
+// ── 단어 초기화 ──
+async function resetVocab(){
+  if(!confirm('단어 학습 기록을 초기화할까요?'))return;
+  await sb.from('vocab_cards').delete().eq('student_id',U.id);
+  vc=[];tv=[];ci=0;doneToday=0;
+  lVoc();
+  tst('초기화됐어요');
+}
+
+// ── 단어 관리자 ──
+async function admAddV(sid){
+  tst('단어 추가 준비 중...');
+}
+async function admBulkV(sid){
+  tst('일괄 추가 준비 중...');
+}
+
+// ── 출석 리스트 ──
+async function rAtList(){
+  const d=document.getElementById('atd')?.value;if(!d)return;
+  const cls=document.getElementById('at-cls-sel')?.value||'';
+  let q=sb.from('attendance').select('*').eq('lesson_date',d);
+  if(cls)q=q.eq('class_name',cls);
+  const{data:atData}=await q;
+  const el=document.getElementById('at-list');if(!el)return;
+  if(!atData?.length){el.innerHTML='<div class="empty">출석 기록이 없어요</div>';return;}
+  el.innerHTML=atData.map(a=>{
+    const stu=sts.find(s=>s.id===a.student_id);
+    return`<div style="padding:8px 0;border-bottom:1px solid var(--brd);display:flex;align-items:center;justify-content:space-between;">
+      <div style="font-size:13px;">${dispName(stu?.name,stu?.email)||'?'}</div>
+      <div style="font-size:11px;color:var(--mu);">${a.class_name||''}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── sg_builder 자막 세그먼트 재생 ──
+function playMemSeg(idx){
+  const seg=window._segs?.[idx];if(!seg)return;
+  const iframe=document.querySelector('#rs-content iframe');if(!iframe)return;
+  try{
+    iframe.contentWindow.postMessage({action:'seekTo',seconds:seg.start,allowSeekAhead:true},'*');
+  }catch(e){}
+}
+
+
+// ── 관리자 탭 전환 ──
+function adTab(t,b){
+  ['st','cl','ls','at','vo','ct'].forEach(x=>{const el=document.getElementById(`ad-${x}`);if(el)el.style.display=x===t?'block':'none';});
+  document.querySelectorAll('#pad>.tbb .tbn').forEach(x=>x.classList.remove('on'));
+  if(b)b.classList.add('on');
+  if(t==='cl'){const clDiv=document.getElementById('ad-cls');if(clDiv)clDiv.style.display='block';rClsList();}
+  if(t==='ls'){rLsList();renderLsRows();lsVocabRenderTgt();}
+  if(t==='at'){document.getElementById('atd').value=new Date().toISOString().slice(0,10);rAtCls();}
+  if(t==='vo'){rVTgt();}
+  if(t==='ct'){loadAdminCert();}
+}
+
+// ── 인증 사진 미리보기 ──
+function previewCert(type,input){
+  const file=input.files?.[0];if(!file)return;
+  const url=URL.createObjectURL(file);
+  const previewEl=document.getElementById(`cert-${type}-preview`);
+  if(previewEl)previewEl.innerHTML=`<img src="${url}" style="width:100%;height:100%;object-fit:cover;">`;
+  if(type==='start')certStartBlob=file;
+  else certEndBlob=file;
+}
+
+// ── 인증 제출 ──
+async function submitCert(){
+  if(!certStartBlob){tst('시작 사진을 올려주세요');return;}
+  if(!certEndBlob){tst('종료 사진을 올려주세요');return;}
+  const dur=parseInt(document.getElementById('cert-duration')?.value)||0;
+  if(dur<1){tst('공부 시간을 입력해주세요');return;}
+  tst('인증 저장 중...');
+  try{
+    const today=new Date().toISOString().slice(0,10);
+    const ts=Date.now();
+    let startUrl='',endUrl='';
+    if(certStartBlob){
+      const{error:e1}=await sb.storage.from('recordings').upload(`cert/${U.id}/${ts}_start.jpg`,certStartBlob,{upsert:true,contentType:'image/jpeg'});
+      if(e1){tst('시작 사진 업로드 실패: '+e1.message);return;}
+      const{data:u1}=sb.storage.from('recordings').getPublicUrl(`cert/${U.id}/${ts}_start.jpg`);
+      startUrl=u1.publicUrl;
+    }
+    if(certEndBlob){
+      const{error:e2}=await sb.storage.from('recordings').upload(`cert/${U.id}/${ts}_end.jpg`,certEndBlob,{upsert:true,contentType:'image/jpeg'});
+      if(e2){tst('종료 사진 업로드 실패: '+e2.message);return;}
+      const{data:u2}=sb.storage.from('recordings').getPublicUrl(`cert/${U.id}/${ts}_end.jpg`);
+      endUrl=u2.publicUrl;
+    }
+    const{error:dbErr}=await sb.from('study_logs').insert({student_id:U.id,photo_start:startUrl||null,photo_end:endUrl||null,study_date:today,duration_min:dur});
+    if(dbErr){tst('저장 실패: '+dbErr.message);return;}
+    earnXP(30,`cert_${today}_${ts}`);
+    certStartBlob=null;certEndBlob=null;
+    ['start','end'].forEach(t=>{
+      const el=document.getElementById(`cert-${t}-preview`);
+      if(el)el.innerHTML=`<svg width="28" height="28" viewBox="0 0 28 28" fill="none"><rect x="2" y="6" width="24" height="18" rx="3" stroke="var(--mu)" stroke-width="1.6"/><circle cx="14" cy="15" r="5" stroke="var(--mu)" stroke-width="1.6"/><path d="M10 6l1.5-3h5L18 6" stroke="var(--mu)" stroke-width="1.6"/></svg><span style="font-size:11px;color:var(--mu);">${t==='start'?'시작':'종료'}</span>`;
+    });
+    document.getElementById('cert-duration').value='';
+    tst('인증 완료! +30 XP 🎉');
+    await renderCertWeekStat();
+    await renderCertLeaderboard();
+    await renderCertHistory();
+  }catch(e){console.error('submitCert error:',e);tst('오류: '+e.message);}
 }
 
 // ── INIT ──
