@@ -3156,10 +3156,13 @@ async function rLsList(){
 
 function renderLsRows(){
   const el=document.getElementById('lslist');if(!el)return;
-  if(!les.length){el.innerHTML='<div class="empty">레슨이 없어요</div>';return;}
-  el.innerHTML=les.map(l=>`<div class="card" style="margin-bottom:8px;cursor:pointer;" onclick="openLsEdit('${l.id}')">
-    <div style="font-size:13px;font-weight:700;">${l.title}</div>
-    <div style="font-size:11px;color:var(--mu);margin-top:2px;">${l.lesson_date||'-'}</div>
+  if(!les.length){el.innerHTML='<div class="empty">등록된 토픽이 없어요</div>';return;}
+  el.innerHTML=les.map(l=>`<div class="card" style="margin-bottom:8px;display:flex;align-items:center;gap:10px;">
+    <div style="flex:1;min-width:0;">
+      <div style="font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${l.title}</div>
+      <div style="font-size:11px;color:var(--mu);margin-top:2px;">${l.lesson_date||'날짜 없음'}</div>
+    </div>
+    <button onclick="openLsEdit('${l.id}')" style="padding:5px 12px;border-radius:8px;background:var(--gl);color:var(--gd);border:1.5px solid #C0E8D8;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;flex-shrink:0;">수정</button>
   </div>`).join('');
 }
 
@@ -3463,26 +3466,112 @@ async function delCls(cls){
 
 // ── 레슨 관리 ──
 async function saveLesson(){
-  const title=document.getElementById('ls-title')?.value?.trim();
-  const url=document.getElementById('ls-url')?.value?.trim();
-  const date=document.getElementById('ls-date')?.value;
+  const title=document.getElementById('lt')?.value?.trim();
+  const url=document.getElementById('lu')?.value?.trim();
   if(!title||!url){tst('제목과 영상 URL을 입력해주세요');return;}
-  const{error}=await sb.from('lessons').insert({title,url,lesson_date:date||null});
-  if(error){tst('등록 실패: '+error.message);return;}
-  document.getElementById('ls-title').value='';
-  document.getElementById('ls-url').value='';
-  tst('토픽이 등록됐어요!');
+
+  // 자막, 핵심표현, 가이드
+  const subtitles=document.getElementById('ls-subtitles')?.value?.trim()||null;
+  const expRaw=document.getElementById('ls-expressions')?.value?.trim()||'';
+  let key_expressions=null;
+  if(expRaw){
+    const exps=expRaw.split('\n').filter(l=>l.trim()).map(l=>{
+      const p=l.split(',');return p.length>=2?{english:p[0].trim(),korean:p.slice(1).join(',').trim()}:null;
+    }).filter(Boolean).slice(0,10);
+    if(exps.length)key_expressions=JSON.stringify(exps);
+  }
+  const guide=document.getElementById('ls-guide')?.value?.trim()||null;
+
+  // 반별 수업 날짜 수집
+  const clsRows=document.querySelectorAll('.ls-cls-date');
+  const schedules=[];
+  clsRows.forEach(row=>{
+    const cls=row.dataset.cls;
+    const date=row.value;
+    if(cls&&date)schedules.push({class_name:cls,lesson_date:date});
+  });
+
+  const isEdit=document.getElementById('ls-form-title')?.textContent?.includes('수정');
+  const editId=document.getElementById('ls-form-title')?.dataset?.editId;
+
+  let lessonId;
+  if(isEdit&&editId){
+    await sb.from('lessons').update({title,url,subtitles,key_expressions,guide}).eq('id',editId);
+    lessonId=editId;
+    tst('수정됐어요!');
+    document.getElementById('ls-form-title').textContent='새 토픽 등록';
+    delete document.getElementById('ls-form-title').dataset.editId;
+    document.getElementById('ls-form-btns').innerHTML='<button class="btn btn-p" onclick="saveLesson()">토픽 등록</button>';
+  } else {
+    const{data:newLesson,error}=await sb.from('lessons').insert({title,url,subtitles,key_expressions,guide}).select().single();
+    if(error){tst('등록 실패: '+error.message);return;}
+    lessonId=newLesson.id;
+    tst('토픽이 등록됐어요!');
+  }
+
+  // 반별 수업 날짜 저장
+  if(lessonId&&schedules.length){
+    await sb.from('lesson_schedules').delete().eq('lesson_id',lessonId);
+    await sb.from('lesson_schedules').insert(schedules.map(s=>({...s,lesson_id:lessonId})));
+  }
+
+  // 단어 일괄 추가
+  const vocabRaw=document.getElementById('ls-vocab')?.value?.trim();
+  if(vocabRaw&&lessonId){
+    const today=new Date().toISOString().slice(0,10);
+    const targets=getLvTgtIds();
+    if(targets.length){
+      const rows=[];
+      vocabRaw.split('\n').forEach(line=>{
+        const[eng,...rest]=line.split(',');const kor=rest.join(',').trim();
+        if(eng?.trim()&&kor)targets.forEach(sid=>rows.push({student_id:sid,english:eng.trim(),korean:kor,box_level:1,next_review:today}));
+      });
+      if(rows.length)await sb.from('vocab_cards').insert(rows);
+    }
+  }
+
+  ['lt','lu','ls-subtitles','ls-expressions','ls-guide','ls-vocab'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   await rLsList();renderLsRows();
+}
+
+function getLvTgtIds(){
+  const allCb=document.getElementById('lv-all');
+  if(allCb?.checked)return sts.map(s=>s.id);
+  const ids=[];
+  document.querySelectorAll('.lv-cls:checked').forEach(cb=>{sts.filter(s=>s.class_name===cb.value).forEach(s=>ids.push(s.id));});
+  return [...new Set(ids)];
 }
 
 async function openLsEdit(lid){
   const l=les.find(x=>x.id===lid);if(!l)return;
-  // 간단 팝업으로 수정
-  const newTitle=prompt('레슨 제목',l.title);
-  if(!newTitle||newTitle===l.title)return;
-  await sb.from('lessons').update({title:newTitle.trim()}).eq('id',lid);
-  l.title=newTitle.trim();
-  renderLsRows();tst('수정됐어요!');
+  document.getElementById('lt').value=l.title||'';
+  document.getElementById('lu').value=l.url||'';
+  if(document.getElementById('ls-subtitles'))document.getElementById('ls-subtitles').value=l.subtitles||'';
+  if(document.getElementById('ls-guide'))document.getElementById('ls-guide').value=l.guide||'';
+  if(document.getElementById('ls-expressions')&&l.key_expressions){
+    try{const exps=JSON.parse(l.key_expressions);document.getElementById('ls-expressions').value=exps.map(e=>e.english+(e.korean?','+e.korean:'')).join('\n');}catch{}
+  }
+  const titleEl=document.getElementById('ls-form-title');
+  if(titleEl){titleEl.textContent=`"${l.title}" 수정`;titleEl.dataset.editId=lid;}
+  document.getElementById('ls-form-btns').innerHTML=`
+    <button class="btn btn-p" onclick="saveLesson()">수정 저장</button>
+    <button class="btn" onclick="cancelLsEdit()" style="margin-top:6px;">취소</button>
+    <button class="btn" onclick="deleteLesson('${lid}')" style="margin-top:6px;background:var(--rl);color:var(--rd);border-color:var(--rd);">삭제</button>`;
+  document.getElementById('ad-ls').scrollIntoView({behavior:'smooth'});
+}
+
+function cancelLsEdit(){
+  ['lt','lu','ls-subtitles','ls-expressions','ls-guide'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  const titleEl=document.getElementById('ls-form-title');
+  if(titleEl){titleEl.textContent='새 토픽 등록';delete titleEl.dataset.editId;}
+  document.getElementById('ls-form-btns').innerHTML='<button class="btn btn-p" onclick="saveLesson()">토픽 등록</button>';
+}
+
+async function deleteLesson(lid){
+  if(!confirm('이 토픽을 삭제할까요?'))return;
+  await sb.from('lessons').delete().eq('id',lid);
+  les=les.filter(l=>l.id!==lid);
+  cancelLsEdit();renderLsRows();tst('삭제됐어요');
 }
 
 // ── 단어 대상 선택 ──
