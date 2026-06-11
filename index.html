@@ -3007,7 +3007,7 @@ async function saveAllAtt(d, cls){
       const{data:ex}=await sb.from('attendance').select('id').eq('student_id',s.id).eq('lesson_date',d).maybeSingle();
       if(!ex){
         const lessonId=les[0]?.id||null;
-        await sb.from('attendance').insert({student_id:s.id,lesson_date:d,class_name:s.class_name||'',lesson_id:lessonId});
+        await sb.from('attendance').insert({student_id:s.id,lesson_date:d,class_name:s.class_name||''});
       }
     }catch(e){console.warn('출석 저장 오류',e);}
   }
