@@ -3054,3 +3054,226 @@ async function submitCert(){
 </script>
 </body>
 </html>
+<script>
+// ── 페이지 이동 ──
+function gp(n){
+  document.querySelectorAll('.pg').forEach(p=>p.classList.remove('on'));
+  document.querySelectorAll('.bni').forEach(b=>b.classList.remove('on'));
+  const ids={home:'ph',vocab:'pv',review:'pr',record:'prc',rank:'prk',cert:'pct',admin:'pad'};
+  const pg=document.getElementById(ids[n]);if(pg)pg.classList.add('on');
+  const ord=['home','vocab','review','record','rank','cert','admin'];
+  const idx=ord.indexOf(n);
+  const btns=document.querySelectorAll('.bni');if(btns[idx])btns[idx].classList.add('on');
+  if(n==='vocab'){if(!loaded.vocab){loaded.vocab=true;startVocab();}else{renderVHead();renderFC();}}
+  if(n==='review'){if(!loaded.review){loaded.review=true;lRev();}}
+  if(n==='record'){if(!loaded.record){loaded.record=true;lRec();}}
+  if(n==='rank'){lRank();}
+  if(n==='cert'){lCert();}
+  if(n==='admin'){
+    if(!classes.length)loadClasses().then(()=>loadStudents().then(()=>{lAdm();adTab('st',document.querySelector('#pad>.tbb .tbn'));}));
+    else{lAdm();adTab('st',document.querySelector('#pad>.tbb .tbn'));}
+  }
+}
+
+// ── 스와이프 ──
+function regSwipe(el,leftCb,rightCb){
+  let sx=0,sy=0;
+  el.addEventListener('touchstart',e=>{sx=e.touches[0].clientX;sy=e.touches[0].clientY;},{passive:true});
+  el.addEventListener('touchend',e=>{
+    const dx=e.changedTouches[0].clientX-sx;
+    const dy=e.changedTouches[0].clientY-sy;
+    if(Math.abs(dx)>Math.abs(dy)&&Math.abs(dx)>40){if(dx<0&&leftCb)leftCb();else if(dx>0&&rightCb)rightCb();}
+  },{passive:true});
+}
+
+// ── 반관리 ──
+async function rClsList(){
+  const el=document.getElementById('cls-list');
+  if(el)el.innerHTML='<div class="loading">로딩중...</div>';
+  try{
+    const{data:clsData}=await sb.from('classes').select('name').order('name');
+    classes=(clsData||[]).map(c=>c.name);
+    const{data:stData}=await sb.from('profiles').select('*').eq('role','student').order('name');
+    sts=stData||[];
+    renderClsList();
+  }catch(e){tst('오류: '+e.message);}
+}
+
+async function rLsList(){
+  const{data}=await sb.from('lessons').select('*').order('created_at',{ascending:false});
+  les=data||[];
+}
+
+function renderLsRows(){
+  const el=document.getElementById('ls-rows');if(!el)return;
+  if(!les.length){el.innerHTML='<div class="empty">레슨이 없어요</div>';return;}
+  el.innerHTML=les.map(l=>`<div class="card" style="margin-bottom:8px;cursor:pointer;" onclick="openLsEdit('${l.id}')">
+    <div style="font-size:13px;font-weight:700;">${l.title}</div>
+    <div style="font-size:11px;color:var(--mu);margin-top:2px;">${l.lesson_date||'-'}</div>
+  </div>`).join('');
+}
+
+async function rAtCls(){
+  const{data}=await sb.from('classes').select('name').order('name');
+  classes=(data||[]).map(c=>c.name);
+  const sel=document.getElementById('at-cls-sel');
+  if(sel){sel.innerHTML='<option value="">전체</option>'+classes.map(c=>`<option value="${c}">${c}</option>`).join('');}
+}
+
+async function rVTgt(){
+  if(!sts.length){const{data}=await sb.from('profiles').select('*').eq('role','student').order('name');sts=data||[];}
+  const wrap=document.getElementById('vtgt-wrap');if(!wrap)return;
+  wrap.innerHTML=`<label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="vtgt-all" onchange="vtgtAllToggle(this)" style="width:16px;height:16px;accent-color:var(--g);"><span style="font-size:13px;font-weight:600;">전체 학생 (${sts.length}명)</span></label>
+    <div style="border-top:1px solid var(--brd);margin:8px 0;"></div>
+    ${classes.map(cls=>`<label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:4px;"><input type="checkbox" class="vtgt-cls" value="${cls}" style="width:16px;height:16px;accent-color:var(--g);"><span style="font-size:12px;">${cls}</span></label>`).join('')}
+    ${sts.map(s=>`<label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:4px;"><input type="checkbox" class="vtgt-stu" value="${s.id}" style="width:16px;height:16px;accent-color:var(--g);"><span style="font-size:12px;">${dispName(s.name,s.email)}</span></label>`).join('')}`;
+}
+
+// ── 인증 ──
+function getWeekStart(d=new Date()){
+  const day=d.getDay();
+  const diff=d.getDate()-(day===0?6:day-1);
+  const mon=new Date(d);mon.setDate(diff);
+  return mon.toISOString().slice(0,10);
+}
+
+async function lCert(){
+  await checkWeeklyGoal();
+  await renderCertWeekStat();
+  await renderCertLeaderboard();
+  await renderCertHistory();
+}
+
+async function checkWeeklyGoal(){
+  const ws=getWeekStart();
+  const{data:goal}=await sb.from('study_goals').select('*').eq('student_id',U.id).eq('week_start',ws).single().catch(()=>({data:null}));
+  const banner=document.getElementById('cert-goal-banner');if(!banner)return;
+  const dayNames=['월','화','수','목','금','토','일'];
+  if(!goal){
+    banner.innerHTML=`<div style="background:linear-gradient(135deg,#1a2940,#243054);border-radius:14px;padding:14px 16px;">
+      <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:4px;">이번 주 목표를 설정해주세요 💪</div>
+      <div style="font-size:11px;color:rgba(255,255,255,.5);margin-bottom:12px;">최소 주 2시간 이상</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
+        <div><div style="font-size:11px;color:rgba(255,255,255,.6);margin-bottom:4px;">횟수 목표</div><input type="number" id="goal-sessions" value="4" min="1" style="width:100%;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);border-radius:8px;color:#fff;font-size:13px;padding:7px 10px;font-family:inherit;"></div>
+        <div><div style="font-size:11px;color:rgba(255,255,255,.6);margin-bottom:4px;">시간 목표 (시간)</div><input type="number" id="goal-hours" value="2" min="2" step="0.5" style="width:100%;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);border-radius:8px;color:#fff;font-size:13px;padding:7px 10px;font-family:inherit;"></div>
+      </div>
+      <div style="font-size:11px;color:rgba(255,255,255,.6);margin-bottom:8px;">공부 요일 선택</div>
+      <div style="display:flex;gap:6px;margin-bottom:14px;">${dayNames.map((d,i)=>`<button onclick="toggleDay(${i})" id="day-btn-${i}" style="width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,.1);border:1.5px solid rgba(255,255,255,.2);color:rgba(255,255,255,.6);font-size:13px;cursor:pointer;font-family:inherit;">${d}</button>`).join('')}</div>
+      <button onclick="saveWeeklyGoal()" style="width:100%;padding:11px;border-radius:10px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">목표 설정하기</button>
+    </div>`;
+  } else {
+    const days=(goal.study_days||'').split(',').filter(Boolean);
+    const dayBadges=dayNames.map((d,i)=>{const sel=days.includes(String(i));return`<div style="width:30px;height:30px;border-radius:8px;background:${sel?'#1D9E75':'rgba(255,255,255,.07)'};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:${sel?700:400};color:${sel?'#fff':'rgba(255,255,255,.3)'};">${d}</div>`;}).join('');
+    banner.innerHTML=`<div style="background:linear-gradient(135deg,#1a2940,#243054);border-radius:14px;padding:14px 16px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;"><div style="font-size:24px;">🎯</div><div style="flex:1;"><div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:2px;">이번 주 목표</div><div style="font-size:12px;color:rgba(255,255,255,.5);">주 ${goal.sessions_goal}회 · ${goal.hours_goal}시간 이상</div></div></div>
+      <div style="display:flex;gap:5px;">${dayBadges}</div>
+    </div>`;
+  }
+}
+
+let _selectedDays=new Set();
+function toggleDay(i){
+  if(_selectedDays.has(i))_selectedDays.delete(i);else _selectedDays.add(i);
+  const btn=document.getElementById(`day-btn-${i}`);
+  if(btn){if(_selectedDays.has(i)){btn.style.background='#1D9E75';btn.style.color='#fff';btn.style.borderColor='#1D9E75';}else{btn.style.background='rgba(255,255,255,.1)';btn.style.color='rgba(255,255,255,.6)';btn.style.borderColor='rgba(255,255,255,.2)';}}
+}
+
+async function saveWeeklyGoal(){
+  const sessions=parseInt(document.getElementById('goal-sessions')?.value)||4;
+  const hours=parseFloat(document.getElementById('goal-hours')?.value)||2;
+  if(hours<2){tst('최소 2시간 이상 설정해주세요');return;}
+  const study_days=[..._selectedDays].sort().join(',');
+  const ws=getWeekStart();
+  const{error}=await sb.from('study_goals').upsert({student_id:U.id,week_start:ws,sessions_goal:sessions,hours_goal:hours,study_days},{onConflict:'student_id,week_start'});
+  if(error){tst('저장 실패: '+error.message);return;}
+  _selectedDays=new Set();tst('목표 설정됐어요! 💪');
+  await checkWeeklyGoal();
+}
+
+async function renderCertWeekStat(){
+  const ws=getWeekStart();const we=new Date(ws);we.setDate(we.getDate()+6);
+  const{data:logs}=await sb.from('study_logs').select('duration_min,study_date').eq('student_id',U.id).gte('study_date',ws).lte('study_date',we.toISOString().slice(0,10));
+  const{data:goal}=await sb.from('study_goals').select('*').eq('student_id',U.id).eq('week_start',ws).single().catch(()=>({data:null}));
+  const el=document.getElementById('cert-week-stat');if(!el)return;
+  const totalMin=(logs||[]).reduce((s,l)=>s+(l.duration_min||0),0);
+  const totalHr=(totalMin/60).toFixed(1);const sessions=(logs||[]).length;
+  const goalHr=goal?.hours_goal||2;const goalSes=goal?.sessions_goal||4;
+  const pctHr=Math.min(100,Math.round(totalMin/60/goalHr*100));
+  el.innerHTML=`<div class="card"><div style="font-size:12px;font-weight:700;margin-bottom:10px;">이번 주 달성 현황</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+      <div style="background:var(--sf);border-radius:10px;padding:10px;text-align:center;border:1.5px solid var(--brd);"><div style="font-size:20px;font-weight:800;color:var(--gd);">${sessions}<span style="font-size:12px;color:var(--mu);">/${goalSes}회</span></div><div style="font-size:10px;color:var(--mu);margin-top:2px;">횟수</div></div>
+      <div style="background:var(--sf);border-radius:10px;padding:10px;text-align:center;border:1.5px solid var(--brd);"><div style="font-size:20px;font-weight:800;color:var(--gd);">${totalHr}<span style="font-size:12px;color:var(--mu);">/${goalHr}h</span></div><div style="font-size:10px;color:var(--mu);margin-top:2px;">시간</div></div>
+    </div>
+    <div style="background:var(--brd);border-radius:99px;height:8px;"><div style="background:${pctHr>=100?'var(--g)':'#1D9E75'};border-radius:99px;height:8px;width:${pctHr}%;transition:width .4s;"></div></div>
+    <div style="font-size:11px;color:var(--mu);text-align:right;margin-top:4px;">${pctHr>=100?'🎉 목표 달성!':goalHr+'시간 목표 중 '+totalHr+'시간'}</div>
+  </div>`;
+}
+
+async function renderCertLeaderboard(){
+  const ws=getWeekStart();const we=new Date(ws);we.setDate(we.getDate()+6);
+  const{data:logs}=await sb.from('study_logs').select('student_id,duration_min').gte('study_date',ws).lte('study_date',we.toISOString().slice(0,10));
+  const{data:profiles}=await sb.from('profiles').select('id,name,email').eq('role','student');
+  const el=document.getElementById('cert-leaderboard');if(!el)return;
+  const map={};(logs||[]).forEach(l=>{if(!map[l.student_id])map[l.student_id]={min:0,cnt:0};map[l.student_id].min+=l.duration_min||0;map[l.student_id].cnt++;});
+  const profMap={};(profiles||[]).forEach(p=>profMap[p.id]=p);
+  const sorted=Object.entries(map).sort((a,b)=>b[1].min-a[1].min);
+  if(!sorted.length){el.innerHTML='<div class="empty">아직 이번 주 인증이 없어요</div>';return;}
+  el.innerHTML=sorted.map(([sid,d],i)=>{
+    const rank=i+1;const prof=profMap[sid];const name=dispName(prof?.name,prof?.email)||'?';const isMe=sid===U.id;const hr=(d.min/60).toFixed(1);
+    const style=isMe?'border:2px solid #1D9E75;':'background:var(--sf);border:1.5px solid var(--brd);';
+    return`<div style="${style}border-radius:12px;padding:10px 13px;display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+      <div style="font-size:16px;font-weight:800;color:${rank===1?'#EF9F27':rank===2?'#B4B2A9':rank===3?'#D85A30':'var(--mu)'};width:24px;text-align:center;">${rank}</div>
+      <div style="width:34px;height:34px;border-radius:9px;background:${isMe?'linear-gradient(135deg,#1D9E75,#159468)':'var(--brd)'};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:${isMe?'#fff':'var(--text)'};">${name.slice(0,2)}</div>
+      <div style="flex:1;"><div style="font-size:13px;font-weight:700;color:var(--text);">${name}${isMe?'<span style="font-size:9px;background:var(--gl);color:var(--gd);padding:1px 6px;border-radius:99px;margin-left:4px;">나</span>':''}</div><div style="font-size:10px;color:var(--mu);">${d.cnt}회 인증</div></div>
+      <div style="font-size:13px;font-weight:700;color:var(--text);">${hr}h</div>
+    </div>`;
+  }).join('');
+}
+
+async function renderCertHistory(){
+  const{data:logs}=await sb.from('study_logs').select('*').eq('student_id',U.id).order('created_at',{ascending:false}).limit(20);
+  const el=document.getElementById('cert-history');if(!el)return;
+  if(!logs?.length){el.innerHTML='<div class="empty">인증 기록이 없어요</div>';return;}
+  el.innerHTML=logs.map(l=>`<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1.5px solid var(--brd);">
+    <div style="display:flex;gap:5px;">
+      ${l.photo_start?`<img src="${l.photo_start}" style="width:48px;height:48px;border-radius:8px;object-fit:cover;cursor:pointer;" onclick="showCertPhoto('${l.photo_start}','${l.photo_end||''}')">`:''} 
+      ${l.photo_end?`<img src="${l.photo_end}" style="width:48px;height:48px;border-radius:8px;object-fit:cover;cursor:pointer;" onclick="showCertPhoto('${l.photo_start||''}','${l.photo_end}')">`:''} 
+    </div>
+    <div style="flex:1;"><div style="font-size:12px;font-weight:600;">${l.study_date||'-'}</div><div style="font-size:11px;color:var(--mu);">${l.duration_min}분 공부</div></div>
+  </div>`).join('');
+}
+</script>
+<script>
+async function lRank(){
+  const myEl=document.getElementById('rank-my');
+  const listEl=document.getElementById('rank-list');if(!listEl)return;
+  listEl.innerHTML='<div class="loading">로딩중...</div>';
+  const{data:xpData}=await sb.from('user_xp').select('student_id,total_xp,level').order('total_xp',{ascending:false});
+  const{data:profiles}=await sb.from('profiles').select('id,name,email').eq('role','student');
+  if(!xpData?.length){listEl.innerHTML='<div class="empty">아직 랭킹 데이터가 없어요</div>';return;}
+  const profMap={};(profiles||[]).forEach(p=>profMap[p.id]=p);
+  const myRank=xpData.findIndex(x=>x.student_id===U.id)+1;
+  const myData=xpData.find(x=>x.student_id===U.id);
+  const myLvInfo=getLevelInfo(myData?.total_xp||0);
+  if(myEl&&myData){
+    const myProf=profMap[U.id];const myName=dispName(myProf?.name,myProf?.email)||'나';
+    myEl.innerHTML=`<div style="background:linear-gradient(135deg,#1a2940,#243054);border-radius:16px;padding:14px 16px;display:flex;align-items:center;gap:12px;margin-bottom:10px;">
+      <div style="font-size:24px;font-weight:800;color:#FFB347;width:32px;text-align:center;">${myRank}</div>
+      <div style="width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,#1D9E75,#159468);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff;flex-shrink:0;">${myName.slice(0,2)}</div>
+      <div style="flex:1;min-width:0;"><div style="font-size:14px;font-weight:800;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${myName}</div><div style="font-size:10px;color:rgba(255,255,255,.5);">내 순위</div></div>
+      <div style="text-align:right;flex-shrink:0;"><div style="font-size:15px;font-weight:800;color:#FFB347;">${(myData.total_xp||0).toLocaleString()} XP</div><div style="font-size:10px;color:rgba(255,255,255,.5);">${myLvInfo.cur.emoji} Lv.${myLvInfo.cur.level}</div></div>
+    </div>`;
+  }
+  listEl.innerHTML=xpData.map((x,i)=>{
+    const rank=i+1;const prof=profMap[x.student_id];const name=dispName(prof?.name,prof?.email)||'?';const lvInfo=getLevelInfo(x.total_xp||0);const isMe=x.student_id===U.id;
+    const rankColor=rank===1?'#EF9F27':rank===2?'#B4B2A9':rank===3?'#D85A30':'var(--mu)';
+    const style=isMe?'border:2px solid #1D9E75;':'background:var(--sf);border:1.5px solid var(--brd);';
+    return`<div style="${style}border-radius:13px;padding:10px 13px;display:flex;align-items:center;gap:10px;margin-bottom:6px;cursor:pointer;" onclick="showCertDetail('${x.student_id}','${name.replace(/'/g,"\\'")}')">
+      <div style="font-size:${rank<=3?18:15}px;font-weight:800;color:${rankColor};width:28px;text-align:center;">${rank}</div>
+      <div style="width:38px;height:38px;border-radius:10px;background:${isMe?'linear-gradient(135deg,#1D9E75,#159468)':'var(--brd)'};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:${isMe?'#fff':'var(--text)'};flex-shrink:0;">${name.slice(0,2)}</div>
+      <div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:5px;">${name}${isMe?'<span style="font-size:9px;background:var(--gl);color:var(--gd);padding:1px 6px;border-radius:99px;">나</span>':''}</div><div style="font-size:10px;color:var(--mu);">${lvInfo.cur.emoji} Lv.${lvInfo.cur.level} ${lvInfo.cur.name}</div></div>
+      <div style="font-size:13px;font-weight:700;color:var(--text);flex-shrink:0;">${(x.total_xp||0).toLocaleString()} XP</div>
+    </div>`;
+  }).join('');
+}
+</script>
