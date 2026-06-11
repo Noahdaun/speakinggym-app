@@ -1228,6 +1228,7 @@ async function oSes(lid,title,url,round){
 // ── 1,2회차: 따라하기 ──
 function renderBotFollow(n){
   const bot=document.getElementById('rs-bot');
+  window._rscN=n;
   bot.innerHTML=`
     <div style="padding:10px 14px 6px;">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;">
@@ -1235,11 +1236,12 @@ function renderBotFollow(n){
         <span id="rs-hint" style="font-size:13px;font-weight:600;color:var(--gd);">${n}/5회</span>
       </div>
       <div style="display:flex;gap:5px;margin-bottom:10px;" id="rs-circles"></div>
-      <button onclick="tapRSC(${Math.min(n+1,5)})" style="width:100%;padding:11px;border-radius:11px;background:${n>=5?'var(--sf)':'linear-gradient(135deg,#1D9E75,#159468)'};color:${n>=5?'var(--mu)':'#fff'};border:${n>=5?'1.5px solid var(--brd)':'none'};font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">${n>=5?'✅ 완료!':'다 들었어요 +1회'}</button>
+      <button id="rs-complete-btn" onclick="tapRSC(Math.min(window._rscN+1,5))" style="width:100%;padding:11px;border-radius:11px;background:${n>=5?'var(--sf)':'linear-gradient(135deg,#1D9E75,#159468)'};color:${n>=5?'var(--mu)':'#fff'};border:${n>=5?'1.5px solid var(--brd)':'none'};font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">${n>=5?'✅ 완료!':'다 들었어요 +1회'}</button>
     </div>`;
   renderRSC(n);
 }
 function renderRSC(n){
+  window._rscN=n;
   const el=document.getElementById('rs-circles');if(!el)return;
   el.innerHTML=Array(5).fill(0).map((_,i)=>`
     <div style="flex:1;height:6px;border-radius:3px;background:${i<n?'#1D9E75':'var(--brd)'};" onclick="tapRSC(${i+1})"></div>`
@@ -1253,9 +1255,11 @@ function renderRSC(n){
   if(progBar)progBar.style.width=pct+'%';
   if(progTxt)progTxt.textContent=pct+'%';
   // 버튼 텍스트도 업데이트
-  const btn=document.querySelector('#rs-bot button');
-  if(btn&&n<5){btn.textContent='다 들었어요 +1회';btn.style.background='linear-gradient(135deg,#1D9E75,#159468)';btn.style.color='#fff';}
-  if(btn&&n>=5){btn.textContent='✅ 완료!';btn.style.background='var(--sf)';btn.style.color='var(--mu)';}
+  const btn=document.getElementById('rs-complete-btn');
+  if(btn){
+    if(n>=5){btn.textContent='✅ 완료!';btn.style.background='var(--sf)';btn.style.color='var(--mu)';}
+    else{btn.textContent='다 들었어요 +1회';btn.style.background='linear-gradient(135deg,#1D9E75,#159468)';btn.style.color='#fff';}
+  }
 }
 async function tapRSC(n){
   if(!ses)return;
