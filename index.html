@@ -2585,6 +2585,7 @@ const LEVELS = [
   {level:6,name:'Master',emoji:'🏆',xp:7000},
 ];
 let myXP=0,myLevel=1;
+let loaded={vocab:false,review:false,record:false};
 
 function getLevelInfo(xp){
   let cur=LEVELS[0],next=LEVELS[1];
@@ -2907,7 +2908,7 @@ async function showCertDetail(sid,name){
   pop.addEventListener('click',e=>{if(e.target===pop)pop.remove();});
   const ws=getWeekStart();
   const dayNames=['월','화','수','목','금','토','일'];
-  const{data:goal}=await sb.from('study_goals').select('*').eq('student_id',sid).eq('week_start',ws).single().catch(()=>({data:null}));
+  const{data:goal}=await sb.from('study_goals').select('*').eq('student_id',sid).eq('week_start',ws).maybeSingle();
   const{data:logs}=await sb.from('study_logs').select('*').eq('student_id',sid).order('created_at',{ascending:false});
   const days=(goal?.study_days||'').split(',').filter(Boolean);
   const dayBadges=dayNames.map((d,i)=>{
@@ -3146,7 +3147,7 @@ async function lCert(){
 
 async function checkWeeklyGoal(){
   const ws=getWeekStart();
-  const{data:goal}=await sb.from('study_goals').select('*').eq('student_id',U.id).eq('week_start',ws).single().catch(()=>({data:null}));
+  const{data:goal}=await sb.from('study_goals').select('*').eq('student_id',U.id).eq('week_start',ws).maybeSingle();
   const banner=document.getElementById('cert-goal-banner');if(!banner)return;
   const dayNames=['월','화','수','목','금','토','일'];
   if(!goal){
@@ -3193,7 +3194,7 @@ async function saveWeeklyGoal(){
 async function renderCertWeekStat(){
   const ws=getWeekStart();const we=new Date(ws);we.setDate(we.getDate()+6);
   const{data:logs}=await sb.from('study_logs').select('duration_min,study_date').eq('student_id',U.id).gte('study_date',ws).lte('study_date',we.toISOString().slice(0,10));
-  const{data:goal}=await sb.from('study_goals').select('*').eq('student_id',U.id).eq('week_start',ws).single().catch(()=>({data:null}));
+  const{data:goal}=await sb.from('study_goals').select('*').eq('student_id',U.id).eq('week_start',ws).maybeSingle();
   const el=document.getElementById('cert-week-stat');if(!el)return;
   const totalMin=(logs||[]).reduce((s,l)=>s+(l.duration_min||0),0);
   const totalHr=(totalMin/60).toFixed(1);const sessions=(logs||[]).length;
@@ -3275,5 +3276,99 @@ async function lRank(){
       <div style="font-size:13px;font-weight:700;color:var(--text);flex-shrink:0;">${(x.total_xp||0).toLocaleString()} XP</div>
     </div>`;
   }).join('');
+}
+</script>
+<script>
+function renderClsList(){
+  const el=document.getElementById('cls-list');if(!el)return;
+  if(!classes.length){el.innerHTML='<div class="empty">아직 반이 없어요</div>';return;}
+  el.innerHTML=classes.map(cls=>{
+    const members=sts.filter(s=>s.class_name===cls);
+    const tags=members.map(s=>`<div style="display:flex;align-items:center;gap:4px;background:var(--sf);border-radius:99px;padding:3px 10px;font-size:11px;">${dispName(s.name,s.email)}
+      <div onclick="rmFromCls('${s.id}','${cls}')" style="width:14px;height:14px;border-radius:50%;background:var(--rl);display:flex;align-items:center;justify-content:center;cursor:pointer;margin-left:2px;"><svg width="7" height="7" viewBox="0 0 7 7"><line x1="1" y1="1" x2="6" y2="6" stroke="#A32D2D" stroke-width="1.5"/><line x1="6" y1="1" x2="1" y2="6" stroke="#A32D2D" stroke-width="1.5"/></svg></div>
+    </div>`).join('');
+    const unassigned=sts.filter(s=>!s.class_name||s.class_name!==cls);
+    const opts=unassigned.map(s=>`<option value="${s.id}">${dispName(s.name,s.email)}</option>`).join('');
+    return`<div class="card" style="margin-bottom:9px;">
+      <div class="row" style="margin-bottom:8px;">
+        <div style="font-size:13px;font-weight:700;">${cls}</div>
+        <div style="display:flex;align-items:center;gap:6px;"><span class="bdg bgr">${members.length}명</span><div onclick="delCls('${cls}')" style="font-size:11px;color:var(--rd);background:var(--rl);padding:3px 9px;border-radius:7px;cursor:pointer;">삭제</div></div>
+      </div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:9px;min-height:22px;">${tags||'<div style="font-size:11px;color:var(--mu);">학생 없음</div>'}</div>
+      <div style="display:flex;gap:7px;">
+        <select id="addto-${cls.replace(/\s/g,'_')}" style="flex:1;margin-bottom:0;padding:8px 10px;font-size:12px;"><option value="">학생 선택...</option>${opts}</select>
+        <button onclick="addToCls('${cls}')" style="padding:0 13px;border-radius:9px;background:var(--g);color:#fff;border:none;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">추가</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function showPhotoPositionEditor(url){
+  const FRAME=300;
+  let tx=0,ty=0,sc=1,minSc=0.1;
+  let imgNW=0,imgNH=0,dispW=0,dispH=0,dispScale=1;
+  let drag=false,lx=0,ly=0;
+  let pinch=false,ld=0;
+  const tmp=new Image();tmp.crossOrigin='anonymous';
+
+  const pop=document.createElement('div');
+  pop.style.cssText='position:fixed;inset:0;z-index:9999;background:#000;display:flex;flex-direction:column;align-items:center;overflow-y:auto;padding:20px;max-width:480px;margin:0 auto;';
+  pop.innerHTML=`<div style="color:#fff;font-size:15px;font-weight:700;margin:16px 0 4px;">프로필 사진 설정</div>
+    <div style="color:rgba(255,255,255,.5);font-size:12px;margin-bottom:16px;text-align:center;">드래그로 이동 · 두 손가락 또는 +/− 로 확대/축소</div>
+    <div style="position:relative;width:${FRAME}px;height:${FRAME}px;overflow:hidden;border-radius:20px;border:3px solid rgba(255,255,255,.5);background:#111;touch-action:none;cursor:grab;flex-shrink:0;" id="pe">
+      <img id="pi" src="${url}" style="position:absolute;transform-origin:0 0;will-change:transform;-webkit-user-drag:none;pointer-events:none;">
+    </div>
+    <div style="color:rgba(255,255,255,.4);font-size:11px;margin:10px 0;" id="pzl">로딩 중...</div>
+    <div style="display:flex;gap:12px;margin-bottom:16px;">
+      <button id="pzo" style="width:44px;height:44px;border-radius:12px;background:rgba(255,255,255,.15);color:#fff;border:none;font-size:22px;cursor:pointer;">−</button>
+      <button id="pzi" style="width:44px;height:44px;border-radius:12px;background:rgba(255,255,255,.15);color:#fff;border:none;font-size:22px;cursor:pointer;">+</button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;width:${FRAME}px;margin-bottom:20px;">
+      <button id="pcan" style="padding:14px;border-radius:12px;background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.2);font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;">취소</button>
+      <button id="psv" style="padding:14px;border-radius:12px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;">저장</button>
+    </div>`;
+  document.body.appendChild(pop);
+  document.getElementById('pcan').onclick=()=>pop.remove();
+
+  const el=document.getElementById('pe');
+  const img=document.getElementById('pi');
+  const lbl=document.getElementById('pzl');
+
+  function applyT(){img.style.transform=`translate(${tx}px,${ty}px) scale(${sc})`;if(lbl)lbl.textContent=`원본 ${Math.round(sc*100)}% 크기`;}
+  function clampT(){const w=imgNW*sc,h=imgNH*sc;if(w>=FRAME){tx=Math.min(0,Math.max(FRAME-w,tx));}else{tx=(FRAME-w)/2;}if(h>=FRAME){ty=Math.min(0,Math.max(FRAME-h,ty));}else{ty=(FRAME-h)/2;}}
+  function doZoom(newSc,cx,cy){newSc=Math.max(minSc,Math.min(8,newSc));const r=newSc/sc;tx=cx-(cx-tx)*r;ty=cy-(cy-ty)*r;sc=newSc;clampT();applyT();}
+
+  tmp.onload=()=>{imgNW=tmp.naturalWidth;imgNH=tmp.naturalHeight;img.style.width=imgNW+'px';img.style.height=imgNH+'px';minSc=Math.max(FRAME/imgNW,FRAME/imgNH);sc=1;tx=(FRAME-imgNW)/2;ty=(FRAME-imgNH)/2;clampT();applyT();};
+  tmp.src=url;
+
+  document.getElementById('pzi').onclick=()=>doZoom(sc*1.2,FRAME/2,FRAME/2);
+  document.getElementById('pzo').onclick=()=>doZoom(sc/1.2,FRAME/2,FRAME/2);
+
+  el.addEventListener('mousedown',e=>{drag=true;lx=e.clientX;ly=e.clientY;el.style.cursor='grabbing';e.preventDefault();});
+  el.addEventListener('mousemove',e=>{if(!drag)return;tx+=e.clientX-lx;ty+=e.clientY-ly;lx=e.clientX;ly=e.clientY;clampT();applyT();e.preventDefault();});
+  el.addEventListener('mouseup',()=>{drag=false;el.style.cursor='grab';});
+  el.addEventListener('mouseleave',()=>{drag=false;el.style.cursor='grab';});
+  el.addEventListener('wheel',e=>{const r=el.getBoundingClientRect();doZoom(sc*(e.deltaY<0?1.1:0.9),e.clientX-r.left,e.clientY-r.top);e.preventDefault();},{passive:false});
+
+  el.addEventListener('touchstart',e=>{if(e.touches.length===1){drag=true;pinch=false;lx=e.touches[0].clientX;ly=e.touches[0].clientY;}else if(e.touches.length===2){drag=false;pinch=true;ld=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);}e.preventDefault();},{passive:false});
+  el.addEventListener('touchmove',e=>{if(e.touches.length===1&&drag){tx+=e.touches[0].clientX-lx;ty+=e.touches[0].clientY-ly;lx=e.touches[0].clientX;ly=e.touches[0].clientY;clampT();applyT();}else if(e.touches.length===2&&pinch){const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);const r=el.getBoundingClientRect();doZoom(sc*(d/ld),(e.touches[0].clientX+e.touches[1].clientX)/2-r.left,(e.touches[0].clientY+e.touches[1].clientY)/2-r.top);ld=d;}e.preventDefault();},{passive:false});
+  el.addEventListener('touchend',e=>{if(e.touches.length<2)pinch=false;if(e.touches.length===0)drag=false;});
+
+  document.getElementById('psv').onclick=async()=>{
+    const btn=document.getElementById('psv');btn.textContent='저장 중...';btn.disabled=true;
+    try{
+      const out=document.createElement('canvas');out.width=600;out.height=600;
+      const ctx=out.getContext('2d');
+      ctx.drawImage(tmp,-tx/sc,-ty/sc,FRAME/sc,FRAME/sc,0,0,600,600);
+      out.toBlob(async blob=>{
+        try{
+          const{error}=await sb.storage.from('avatars').upload(`${U.id}/avatar`,blob,{upsert:true,contentType:'image/jpeg'});
+          if(error){tst('저장 실패: '+error.message);pop.remove();return;}
+          const{data:ud}=sb.storage.from('avatars').getPublicUrl(`${U.id}/avatar`);
+          pop.remove();setProfilePhoto(ud.publicUrl+'?t='+Date.now());tst('프로필 사진 저장됐어요! 📸');
+        }catch(e2){tst('저장 오류: '+e2.message);pop.remove();}
+      },'image/jpeg',0.92);
+    }catch(e){tst('오류: '+e.message);pop.remove();}
+  };
 }
 </script>
