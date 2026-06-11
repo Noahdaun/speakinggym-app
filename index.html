@@ -1056,7 +1056,6 @@ async function lRev(){
     sb.from('review_logs').select('*').eq('student_id',U.id)
   ]);
   les=lss||[];
-  const schMap={};(schs||[]).forEach(s=>{if(!schMap[s.lesson_id])schMap[s.lesson_id]=[];schMap[s.lesson_id].push(s);});
   const myClass=P?.class_name;
   // 내 출석 날짜 목록 (오래된 순)
   const myAttendDates=(at||[]).map(a=>a.lesson_date).sort();
@@ -2563,3 +2562,13 @@ async function loadSDRev(){
   el.innerHTML=lessonHtml||'<div class="empty">기록이 없어요</div>';
 }
 
+// ── INIT ──
+(async()=>{
+  const{data:{session:s}}=await sb.auth.getSession();
+  if(s?.user)await initApp(s.user);
+  document.getElementById('le').addEventListener('keydown',e=>e.key==='Enter'&&document.getElementById('lp').focus());
+  document.getElementById('lp').addEventListener('keydown',e=>e.key==='Enter'&&doLogin());
+})();
+</script>
+</body>
+</html>
