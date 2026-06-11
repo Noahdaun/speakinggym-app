@@ -2960,6 +2960,17 @@ async function admBulkV(sid){
 async function rAtList(cls){
   const d=document.getElementById('atd')?.value;if(!d)return;
   if(!sts.length){const{data}=await sb.from('profiles').select('*').eq('role','student').order('name');sts=data||[];}
+  if(!classes.length){const{data}=await sb.from('classes').select('name').order('name');classes=(data||[]).map(c=>c.name);}
+
+  // 반 필터 탭 렌더링
+  const atcp=document.getElementById('atcp');
+  if(atcp){
+    const cur=cls||'all';
+    atcp.innerHTML=[{v:'all',l:'전체'},...classes.map(c=>({v:c,l:c}))].map(({v,l})=>
+      `<div class="pill${cur===v?' on':''}" onclick="rAtList('${v}')" style="cursor:pointer;">${l}</div>`
+    ).join('');
+  }
+
   const el=document.getElementById('atlist');if(!el)return;
   el.innerHTML='<div class="loading">로딩중...</div>';
 
@@ -2990,20 +3001,21 @@ async function saveAllAtt(d, cls){
   const checked=filtered.filter(s=>document.getElementById(`att-${s.id}`)?.checked);
   const unchecked=filtered.filter(s=>!document.getElementById(`att-${s.id}`)?.checked);
 
-  // 체크된 학생 출석 insert (없으면)
+  // 체크된 학생 출석 insert
   for(const s of checked){
-    const{data:ex}=await sb.from('attendance').select('id').eq('student_id',s.id).eq('lesson_date',d).single().catch(()=>({data:null}));
-    if(!ex){
-      const lessonId=les[0]?.id||null;
-      await sb.from('attendance').insert({student_id:s.id,lesson_date:d,class_name:s.class_name||'',lesson_id:lessonId});
-    }
+    try{
+      const{data:ex}=await sb.from('attendance').select('id').eq('student_id',s.id).eq('lesson_date',d).maybeSingle();
+      if(!ex){
+        const lessonId=les[0]?.id||null;
+        await sb.from('attendance').insert({student_id:s.id,lesson_date:d,class_name:s.class_name||'',lesson_id:lessonId});
+      }
+    }catch(e){console.warn('출석 저장 오류',e);}
   }
   // 체크 해제된 학생 출석 삭제
   for(const s of unchecked){
     await sb.from('attendance').delete().eq('student_id',s.id).eq('lesson_date',d);
   }
   tst(`출석 저장 완료! ✅ ${checked.length}명 출석`);
-  // 관리자 현황 새로고침
   lAdm();
 }
 
