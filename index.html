@@ -589,7 +589,7 @@ function doUpdate(){
       <!-- 출석 -->
       <div id="ad-at" style="display:none;">
         <div style="font-size:13px;font-weight:600;margin-bottom:6px;">출석 날짜</div>
-        <input class="inp" type="date" id="atd" style="margin-bottom:12px;" onchange="rAtList(document.querySelector('#atcp .pill.on')?.textContent==='전체'?'all':document.querySelector('#atcp .pill.on')?.textContent||'all')">
+        <input class="inp" type="date" id="atd" style="margin-bottom:12px;" onchange="rAtList('all')">
         <div class="pills" id="atcp"></div>
         <div id="atlist"><div class="loading">로딩중...</div></div>
         <div style="background:var(--gl);border-radius:10px;padding:10px 13px;margin-top:10px;border:1.5px solid #C0E8D8;">
@@ -2957,21 +2957,54 @@ async function admBulkV(sid){
 }
 
 // ── 출석 리스트 ──
-async function rAtList(){
+async function rAtList(cls){
   const d=document.getElementById('atd')?.value;if(!d)return;
-  const cls=document.getElementById('at-cls-sel')?.value||'';
-  let q=sb.from('attendance').select('*').eq('lesson_date',d);
-  if(cls)q=q.eq('class_name',cls);
-  const{data:atData}=await q;
-  const el=document.getElementById('at-list');if(!el)return;
-  if(!atData?.length){el.innerHTML='<div class="empty">출석 기록이 없어요</div>';return;}
-  el.innerHTML=atData.map(a=>{
-    const stu=sts.find(s=>s.id===a.student_id);
-    return`<div style="padding:8px 0;border-bottom:1px solid var(--brd);display:flex;align-items:center;justify-content:space-between;">
-      <div style="font-size:13px;">${dispName(stu?.name,stu?.email)||'?'}</div>
-      <div style="font-size:11px;color:var(--mu);">${a.class_name||''}</div>
-    </div>`;
-  }).join('');
+  if(!sts.length){const{data}=await sb.from('profiles').select('*').eq('role','student').order('name');sts=data||[];}
+  const el=document.getElementById('atlist');if(!el)return;
+  el.innerHTML='<div class="loading">로딩중...</div>';
+
+  // 해당 날짜 기존 출석 기록
+  const{data:atData}=await sb.from('attendance').select('*').eq('lesson_date',d);
+  const attendedSet=new Set((atData||[]).map(a=>a.student_id));
+
+  // 반 필터
+  const filtered=cls&&cls!=='all'?sts.filter(s=>s.class_name===cls):sts;
+  if(!filtered.length){el.innerHTML='<div class="empty">학생이 없어요</div>';return;}
+
+  el.innerHTML=`<div style="margin-bottom:10px;">
+    <button onclick="saveAllAtt('${d}','${cls||'all'}')" style="width:100%;padding:11px;border-radius:11px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:8px;">✅ 체크된 학생 출석 저장</button>
+  </div>
+  ${filtered.map(s=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1.5px solid var(--brd);">
+      <label style="display:flex;align-items:center;gap:10px;flex:1;cursor:pointer;">
+        <input type="checkbox" id="att-${s.id}" ${attendedSet.has(s.id)?'checked':''} style="width:18px;height:18px;accent-color:var(--g);flex-shrink:0;">
+        <span style="font-size:13px;font-weight:600;">${dispName(s.name,s.email)}</span>
+        <span style="font-size:11px;color:var(--mu);">${s.class_name||''}</span>
+      </label>
+    </div>`).join('')}`;
+}
+
+async function saveAllAtt(d, cls){
+  if(!d){tst('날짜를 선택해주세요');return;}
+  const filtered=cls&&cls!=='all'?sts.filter(s=>s.class_name===cls):sts;
+  const checked=filtered.filter(s=>document.getElementById(`att-${s.id}`)?.checked);
+  const unchecked=filtered.filter(s=>!document.getElementById(`att-${s.id}`)?.checked);
+
+  // 체크된 학생 출석 insert (없으면)
+  for(const s of checked){
+    const{data:ex}=await sb.from('attendance').select('id').eq('student_id',s.id).eq('lesson_date',d).single().catch(()=>({data:null}));
+    if(!ex){
+      const lessonId=les[0]?.id||null;
+      await sb.from('attendance').insert({student_id:s.id,lesson_date:d,class_name:s.class_name||'',lesson_id:lessonId});
+    }
+  }
+  // 체크 해제된 학생 출석 삭제
+  for(const s of unchecked){
+    await sb.from('attendance').delete().eq('student_id',s.id).eq('lesson_date',d);
+  }
+  tst(`출석 저장 완료! ✅ ${checked.length}명 출석`);
+  // 관리자 현황 새로고침
+  lAdm();
 }
 
 // ── sg_builder 자막 세그먼트 재생 ──
