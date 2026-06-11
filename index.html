@@ -3155,7 +3155,7 @@ async function rLsList(){
 }
 
 function renderLsRows(){
-  const el=document.getElementById('ls-rows');if(!el)return;
+  const el=document.getElementById('lslist');if(!el)return;
   if(!les.length){el.innerHTML='<div class="empty">레슨이 없어요</div>';return;}
   el.innerHTML=les.map(l=>`<div class="card" style="margin-bottom:8px;cursor:pointer;" onclick="openLsEdit('${l.id}')">
     <div style="font-size:13px;font-weight:700;">${l.title}</div>
