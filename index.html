@@ -3024,7 +3024,11 @@ function adTab(t,b){
   if(b)b.classList.add('on');
   if(t==='cl'){const clDiv=document.getElementById('ad-cls');if(clDiv)clDiv.style.display='block';rClsList();}
   if(t==='ls'){rLsList();renderLsRows();lsVocabRenderTgt();}
-  if(t==='at'){document.getElementById('atd').value=new Date().toISOString().slice(0,10);rAtCls();}
+  if(t==='at'){
+    document.getElementById('atd').value=new Date().toISOString().slice(0,10);
+    rAtCls();
+    rAtList('all');
+  }
   if(t==='vo'){rVTgt();}
   if(t==='ct'){loadAdminCert();}
 }
@@ -3403,5 +3407,122 @@ function showPhotoPositionEditor(url){
       },'image/jpeg',0.92);
     }catch(e){tst('오류: '+e.message);pop.remove();}
   };
+}
+</script>
+<script>
+// ── 반관리 ──
+async function addClass(){
+  const name=document.getElementById('ncls')?.value?.trim();
+  if(!name){tst('반 이름을 입력해주세요');return;}
+  if(classes.includes(name)){tst('이미 있는 반 이름이에요');return;}
+  const{error}=await sb.from('classes').insert({name});
+  if(error&&!error.message?.includes('duplicate')){tst('추가 실패: '+error.message);return;}
+  classes.push(name);classes.sort();
+  document.getElementById('ncls').value='';
+  renderClsList();
+  tst(`${name} 반 추가됐어요!`);
+}
+
+async function addToCls(cls){
+  const key=`addto-${cls.replace(/\s/g,'_')}`;
+  const sid=document.getElementById(key)?.value;
+  if(!sid){tst('학생을 선택해주세요');return;}
+  const{error}=await sb.from('profiles').update({class_name:cls}).eq('id',sid);
+  if(error){tst('추가 실패: '+error.message);return;}
+  const st=sts.find(s=>s.id===sid);if(st)st.class_name=cls;
+  renderClsList();tst('반에 추가됐어요!');
+}
+
+async function rmFromCls(sid,cls){
+  const{error}=await sb.from('profiles').update({class_name:null}).eq('id',sid);
+  if(error){tst('제거 실패: '+error.message);return;}
+  const st=sts.find(s=>s.id===sid);if(st)st.class_name=null;
+  renderClsList();tst('반에서 제거됐어요');
+}
+
+async function delCls(cls){
+  if(!confirm(`"${cls}" 반을 삭제할까요?\n학생들의 반 배정이 해제됩니다.`))return;
+  await sb.from('classes').delete().eq('name',cls);
+  await sb.from('profiles').update({class_name:null}).eq('class_name',cls);
+  classes=classes.filter(c=>c!==cls);
+  sts.forEach(s=>{if(s.class_name===cls)s.class_name=null;});
+  renderClsList();tst('삭제됐어요');
+}
+
+// ── 레슨 관리 ──
+async function saveLesson(){
+  const title=document.getElementById('ls-title')?.value?.trim();
+  const url=document.getElementById('ls-url')?.value?.trim();
+  const date=document.getElementById('ls-date')?.value;
+  if(!title||!url){tst('제목과 영상 URL을 입력해주세요');return;}
+  const{error}=await sb.from('lessons').insert({title,url,lesson_date:date||null});
+  if(error){tst('등록 실패: '+error.message);return;}
+  document.getElementById('ls-title').value='';
+  document.getElementById('ls-url').value='';
+  tst('토픽이 등록됐어요!');
+  await rLsList();renderLsRows();
+}
+
+async function openLsEdit(lid){
+  const l=les.find(x=>x.id===lid);if(!l)return;
+  // 간단 팝업으로 수정
+  const newTitle=prompt('레슨 제목',l.title);
+  if(!newTitle||newTitle===l.title)return;
+  await sb.from('lessons').update({title:newTitle.trim()}).eq('id',lid);
+  l.title=newTitle.trim();
+  renderLsRows();tst('수정됐어요!');
+}
+
+// ── 단어 대상 선택 ──
+function vtgtAllToggle(cb){
+  const all=cb.checked;
+  document.querySelectorAll('.vtgt-cls,.vtgt-stu').forEach(el=>{el.checked=all;});
+}
+
+async function admAddV(){
+  const eng=document.getElementById('ae2')?.value?.trim();
+  const kor=document.getElementById('ak2')?.value?.trim();
+  if(!eng||!kor){tst('영어와 한국어를 모두 입력해주세요');return;}
+  // 대상 학생 수집
+  const targets=getVtgtIds();
+  if(!targets.length){tst('대상 학생을 선택해주세요');return;}
+  const today=new Date().toISOString().slice(0,10);
+  const rows=targets.map(sid=>({student_id:sid,english:eng,korean:kor,box_level:1,next_review:today}));
+  const{error}=await sb.from('vocab_cards').insert(rows);
+  if(error){tst('추가 실패: '+error.message);return;}
+  document.getElementById('ae2').value='';document.getElementById('ak2').value='';
+  tst(`${targets.length}명에게 단어 추가됐어요!`);
+}
+
+async function admBulkV(){
+  const raw=document.getElementById('vbulk')?.value?.trim();
+  if(!raw){tst('단어를 입력해주세요');return;}
+  const targets=getVtgtIds();
+  if(!targets.length){tst('대상 학생을 선택해주세요');return;}
+  const today=new Date().toISOString().slice(0,10);
+  const rows=[];
+  raw.split('\n').forEach(line=>{
+    const [eng,...rest]=line.split(',');
+    const kor=rest.join(',').trim();
+    if(eng?.trim()&&kor){
+      targets.forEach(sid=>rows.push({student_id:sid,english:eng.trim(),korean:kor,box_level:1,next_review:today}));
+    }
+  });
+  if(!rows.length){tst('올바른 형식이 없어요 (영어,한국어)');return;}
+  const{error}=await sb.from('vocab_cards').insert(rows);
+  if(error){tst('추가 실패: '+error.message);return;}
+  document.getElementById('vbulk').value='';
+  tst(`${rows.length/targets.length}개 단어를 ${targets.length}명에게 추가했어요!`);
+}
+
+function getVtgtIds(){
+  const allCb=document.getElementById('vtgt-all');
+  if(allCb?.checked)return sts.map(s=>s.id);
+  const ids=[];
+  document.querySelectorAll('.vtgt-cls:checked').forEach(cb=>{
+    sts.filter(s=>s.class_name===cb.value).forEach(s=>ids.push(s.id));
+  });
+  document.querySelectorAll('.vtgt-stu:checked').forEach(cb=>ids.push(cb.value));
+  return [...new Set(ids)];
 }
 </script>
