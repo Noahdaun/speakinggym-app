@@ -1063,7 +1063,7 @@ async function lRev(){
   const[{data:lss},{data:schs},{data:at},{data:logs}]=await Promise.all([
     sb.from('lessons').select('*').order('created_at',{ascending:false}),
     sb.from('lesson_schedules').select('*'),
-    sb.from('attendance').select('lesson_date').eq('student_id',U.id).order('lesson_date',{ascending:false}),
+    sb.from('attendance').select('lesson_date').eq('student_id',U.id).eq('status','present').order('lesson_date',{ascending:false}),
     sb.from('review_logs').select('*').eq('student_id',U.id)
   ]);
   les=lss||[];
@@ -2808,38 +2808,25 @@ function openNotify(sid){
 
 function renderSDNotify(stuList){
   const el=document.querySelector('.sd-notify-wrap');if(!el)return;
-  const cls=stuList[0]?.class_name||'';
+  const stu=stuList[0];if(!stu)return;
   el.innerHTML=`<div style="padding:8px 0;">
-    <button onclick="openNotify('${cls.replace(/'/g,"\\'")}')" style="width:100%;padding:11px;border-radius:11px;background:var(--gl);color:var(--gd);border:1.5px solid #C0E8D8;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">💬 메시지 보내기</button>
+    <button onclick="openNotify('${stu.id}')" style="width:100%;padding:11px;border-radius:11px;background:var(--gl);color:var(--gd);border:1.5px solid #C0E8D8;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">💬 ${dispName(stu.name,stu.email)}님에게 메시지 보내기</button>
   </div>`;
 }
 
-async function sendNotify(clsName,msg){
+async function sendNotify(targetStudentId,msg){
   if(!msg?.trim()){tst('메시지를 입력해주세요');return;}
-  let targetClassId=null;
-  if(clsName){
-    const{data:clsRow}=await sb.from('classes').select('id').eq('name',clsName).maybeSingle();
-    targetClassId=clsRow?.id||null;
-  }
-  const{error}=await sb.from('messages').insert({sender_id:U.id,target_class_id:targetClassId,content:msg.trim(),read:false});
+  const{error}=await sb.from('messages').insert({sender_id:U.id,target_student_id:targetStudentId||null,content:msg.trim(),read:false});
   if(error){tst('전송 실패: '+error.message);return;}
   document.querySelector('div[style*="position:fixed"][style*="9000"]')?.remove();
-  tst(clsName?'메시지를 보냈어요!':'전체 학생에게 보냈어요!');
+  tst('메시지를 보냈어요!');
 }
 
 // ── 학생: 알림 로드 및 표시 ──
 async function loadMyNotices(){
   if(P?.role==='admin')return;
   try{
-    let myClsId=null;
-    if(P?.class_name){
-      const{data:clsRow}=await sb.from('classes').select('id').eq('name',P.class_name).maybeSingle();
-      myClsId=clsRow?.id||null;
-    }
-    let q=sb.from('messages').select('*').order('created_at',{ascending:false}).limit(5);
-    if(myClsId)q=q.or(`target_class_id.eq.${myClsId},target_class_id.is.null`);
-    else q=q.is('target_class_id',null);
-    const{data,error}=await q;
+    const{data,error}=await sb.from('messages').select('*').or(`target_student_id.eq.${U.id},and(target_student_id.is.null,target_class_id.is.null)`).order('created_at',{ascending:false}).limit(5);
     if(error){console.warn('알림 로드 실패',error);return;}
     const unread=(data||[]).filter(m=>!m.read);
     const wrap=document.getElementById('home-notice');if(!wrap)return;
@@ -3025,7 +3012,7 @@ async function rAtList(cls){
   el.innerHTML='<div class="loading">로딩중...</div>';
 
   // 해당 날짜 기존 출석 기록
-  const{data:atData}=await sb.from('attendance').select('*').eq('lesson_date',d);
+  const{data:atData}=await sb.from('attendance').select('*').eq('lesson_date',d).eq('status','present');
   const attendedSet=new Set((atData||[]).map(a=>a.student_id));
 
   // 반 필터
@@ -3056,8 +3043,7 @@ async function saveAllAtt(d, cls){
     try{
       const{data:ex}=await sb.from('attendance').select('id').eq('student_id',s.id).eq('lesson_date',d).maybeSingle();
       if(!ex){
-        const lessonId=les[0]?.id||null;
-        await sb.from('attendance').insert({student_id:s.id,lesson_date:d,class_name:s.class_name||''});
+        await sb.from('attendance').insert({student_id:s.id,lesson_date:d,status:'present'});
       }
     }catch(e){console.warn('출석 저장 오류',e);}
   }
