@@ -265,7 +265,9 @@ function doUpdate(){
     <!-- HOME -->
     <div id="ph" class="pg on">
       <!-- XP 바 -->
-      <div id="xp-bar-wrap" style="padding:14px 14px 0;"></div>
+      <div id="xp-bar-wrap"></div>
+      <!-- 알림 -->
+      <div id="home-notice"></div>
       <!-- 오늘 체크리스트 -->
       <div id="home-todo"></div>
       <!-- 달력 -->
@@ -630,14 +632,6 @@ function doUpdate(){
       <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M3 9.5L10 3l7 6.5V17a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z" stroke="#1D9E75" stroke-width="1.6"/></svg>
       <span>홈</span>
     </button>
-    <button class="bni" onclick="gp('vocab')">
-      <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="3" y="3" width="14" height="14" rx="2" stroke="#1D9E75" stroke-width="1.6"/><line x1="7" y1="7" x2="13" y2="7" stroke="#1D9E75" stroke-width="1.6"/><line x1="7" y1="10" x2="13" y2="10" stroke="#1D9E75" stroke-width="1.6"/><line x1="7" y1="13" x2="10" y2="13" stroke="#1D9E75" stroke-width="1.6"/></svg>
-      <span>단어</span>
-    </button>
-    <button class="bni" onclick="gp('review')">
-      <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="7" stroke="#1D9E75" stroke-width="1.6"/><polyline points="10,6 10,10 13,12" stroke="#1D9E75" stroke-width="1.6" stroke-linecap="round"/></svg>
-      <span>리뷰</span>
-    </button>
     <button class="bni" onclick="gp('record')">
       <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><polyline points="3,15 7,9 10,12 13,7 17,11" stroke="#1D9E75" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
       <span>기록</span>
@@ -788,6 +782,7 @@ async function initApp(u){
     try{await loadXP();}catch(e){console.warn('XP 로드 실패',e);}
     loadProfilePhoto();
     buildHomeTodo();
+    loadMyNotices();
   }
 }
 
@@ -2802,9 +2797,9 @@ function openNotify(sid){
 
 async function sendNotify(sid,msg){
   if(!msg?.trim()){tst('메시지를 입력해주세요');return;}
-  await sb.from('messages').insert({from_id:U.id,to_id:sid,content:msg.trim()});
+  await sb.from('messages').insert({from_id:U.id,to_id:sid||null,content:msg.trim()});
   document.querySelector('div[style*="position:fixed"][style*="9000"]')?.remove();
-  tst('메시지를 보냈어요!');
+  tst(sid?'메시지를 보냈어요!':'전체 학생에게 보냈어요!');
 }
 
 function renderSDNotify(stuList){
@@ -2812,6 +2807,31 @@ function renderSDNotify(stuList){
   el.innerHTML=`<div style="padding:8px 0;">
     <button onclick="openNotify('${stuList[0]?.id||''}')" style="width:100%;padding:11px;border-radius:11px;background:var(--gl);color:var(--gd);border:1.5px solid #C0E8D8;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">💬 메시지 보내기</button>
   </div>`;
+}
+
+// ── 학생: 알림 로드 및 표시 ──
+async function loadMyNotices(){
+  if(P?.role==='admin')return;
+  try{
+    const{data,error}=await sb.from('messages').select('*').or(`to_id.eq.${U.id},to_id.is.null`).order('created_at',{ascending:false}).limit(5);
+    if(error){console.warn('알림 로드 실패',error);return;}
+    const unread=(data||[]).filter(m=>!m.read);
+    const wrap=document.getElementById('home-notice');if(!wrap)return;
+    if(!unread.length){wrap.innerHTML='';return;}
+    wrap.innerHTML=unread.map(m=>`
+      <div style="background:linear-gradient(135deg,#FFF4E0,#FFE8C2);border:1.5px solid #FAC775;border-radius:13px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:flex-start;gap:10px;cursor:pointer;" onclick="markNoticeRead('${m.id}')">
+        <div style="font-size:18px;flex-shrink:0;">💬</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:13px;font-weight:600;color:#854F0B;word-break:break-all;">${m.content}</div>
+          <div style="font-size:10px;color:#A87B33;margin-top:3px;">${new Date(m.created_at).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})} · 탭하여 확인</div>
+        </div>
+      </div>`).join('');
+  }catch(e){console.warn('알림 로드 실패',e);}
+}
+
+async function markNoticeRead(mid){
+  await sb.from('messages').update({read:true}).eq('id',mid);
+  loadMyNotices();
 }
 
 // ── 리뷰 새로고침 ──
@@ -3115,9 +3135,10 @@ function gp(n){
   document.querySelectorAll('.bni').forEach(b=>b.classList.remove('on'));
   const ids={home:'ph',vocab:'pv',review:'pr',record:'prc',rank:'prk',cert:'pct',admin:'pad'};
   const pg=document.getElementById(ids[n]);if(pg)pg.classList.add('on');
-  const ord=['home','vocab','review','record','rank','cert','admin'];
-  const idx=ord.indexOf(n);
-  const btns=document.querySelectorAll('.bni');if(btns[idx])btns[idx].classList.add('on');
+  // 네비 버튼은 home,record,rank,cert,admin 순서 (vocab/review는 네비에 없음, 홈에서 진입)
+  const navOrd=['home','record','rank','cert','admin'];
+  const idx=navOrd.indexOf(n);
+  const btns=document.querySelectorAll('.bni');if(idx>=0&&btns[idx])btns[idx].classList.add('on');
   if(n==='vocab'){if(!loaded.vocab){loaded.vocab=true;startVocab();}else{renderVHead();renderFC();}}
   if(n==='review'){if(!loaded.review){loaded.review=true;lRev();}}
   if(n==='record'){if(!loaded.record){loaded.record=true;lRec();}}
