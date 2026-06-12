@@ -2806,25 +2806,40 @@ function openNotify(sid){
   pop.addEventListener('click',e=>{if(e.target===pop)pop.remove();});
 }
 
-async function sendNotify(sid,msg){
-  if(!msg?.trim()){tst('메시지를 입력해주세요');return;}
-  await sb.from('messages').insert({from_id:U.id,to_id:sid||null,content:msg.trim()});
-  document.querySelector('div[style*="position:fixed"][style*="9000"]')?.remove();
-  tst(sid?'메시지를 보냈어요!':'전체 학생에게 보냈어요!');
-}
-
 function renderSDNotify(stuList){
   const el=document.querySelector('.sd-notify-wrap');if(!el)return;
+  const cls=stuList[0]?.class_name||'';
   el.innerHTML=`<div style="padding:8px 0;">
-    <button onclick="openNotify('${stuList[0]?.id||''}')" style="width:100%;padding:11px;border-radius:11px;background:var(--gl);color:var(--gd);border:1.5px solid #C0E8D8;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">💬 메시지 보내기</button>
+    <button onclick="openNotify('${cls.replace(/'/g,"\\'")}')" style="width:100%;padding:11px;border-radius:11px;background:var(--gl);color:var(--gd);border:1.5px solid #C0E8D8;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">💬 메시지 보내기</button>
   </div>`;
+}
+
+async function sendNotify(clsName,msg){
+  if(!msg?.trim()){tst('메시지를 입력해주세요');return;}
+  let targetClassId=null;
+  if(clsName){
+    const{data:clsRow}=await sb.from('classes').select('id').eq('name',clsName).maybeSingle();
+    targetClassId=clsRow?.id||null;
+  }
+  const{error}=await sb.from('messages').insert({sender_id:U.id,target_class_id:targetClassId,content:msg.trim(),read:false});
+  if(error){tst('전송 실패: '+error.message);return;}
+  document.querySelector('div[style*="position:fixed"][style*="9000"]')?.remove();
+  tst(clsName?'메시지를 보냈어요!':'전체 학생에게 보냈어요!');
 }
 
 // ── 학생: 알림 로드 및 표시 ──
 async function loadMyNotices(){
   if(P?.role==='admin')return;
   try{
-    const{data,error}=await sb.from('messages').select('*').or(`to_id.eq.${U.id},to_id.is.null`).order('created_at',{ascending:false}).limit(5);
+    let myClsId=null;
+    if(P?.class_name){
+      const{data:clsRow}=await sb.from('classes').select('id').eq('name',P.class_name).maybeSingle();
+      myClsId=clsRow?.id||null;
+    }
+    let q=sb.from('messages').select('*').order('created_at',{ascending:false}).limit(5);
+    if(myClsId)q=q.or(`target_class_id.eq.${myClsId},target_class_id.is.null`);
+    else q=q.is('target_class_id',null);
+    const{data,error}=await q;
     if(error){console.warn('알림 로드 실패',error);return;}
     const unread=(data||[]).filter(m=>!m.read);
     const wrap=document.getElementById('home-notice');if(!wrap)return;
