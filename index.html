@@ -698,7 +698,7 @@ function dispInitial(name, email){
 }
 
 
-let U=null,P=null,cY,cM;
+let U=null,P=null,AID=null,cY,cM;
 let aMap={},rMap={};// 달력용
 let vc=[],tv=[],ci=0,fl=false,doneToday=0;
 let les=[],sts=[],classes=[];
@@ -769,6 +769,16 @@ async function initApp(u){
   document.getElementById('uav').title=dispName(P?.name,u.email);
   document.getElementById('ls').classList.remove('on');
   document.getElementById('as').classList.add('on');
+  // academy_id 확보 (메시지 발송 RLS용)
+  try{
+    if(P?.role==='admin'){
+      const{data:ac}=await sb.from('academies').select('id').eq('owner_id',u.id).maybeSingle();
+      AID=ac?.id||null;
+    }else{
+      const{data:am}=await sb.from('academy_members').select('academy_id').eq('user_id',u.id).maybeSingle();
+      AID=am?.academy_id||null;
+    }
+  }catch(e){console.warn('academy_id 로드 실패',e);}
   const n=new Date();cY=n.getFullYear();cM=n.getMonth();
   if(P?.role==='admin'){
     document.getElementById('bnav').insertAdjacentHTML('beforeend',
@@ -2816,7 +2826,7 @@ function renderSDNotify(stuList){
 
 async function sendNotify(targetStudentId,msg){
   if(!msg?.trim()){tst('메시지를 입력해주세요');return;}
-  const{error}=await sb.from('messages').insert({sender_id:U.id,target_student_id:targetStudentId||null,content:msg.trim(),read:false});
+  const{error}=await sb.from('messages').insert({sender_id:U.id,academy_id:AID,target_student_id:targetStudentId||null,content:msg.trim(),read:false});
   if(error){tst('전송 실패: '+error.message);return;}
   document.querySelector('div[style*="position:fixed"][style*="9000"]')?.remove();
   tst('메시지를 보냈어요!');
