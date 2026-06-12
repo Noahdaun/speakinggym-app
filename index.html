@@ -3151,7 +3151,8 @@ function gp(n){
   const idx=navOrd.indexOf(n);
   const btns=document.querySelectorAll('.bni');if(idx>=0&&btns[idx])btns[idx].classList.add('on');
   if(n==='vocab'){if(!loaded.vocab){loaded.vocab=true;startVocab();}else{renderVHead();renderFC();}}
-  if(n==='review'){if(!loaded.review){loaded.review=true;lRev();}}
+  if(n==='review'){lRev();}
+  if(n==='home'){lRev().then(buildHomeTodo);loadMyNotices();}
   if(n==='record'){if(!loaded.record){loaded.record=true;lRec();}}
   if(n==='rank'){lRank();}
   if(n==='cert'){lCert();}
