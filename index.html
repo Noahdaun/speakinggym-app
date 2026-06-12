@@ -1058,43 +1058,48 @@ async function lRev(){
   const[{data:lss},{data:schs},{data:at},{data:logs}]=await Promise.all([
     sb.from('lessons').select('*').order('created_at',{ascending:false}),
     sb.from('lesson_schedules').select('*'),
-    sb.from('attendance').select('lesson_date').eq('student_id',U.id).eq('status','present').order('lesson_date',{ascending:false}),
+    sb.from('attendance').select('lesson_date').eq('student_id',U.id).order('lesson_date',{ascending:false}),
     sb.from('review_logs').select('*').eq('student_id',U.id)
   ]);
   les=lss||[];
   const myClass=P?.class_name;
-  // 내 출석 날짜 목록 (오래된 순)
-  const myAttendDates=(at||[]).map(a=>a.lesson_date).sort();
+  // 내 출석 날짜 목록 (오래된 순, 중복 제거)
+  const myAttendDates=[...new Set((at||[]).map(a=>a.lesson_date))].sort();
 
   // 각 레슨의 수업일 찾기
   const schMap={};(schs||[]).forEach(s=>{if(!schMap[s.lesson_id])schMap[s.lesson_id]=[];schMap[s.lesson_id].push(s);});
   const myLessons=les.map(l=>{
     const mySchs=(schMap[l.id]||[]).filter(s=>!myClass||s.class_name===myClass);
-    const lessonDate=mySchs.length?mySchs[0].lesson_date:l.lesson_date;
+    const lessonDate=mySchs.length?mySchs[0].lesson_date:(l.lesson_date||null);
     return{...l,myDate:lessonDate};
-  }).filter(l=>{
-    // 내가 출석한 날짜 중 이 레슨 수업일과 일치하는 게 있어야 표시
-    return myAttendDates.includes(l.myDate);
-  }).sort((a,b)=>b.myDate.localeCompare(a.myDate));
+  });
 
   const rounds=[1,2,3,5,7];
   const items=[];
 
-  myLessons.forEach((lesson, idx)=>{
-    // 이 레슨의 회차 = 가장 최근 수업(idx=0)이 1회차, 그 전(idx=1)이 2회차...
-    // 단, 내 출석 기준으로 몇 번째 전 수업인지
-    const lessonAttendIdx=myAttendDates.indexOf(lesson.myDate);
-    const latestAttendIdx=myAttendDates.length-1;
-    const sessionsAgo=latestAttendIdx-lessonAttendIdx; // 0=가장최근, 1=한번전...
-    const round=sessionsAgo+1; // 1회차=가장최근, 2회차=한번전...
+  // 1) 수업일 정보가 있는 레슨: 출석 기반 회차 계산
+  myLessons.filter(l=>l.myDate&&myAttendDates.includes(l.myDate))
+    .sort((a,b)=>b.myDate.localeCompare(a.myDate))
+    .forEach(lesson=>{
+      const lessonAttendIdx=myAttendDates.indexOf(lesson.myDate);
+      const latestAttendIdx=myAttendDates.length-1;
+      const sessionsAgo=latestAttendIdx-lessonAttendIdx;
+      const round=sessionsAgo+1;
+      if(!rounds.includes(round))return;
+      const doneRounds=new Set((logs||[]).filter(l=>l.lesson_id===lesson.id&&l.completed).map(l=>l.review_round));
+      if(!doneRounds.has(round)){
+        items.push({lesson,round,date:lesson.myDate});
+      }
+    });
 
-    if(!rounds.includes(round))return; // 1,2,3,5,7회차만
-
-    const doneRounds=new Set((logs||[]).filter(l=>l.lesson_id===lesson.id&&l.completed).map(l=>l.review_round));
-    if(!doneRounds.has(round)){
-      items.push({lesson,round,date:lesson.myDate});
-    }
-  });
+  // 2) 수업일 정보가 없는 기존 레슨: 1회차로 항상 표시 (완료 안 했으면)
+  myLessons.filter(l=>!l.myDate)
+    .forEach(lesson=>{
+      const doneRounds=new Set((logs||[]).filter(l=>l.lesson_id===lesson.id&&l.completed).map(l=>l.review_round));
+      if(!doneRounds.has(1)){
+        items.push({lesson,round:1,date:null});
+      }
+    });
   todayRevItems=items.slice(0,4);
   renderRT(todayRevItems,logs||[]);
   renderRH(logs||[]);
