@@ -548,8 +548,13 @@ function doUpdate(){
         <div style="font-size:13px;font-weight:600;margin-bottom:9px;" id="ls-form-title">새 토픽 등록</div>
         <input class="inp" type="text" id="lt" placeholder="토픽 제목 (예: KPop Demon Hunters)">
         <input class="inp" type="url" id="lu" placeholder="GitHub URL">
-        <div style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--text);">반별 수업 날짜</div>
-        <div id="ls-cls-rows"></div>
+        <div style="font-size:12px;font-weight:600;margin-bottom:4px;color:var(--text);">이 토픽을 들은 수업 날짜</div>
+        <div style="font-size:11px;color:var(--mu);margin-bottom:7px;">날짜를 선택해서 추가하세요. 그 날 출석한 학생에게 이 토픽이 배정돼요.</div>
+        <div style="display:flex;gap:7px;margin-bottom:8px;">
+          <input type="date" id="ls-date-input" style="flex:1;margin-bottom:0;">
+          <button onclick="addLsDate()" style="padding:0 16px;border-radius:10px;background:var(--g);color:#fff;border:none;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:inherit;">추가</button>
+        </div>
+        <div id="ls-date-tags" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;"></div>
 
         <div class="dv"></div>
 
@@ -1062,23 +1067,24 @@ async function lRev(){
     sb.from('review_logs').select('*').eq('student_id',U.id)
   ]);
   les=lss||[];
-  const myClass=P?.class_name;
   // 내 출석 날짜 목록 (오래된 순, 중복 제거)
   const myAttendDates=[...new Set((at||[]).map(a=>a.lesson_date))].sort();
 
-  // 각 레슨의 수업일 찾기
-  const schMap={};(schs||[]).forEach(s=>{if(!schMap[s.lesson_id])schMap[s.lesson_id]=[];schMap[s.lesson_id].push(s);});
+  // 각 레슨의 수업 날짜 목록 (복수)
+  const schMap={};(schs||[]).forEach(s=>{if(!schMap[s.lesson_id])schMap[s.lesson_id]=[];schMap[s.lesson_id].push(s.lesson_date);});
   const myLessons=les.map(l=>{
-    const mySchs=(schMap[l.id]||[]).filter(s=>!myClass||s.class_name===myClass);
-    const lessonDate=mySchs.length?mySchs[0].lesson_date:(l.lesson_date||null);
-    return{...l,myDate:lessonDate};
+    const dates=schMap[l.id]||[];
+    // 내 출석일과 일치하는 날짜 중 가장 최근 것
+    const matched=dates.filter(d=>myAttendDates.includes(d)).sort();
+    const myDate=matched.length?matched[matched.length-1]:null;
+    return{...l,myDate,hasSchedule:dates.length>0};
   });
 
   const rounds=[1,2,3,5,7];
   const items=[];
 
-  // 1) 수업일 정보가 있는 레슨: 출석 기반 회차 계산
-  myLessons.filter(l=>l.myDate&&myAttendDates.includes(l.myDate))
+  // 1) 수업 날짜가 지정된 레슨: 매칭된 출석일 기준 회차 계산
+  myLessons.filter(l=>l.hasSchedule&&l.myDate)
     .sort((a,b)=>b.myDate.localeCompare(a.myDate))
     .forEach(lesson=>{
       const lessonAttendIdx=myAttendDates.indexOf(lesson.myDate);
@@ -1092,8 +1098,8 @@ async function lRev(){
       }
     });
 
-  // 2) 수업일 정보가 없는 기존 레슨: 1회차로 항상 표시 (완료 안 했으면)
-  myLessons.filter(l=>!l.myDate)
+  // 2) 수업 날짜가 지정되지 않은 기존 레슨: 1회차로 항상 표시 (완료 안 했으면)
+  myLessons.filter(l=>!l.hasSchedule)
     .forEach(lesson=>{
       const doneRounds=new Set((logs||[]).filter(l=>l.lesson_id===lesson.id&&l.completed).map(l=>l.review_round));
       if(!doneRounds.has(1)){
@@ -3064,7 +3070,7 @@ function adTab(t,b){
   document.querySelectorAll('#pad>.tbb .tbn').forEach(x=>x.classList.remove('on'));
   if(b)b.classList.add('on');
   if(t==='cl'){const clDiv=document.getElementById('ad-cls');if(clDiv)clDiv.style.display='block';rClsList();}
-  if(t==='ls'){rLsList();renderLsRows();lsVocabRenderTgt();}
+  if(t==='ls'){rLsList();renderLsRows();lsVocabRenderTgt();renderLsDateTags();}
   if(t==='at'){
     document.getElementById('atd').value=new Date().toISOString().slice(0,10);
     rAtCls();
@@ -3512,14 +3518,8 @@ async function saveLesson(){
   }
   const guide=document.getElementById('ls-guide')?.value?.trim()||null;
 
-  // 반별 수업 날짜 수집
-  const clsRows=document.querySelectorAll('.ls-cls-date');
-  const schedules=[];
-  clsRows.forEach(row=>{
-    const cls=row.dataset.cls;
-    const date=row.value;
-    if(cls&&date)schedules.push({class_name:cls,lesson_date:date});
-  });
+  // 수업 날짜 수집 (lsDates 배열 사용)
+  const schedules=lsDates.map(d=>({lesson_date:d}));
 
   const isEdit=document.getElementById('ls-form-title')?.textContent?.includes('수정');
   const editId=document.getElementById('ls-form-title')?.dataset?.editId;
@@ -3561,7 +3561,30 @@ async function saveLesson(){
   }
 
   ['lt','lu','ls-subtitles','ls-expressions','ls-guide','ls-vocab'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  lsDates=[];renderLsDateTags();
   await rLsList();renderLsRows();
+}
+
+// ── 레슨 수업 날짜 (복수) ──
+let lsDates=[];
+function addLsDate(){
+  const input=document.getElementById('ls-date-input');
+  const d=input?.value;if(!d)return;
+  if(!lsDates.includes(d)){lsDates.push(d);lsDates.sort();}
+  input.value='';
+  renderLsDateTags();
+}
+function rmLsDate(d){
+  lsDates=lsDates.filter(x=>x!==d);
+  renderLsDateTags();
+}
+function renderLsDateTags(){
+  const el=document.getElementById('ls-date-tags');if(!el)return;
+  if(!lsDates.length){el.innerHTML='<div style="font-size:11px;color:var(--mu);">날짜를 추가하면 여기 표시돼요</div>';return;}
+  el.innerHTML=lsDates.map(d=>`<div style="display:flex;align-items:center;gap:5px;background:var(--gl);color:var(--gd);border:1.5px solid #C0E8D8;border-radius:99px;padding:5px 10px;font-size:12px;font-weight:600;">
+    ${d}
+    <div onclick="rmLsDate('${d}')" style="width:14px;height:14px;border-radius:50%;background:var(--rl);display:flex;align-items:center;justify-content:center;cursor:pointer;"><svg width="7" height="7" viewBox="0 0 7 7"><line x1="1" y1="1" x2="6" y2="6" stroke="#A32D2D" stroke-width="1.5"/><line x1="6" y1="1" x2="1" y2="6" stroke="#A32D2D" stroke-width="1.5"/></svg></div>
+  </div>`).join('');
 }
 
 function getLvTgtIds(){
@@ -3581,6 +3604,10 @@ async function openLsEdit(lid){
   if(document.getElementById('ls-expressions')&&l.key_expressions){
     try{const exps=JSON.parse(l.key_expressions);document.getElementById('ls-expressions').value=exps.map(e=>e.english+(e.korean?','+e.korean:'')).join('\n');}catch{}
   }
+  // 기존 수업 날짜 로드
+  const{data:schs}=await sb.from('lesson_schedules').select('lesson_date').eq('lesson_id',lid);
+  lsDates=[...new Set((schs||[]).map(s=>s.lesson_date))].sort();
+  renderLsDateTags();
   const titleEl=document.getElementById('ls-form-title');
   if(titleEl){titleEl.textContent=`"${l.title}" 수정`;titleEl.dataset.editId=lid;}
   document.getElementById('ls-form-btns').innerHTML=`
@@ -3592,6 +3619,7 @@ async function openLsEdit(lid){
 
 function cancelLsEdit(){
   ['lt','lu','ls-subtitles','ls-expressions','ls-guide'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  lsDates=[];renderLsDateTags();
   const titleEl=document.getElementById('ls-form-title');
   if(titleEl){titleEl.textContent='새 토픽 등록';delete titleEl.dataset.editId;}
   document.getElementById('ls-form-btns').innerHTML='<button class="btn btn-p" onclick="saveLesson()">토픽 등록</button>';
