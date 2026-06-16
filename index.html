@@ -160,6 +160,7 @@ select:focus{border-color:var(--g);}
 .empty{text-align:center;padding:40px var(--sp4);color:var(--mu);font-size:13px;line-height:2;font-weight:500;}
 .toast{position:fixed;bottom:84px;left:50%;transform:translateX(-50%) translateY(8px);background:#111827;color:#fff;padding:12px 24px;border-radius:var(--rpill);font-size:13px;font-weight:600;z-index:9999;opacity:0;transition:opacity .25s,transform .25s;pointer-events:none;white-space:nowrap;max-width:90vw;box-shadow:0 8px 24px rgba(0,0,0,.2);}
 .toast.on{opacity:1;transform:translateX(-50%) translateY(0);}
+@keyframes slideDown{from{opacity:0;transform:translateX(-50%) translateY(-12px);}to{opacity:1;transform:translateX(-50%) translateY(0);}}
 </style>
 </head>
 <script>
@@ -280,6 +281,8 @@ function doUpdate(){
       <div id="xp-bar-wrap"></div>
       <!-- 알림 -->
       <div id="home-notice"></div>
+      <!-- 푸시 알림 설정 -->
+      <div id="push-status-wrap" style="padding:0 14px 8px;"></div>
       <!-- 오늘 체크리스트 -->
       <div id="home-todo"></div>
       <!-- 달력 -->
@@ -697,6 +700,7 @@ function doUpdate(){
 const SU='https://hrmiyejhhzptwjzbrzvv.supabase.co';
 const SK='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhybWl5ZWpoaHpwdHdqemJyenZ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYyODIxMzcsImV4cCI6MjA5MTg1ODEzN30.yL9kiPLI3LibWyEJitPliS4HbyWrGdGYh4YZ0lqjTZQ';
 const sb=supabase.createClient(SU,SK);
+const VAPID_PUB='BPlxJBqxjUR4lkm90XJa4PofdQQJIqRBW1c7jVMOrDMW-7fJGNiOdrQRWQl0APEY2Jn3WRwaVT7n7OlTKNseR4Q';
 
 // ── UTILS ──
 function dispName(name, email){
@@ -824,6 +828,8 @@ async function initApp(u){
     loadProfilePhoto();
     buildHomeTodo();
     loadMyNotices();
+    startRealtimeMsgs();
+    checkPushStatus();
   }
 }
 
@@ -2904,6 +2910,93 @@ async function loadMyNotices(){
         </div>
       </div>`).join('');
   }catch(e){console.warn('알림 로드 실패',e);}
+}
+
+// ── 실시간 메시지 구독 (앱 내 팝업) ──
+let realtimeSub=null;
+function startRealtimeMsgs(){
+  if(realtimeSub||P?.role==='admin')return;
+  realtimeSub=sb.channel('my-messages')
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'messages',filter:`target_student_id=eq.${U.id}`},
+      payload=>{
+        showInAppPopup(payload.new);
+        loadMyNotices();
+      })
+    .subscribe();
+}
+function showInAppPopup(msg){
+  const existing=document.getElementById('msg-popup');
+  if(existing)existing.remove();
+  const pop=document.createElement('div');
+  pop.id='msg-popup';
+  pop.style.cssText='position:fixed;top:16px;left:50%;transform:translateX(-50%);width:calc(100% - 32px);max-width:440px;background:#1D9E75;color:#fff;border-radius:16px;padding:14px 16px;z-index:99999;box-shadow:0 8px 28px rgba(0,0,0,.25);display:flex;align-items:flex-start;gap:12px;animation:slideDown .3s ease;';
+  pop.innerHTML=`
+    <div style="font-size:20px;flex-shrink:0;">💬</div>
+    <div style="flex:1;min-width:0;">
+      <div style="font-size:12px;font-weight:700;opacity:.85;margin-bottom:3px;">선생님 메시지</div>
+      <div style="font-size:14px;font-weight:600;word-break:break-all;">${msg.content}</div>
+    </div>
+    <div onclick="document.getElementById('msg-popup').remove()" style="font-size:18px;opacity:.7;cursor:pointer;flex-shrink:0;padding:2px;">✕</div>`;
+  document.body.appendChild(pop);
+  // 6초 후 자동 사라짐
+  setTimeout(()=>{pop.style.opacity='0';pop.style.transition='opacity .4s';setTimeout(()=>pop.remove(),400);},6000);
+  // 읽음 처리
+  setTimeout(()=>markNoticeRead(msg.id),1000);
+}
+
+// ── 푸시 알림 ──
+function urlB64ToUint8Array(base64String){
+  const padding='='.repeat((4-base64String.length%4)%4);
+  const base64=(base64String+padding).replace(/-/g,'+').replace(/_/g,'/');
+  const rawData=window.atob(base64);
+  return Uint8Array.from([...rawData].map(c=>c.charCodeAt(0)));
+}
+async function requestPushPermission(){
+  if(!('Notification' in window)||!('serviceWorker' in navigator)||!('PushManager' in window)){
+    tst('이 기기는 푸시 알림을 지원하지 않아요');return;
+  }
+  const perm=await Notification.requestPermission();
+  if(perm!=='granted'){tst('알림이 차단됐어요. 브라우저 설정에서 허용해주세요');return;}
+  try{
+    const reg=await navigator.serviceWorker.ready;
+    const sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:urlB64ToUint8Array(VAPID_PUB)});
+    const subJson=sub.toJSON();
+    await sb.from('push_subscriptions').upsert({user_id:U.id,endpoint:subJson.endpoint,p256dh:subJson.keys.p256dh,auth:subJson.keys.auth},{onConflict:'user_id'});
+    tst('✅ 푸시 알림이 켜졌어요!');
+    document.getElementById('push-btn')?.remove();
+    renderPushStatus(true);
+  }catch(e){tst('알림 설정 실패: '+e.message);}
+}
+async function checkPushStatus(){
+  if(!('Notification' in window)||!('PushManager' in window))return;
+  const perm=Notification.permission;
+  const reg=await navigator.serviceWorker.ready.catch(()=>null);
+  const sub=reg?await reg.pushManager.getSubscription():null;
+  renderPushStatus(perm==='granted'&&!!sub);
+}
+function renderPushStatus(enabled){
+  const el=document.getElementById('push-status-wrap');
+  if(!el)return;
+  if(enabled){
+    el.innerHTML=`<div style="display:flex;align-items:center;gap:8px;padding:10px 13px;background:#E1F5EE;border-radius:11px;border:1.5px solid #C0E8D8;">
+      <div style="font-size:16px;">🔔</div>
+      <div style="font-size:13px;font-weight:600;color:var(--gd);">푸시 알림 켜짐</div>
+      <div style="flex:1;"></div>
+      <button onclick="disablePush()" style="font-size:11px;color:var(--mu);background:none;border:none;cursor:pointer;font-family:inherit;text-decoration:underline;">끄기</button>
+    </div>`;
+  } else {
+    el.innerHTML=`<button id="push-btn" onclick="requestPushPermission()" style="width:100%;padding:12px;border-radius:11px;background:linear-gradient(135deg,#534AB7,#3C3489);color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:8px;">
+      <span style="font-size:16px;">🔔</span> 푸시 알림 켜기
+    </button>`;
+  }
+}
+async function disablePush(){
+  const reg=await navigator.serviceWorker.ready.catch(()=>null);
+  const sub=reg?await reg.pushManager.getSubscription():null;
+  if(sub)await sub.unsubscribe();
+  await sb.from('push_subscriptions').delete().eq('user_id',U.id);
+  renderPushStatus(false);
+  tst('푸시 알림이 꺼졌어요');
 }
 
 async function markNoticeRead(mid){
