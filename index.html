@@ -2896,20 +2896,72 @@ async function sendNotify(targetStudentId,msg){
 async function loadMyNotices(){
   if(P?.role==='admin')return;
   try{
-    const{data,error}=await sb.from('messages').select('*').or(`target_student_id.eq.${U.id},and(target_student_id.is.null,target_class_id.is.null)`).order('created_at',{ascending:false}).limit(5);
+    const{data,error}=await sb.from('messages').select('*').eq('target_student_id',U.id).order('created_at',{ascending:false}).limit(50);
     if(error){console.warn('알림 로드 실패',error);return;}
-    const unread=(data||[]).filter(m=>!m.read);
-    const wrap=document.getElementById('home-notice');if(!wrap)return;
-    if(!unread.length){wrap.innerHTML='';return;}
-    wrap.innerHTML=unread.map(m=>`
-      <div style="background:linear-gradient(135deg,#FFF4E0,#FFE8C2);border:1.5px solid #FAC775;border-radius:13px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:flex-start;gap:10px;cursor:pointer;" onclick="markNoticeRead('${m.id}')">
-        <div style="font-size:18px;flex-shrink:0;">💬</div>
-        <div style="flex:1;min-width:0;">
-          <div style="font-size:13px;font-weight:600;color:#854F0B;word-break:break-all;">${m.content}</div>
-          <div style="font-size:10px;color:#A87B33;margin-top:3px;">${new Date(m.created_at).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})} · 탭하여 확인</div>
-        </div>
-      </div>`).join('');
+    const all=data||[];
+    const unread=all.filter(m=>!m.read);
+    // 홈 상단 뱃지 업데이트
+    const wrap=document.getElementById('home-notice');
+    if(wrap){
+      if(!unread.length){wrap.innerHTML='';}
+      else{
+        wrap.innerHTML=`<div style="padding:0 14px 8px;">
+          <button onclick="openMsgInbox()" style="width:100%;padding:12px 16px;border-radius:14px;background:linear-gradient(135deg,#FFB347,#E8940A);border:none;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:12px;box-shadow:0 4px 16px rgba(232,148,10,.3);">
+            <div style="width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.25);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px;">💬</div>
+            <div style="flex:1;text-align:left;">
+              <div style="font-size:13px;font-weight:800;color:#fff;">선생님 메시지 ${unread.length}개</div>
+              <div style="font-size:11px;color:rgba(255,255,255,.85);margin-top:2px;">탭해서 확인하세요</div>
+            </div>
+            <div style="font-size:11px;color:rgba(255,255,255,.8);font-weight:600;">보기 →</div>
+          </button>
+        </div>`;
+      }
+    }
+    // 캐시
+    window._allMsgs=all;
   }catch(e){console.warn('알림 로드 실패',e);}
+}
+
+function openMsgInbox(){
+  const all=window._allMsgs||[];
+  const pop=document.createElement('div');
+  pop.id='msg-inbox-pop';
+  pop.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9000;display:flex;align-items:flex-end;justify-content:center;';
+  const msgs=all.map(m=>{
+    const dt=new Date(m.created_at).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
+    const unread=!m.read;
+    return`<div style="padding:14px 16px;border-bottom:1px solid var(--brd);${unread?'background:#FFFBF0;':''}" onclick="markNoticeRead('${m.id}')">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+        ${unread?'<div style="width:8px;height:8px;border-radius:50%;background:#E8940A;flex-shrink:0;"></div>':'<div style="width:8px;height:8px;flex-shrink:0;"></div>'}
+        <div style="font-size:10px;color:var(--mu);">${dt}</div>
+        ${unread?'<span style="font-size:9px;font-weight:700;padding:2px 7px;border-radius:99px;background:#FEF3C7;color:#92400E;">새 메시지</span>':''}
+      </div>
+      <div style="font-size:14px;font-weight:600;color:var(--text);line-height:1.6;word-break:break-all;">${m.content}</div>
+    </div>`;
+  }).join('');
+  pop.innerHTML=`<div style="background:var(--bg);border-radius:24px 24px 0 0;width:100%;max-width:480px;max-height:80vh;display:flex;flex-direction:column;">
+    <div style="padding:16px 16px 12px;border-bottom:1px solid var(--brd);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+      <div style="font-size:17px;font-weight:800;">선생님 메시지 📬</div>
+      <button onclick="document.getElementById('msg-inbox-pop').remove()" style="width:32px;height:32px;border-radius:50%;background:var(--sf);border:none;cursor:pointer;font-size:16px;">✕</button>
+    </div>
+    <div style="overflow-y:auto;flex:1;">
+      ${msgs.length?msgs:'<div style="padding:40px;text-align:center;color:var(--mu);font-size:13px;">메시지가 없어요</div>'}
+    </div>
+    <div style="padding:12px 16px;flex-shrink:0;border-top:1px solid var(--brd);">
+      <button onclick="markAllRead()" style="width:100%;padding:11px;border-radius:11px;background:var(--sf);border:1.5px solid var(--brd);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;color:var(--text);">전체 읽음 처리</button>
+    </div>
+  </div>`;
+  document.body.appendChild(pop);
+  pop.addEventListener('click',e=>{if(e.target===pop)pop.remove();});
+}
+
+async function markAllRead(){
+  const unread=(window._allMsgs||[]).filter(m=>!m.read);
+  if(!unread.length){tst('모두 읽었어요');return;}
+  await Promise.all(unread.map(m=>sb.from('messages').update({read:true}).eq('id',m.id)));
+  tst('전체 읽음 처리됐어요');
+  document.getElementById('msg-inbox-pop')?.remove();
+  loadMyNotices();
 }
 
 // ── 실시간 메시지 구독 (앱 내 팝업) ──
@@ -2925,23 +2977,28 @@ function startRealtimeMsgs(){
     .subscribe();
 }
 function showInAppPopup(msg){
-  const existing=document.getElementById('msg-popup');
+  const existing=document.getElementById('msg-modal');
   if(existing)existing.remove();
   const pop=document.createElement('div');
-  pop.id='msg-popup';
-  pop.style.cssText='position:fixed;top:16px;left:50%;transform:translateX(-50%);width:calc(100% - 32px);max-width:440px;background:#1D9E75;color:#fff;border-radius:16px;padding:14px 16px;z-index:99999;box-shadow:0 8px 28px rgba(0,0,0,.25);display:flex;align-items:flex-start;gap:12px;animation:slideDown .3s ease;';
-  pop.innerHTML=`
-    <div style="font-size:20px;flex-shrink:0;">💬</div>
-    <div style="flex:1;min-width:0;">
-      <div style="font-size:12px;font-weight:700;opacity:.85;margin-bottom:3px;">선생님 메시지</div>
-      <div style="font-size:14px;font-weight:600;word-break:break-all;">${msg.content}</div>
+  pop.id='msg-modal';
+  pop.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:99999;display:flex;align-items:center;justify-content:center;padding:24px;';
+  const dt=new Date(msg.created_at).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
+  pop.innerHTML=`<div style="background:var(--bg);border-radius:24px;width:100%;max-width:420px;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.4);">
+    <div style="background:linear-gradient(135deg,#1D9E75,#159468);padding:20px 20px 24px;">
+      <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.7);margin-bottom:6px;">선생님 메시지</div>
+      <div style="font-size:13px;color:rgba(255,255,255,.6);">${dt}</div>
     </div>
-    <div onclick="document.getElementById('msg-popup').remove()" style="font-size:18px;opacity:.7;cursor:pointer;flex-shrink:0;padding:2px;">✕</div>`;
+    <div style="padding:24px 20px 20px;">
+      <div style="font-size:18px;font-weight:700;color:var(--text);line-height:1.7;word-break:break-all;margin-bottom:24px;">${msg.content}</div>
+      <button onclick="closeMsgModal('${msg.id}')" style="width:100%;padding:14px;border-radius:14px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;">확인했어요</button>
+      <button onclick="openMsgInbox()" style="width:100%;margin-top:8px;padding:11px;border-radius:12px;background:var(--sf);border:1.5px solid var(--brd);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;color:var(--text);">전체 메시지 보기</button>
+    </div>
+  </div>`;
   document.body.appendChild(pop);
-  // 6초 후 자동 사라짐
-  setTimeout(()=>{pop.style.opacity='0';pop.style.transition='opacity .4s';setTimeout(()=>pop.remove(),400);},6000);
-  // 읽음 처리
-  setTimeout(()=>markNoticeRead(msg.id),1000);
+}
+function closeMsgModal(mid){
+  document.getElementById('msg-modal')?.remove();
+  markNoticeRead(mid);
 }
 
 // ── 푸시 알림 ──
@@ -3001,7 +3058,12 @@ async function disablePush(){
 
 async function markNoticeRead(mid){
   await sb.from('messages').update({read:true}).eq('id',mid);
-  loadMyNotices();
+  await loadMyNotices();
+  // inbox 팝업이 열려있으면 새로고침
+  if(document.getElementById('msg-inbox-pop')){
+    document.getElementById('msg-inbox-pop').remove();
+    openMsgInbox();
+  }
 }
 
 // ── 리뷰 새로고침 ──

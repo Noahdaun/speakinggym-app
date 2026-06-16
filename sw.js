@@ -1,4 +1,4 @@
-const VERSION = "sg-v36";
+const VERSION = "sg-v37";
 const CACHE = `speakinggym-${VERSION}`;
 const ASSETS = [
   '/speakinggym-app/',
