@@ -240,6 +240,18 @@ function doUpdate(){
     <button class="btn btn-p" onclick="doLogin()">로그인</button>
     <button class="btn btn-o" onclick="goSignup()">처음이에요 — 가입하기</button>
     <div id="lerr" class="err"></div>
+    <div style="text-align:center;margin-top:10px;">
+      <span onclick="goForgot()" style="font-size:13px;color:var(--mu);cursor:pointer;text-decoration:underline;">비밀번호를 잊으셨나요?</span>
+    </div>
+  </div>
+  <!-- 비밀번호 찾기 화면 -->
+  <div class="lbx" id="fpbox" style="display:none;">
+    <div class="logo-wrap"><h1>Speaking Gym</h1><p>비밀번호 재설정</p></div>
+    <div style="font-size:13px;color:var(--mu);margin-bottom:14px;text-align:center;line-height:1.7;">가입한 이메일을 입력하면<br>재설정 링크를 보내드려요</div>
+    <input class="inp" type="email" id="fpe" placeholder="이메일">
+    <button class="btn btn-p" onclick="doForgot()">재설정 링크 보내기</button>
+    <button class="btn btn-o" style="margin-top:8px;" onclick="goLogin()">로그인으로 돌아가기</button>
+    <div id="fperr" class="err"></div>
   </div>
   <div class="lbx" id="subox" style="display:none;">
     <div class="logo-wrap"><h1>Speaking Gym</h1><p>계정 만들기</p></div>
@@ -709,14 +721,28 @@ let lsClsState={},editLessonId=null;
 let selSignupCls='';
 
 // ── AUTH ──
+function goForgot(){
+  document.getElementById('lbox').style.display='none';
+  document.getElementById('fpbox').style.display='block';
+  document.getElementById('fperr').textContent='';
+}
+function goLogin(){
+  document.getElementById('subox').style.display='none';
+  document.getElementById('fpbox').style.display='none';
+  document.getElementById('lbox').style.display='block';
+}
+async function doForgot(){
+  const e=document.getElementById('fpe').value.trim();
+  const er=document.getElementById('fperr');er.textContent='';er.style.color='#E24B4A';
+  if(!e){er.textContent='이메일을 입력해주세요';return;}
+  const{error}=await sb.auth.resetPasswordForEmail(e,{redirectTo:'https://noahdaun.github.io/speakinggym-app/'});
+  if(error){er.textContent='오류: '+error.message;return;}
+  er.style.color='var(--g)';er.textContent='재설정 링크를 보냈어요! 이메일을 확인해주세요 ✉️';
+}
 function goSignup(){
   document.getElementById('lbox').style.display='none';
   document.getElementById('subox').style.display='block';
   loadSignupClasses();
-}
-function goLogin(){
-  document.getElementById('subox').style.display='none';
-  document.getElementById('lbox').style.display='block';
 }
 async function loadSignupClasses(){
   const{data}=await sb.from('classes').select('name').order('name');
@@ -2078,7 +2104,7 @@ function renderMissingAlert(doneSet, cls='all'){
   alertDiv.innerHTML=`<div style="background:#FFF8F0;border-radius:11px;padding:11px 13px;border:1.5px solid #FAC775;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;">
       <div style="font-size:12px;font-weight:700;color:var(--amd);">⚠️ 미완료 학생 ${missing.length}명</div>
-      <div onclick="openNotify(null)" style="font-size:11px;color:#854F0B;background:var(--aml);padding:4px 10px;border-radius:8px;cursor:pointer;font-weight:600;">전체 알림</div>
+      <div onclick="openNotifyAll()" style="font-size:11px;color:#854F0B;background:var(--aml);padding:4px 10px;border-radius:8px;cursor:pointer;font-weight:600;">전체 알림</div>
     </div>
     <div style="display:flex;gap:5px;flex-wrap:wrap;">
       ${missing.map(s=>`<div style="background:#fff;border-radius:99px;padding:4px 11px;font-size:11px;border:1px solid #FAC775;display:flex;align-items:center;gap:5px;">
@@ -2188,7 +2214,7 @@ function sAdCls(cls,btn){
         alertDiv.innerHTML=`<div style="background:#FFF8F0;border-radius:11px;padding:11px 13px;border:1.5px solid #FAC775;">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;">
             <div style="font-size:12px;font-weight:700;color:var(--amd);">⚠️ 미완료 학생 ${missing.length}명</div>
-            <div onclick="openNotify(null)" style="font-size:11px;color:#854F0B;background:var(--aml);padding:4px 10px;border-radius:8px;cursor:pointer;font-weight:600;">전체 알림</div>
+            <div onclick="openNotifyAll()" style="font-size:11px;color:#854F0B;background:var(--aml);padding:4px 10px;border-radius:8px;cursor:pointer;font-weight:600;">전체 알림</div>
           </div>
           <div style="display:flex;gap:5px;flex-wrap:wrap;">
             ${missing.map(s=>`<div style="background:#fff;border-radius:99px;padding:4px 11px;font-size:11px;border:1px solid #FAC775;display:flex;align-items:center;gap:5px;">
@@ -2803,6 +2829,34 @@ async function delStudent(sid,name,e){
 }
 
 // ── 알림 ──
+async function openNotifyAll(){
+  const pop=document.createElement('div');
+  pop.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9000;display:flex;align-items:flex-end;justify-content:center;';
+  pop.innerHTML=`<div style="background:var(--bg);border-radius:20px 20px 0 0;width:100%;max-width:480px;padding:16px 14px 30px;">
+    <div style="font-size:15px;font-weight:800;margin-bottom:4px;">전체 메시지 보내기</div>
+    <div style="font-size:12px;color:var(--mu);margin-bottom:12px;">미완료 학생 전원에게 발송됩니다</div>
+    <textarea id="notify-all-msg" class="inp" placeholder="메시지 입력..." style="height:80px;margin-bottom:12px;"></textarea>
+    <button onclick="sendNotifyAll()" style="width:100%;padding:13px;border-radius:12px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;">전체 발송</button>
+    <button onclick="this.closest('div[style*=fixed]').remove()" style="width:100%;margin-top:8px;padding:11px;border-radius:12px;background:var(--sf);border:1.5px solid var(--brd);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">취소</button>
+  </div>`;
+  document.body.appendChild(pop);
+  pop.addEventListener('click',e=>{if(e.target===pop)pop.remove();});
+}
+async function sendNotifyAll(){
+  const msg=document.getElementById('notify-all-msg')?.value?.trim();
+  if(!msg){tst('메시지를 입력해주세요');return;}
+  // 미완료 학생들을 찾아서 개별 발송
+  const td=new Date().toISOString().slice(0,10);
+  const{data:lg}=await sb.from('review_logs').select('student_id').eq('completed',true).gte('completed_at',td);
+  const doneSet=new Set((lg||[]).map(l=>l.student_id));
+  const missing=sts.filter(s=>s.class_name&&!doneSet.has(s.id));
+  if(!missing.length){tst('미완료 학생이 없어요');document.querySelector('div[style*="position:fixed"][style*="9000"]')?.remove();return;}
+  const inserts=missing.map(s=>({sender_id:U.id,academy_id:AID,target_student_id:s.id,content:msg,read:false}));
+  const{error}=await sb.from('messages').insert(inserts);
+  if(error){tst('전송 실패: '+error.message);return;}
+  document.querySelector('div[style*="position:fixed"][style*="9000"]')?.remove();
+  tst(`${missing.length}명에게 메시지를 보냈어요!`);
+}
 function openNotify(sid){
   const pop=document.createElement('div');
   pop.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9000;display:flex;align-items:flex-end;justify-content:center;';
