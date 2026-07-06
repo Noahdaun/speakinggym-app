@@ -160,7 +160,6 @@ select:focus{border-color:var(--g);}
 .empty{text-align:center;padding:40px var(--sp4);color:var(--mu);font-size:13px;line-height:2;font-weight:500;}
 .toast{position:fixed;bottom:84px;left:50%;transform:translateX(-50%) translateY(8px);background:#111827;color:#fff;padding:12px 24px;border-radius:var(--rpill);font-size:13px;font-weight:600;z-index:9999;opacity:0;transition:opacity .25s,transform .25s;pointer-events:none;white-space:nowrap;max-width:90vw;box-shadow:0 8px 24px rgba(0,0,0,.2);}
 .toast.on{opacity:1;transform:translateX(-50%) translateY(0);}
-@keyframes slideDown{from{opacity:0;transform:translateX(-50%) translateY(-12px);}to{opacity:1;transform:translateX(-50%) translateY(0);}}
 </style>
 </head>
 <script>
@@ -241,18 +240,6 @@ function doUpdate(){
     <button class="btn btn-p" onclick="doLogin()">로그인</button>
     <button class="btn btn-o" onclick="goSignup()">처음이에요 — 가입하기</button>
     <div id="lerr" class="err"></div>
-    <div style="text-align:center;margin-top:10px;">
-      <span onclick="goForgot()" style="font-size:13px;color:var(--mu);cursor:pointer;text-decoration:underline;">비밀번호를 잊으셨나요?</span>
-    </div>
-  </div>
-  <!-- 비밀번호 찾기 화면 -->
-  <div class="lbx" id="fpbox" style="display:none;">
-    <div class="logo-wrap"><h1>Speaking Gym</h1><p>비밀번호 재설정</p></div>
-    <div style="font-size:13px;color:var(--mu);margin-bottom:14px;text-align:center;line-height:1.7;">가입한 이메일을 입력하면<br>재설정 링크를 보내드려요</div>
-    <input class="inp" type="email" id="fpe" placeholder="이메일">
-    <button class="btn btn-p" onclick="doForgot()">재설정 링크 보내기</button>
-    <button class="btn btn-o" style="margin-top:8px;" onclick="goLogin()">로그인으로 돌아가기</button>
-    <div id="fperr" class="err"></div>
   </div>
   <div class="lbx" id="subox" style="display:none;">
     <div class="logo-wrap"><h1>Speaking Gym</h1><p>계정 만들기</p></div>
@@ -281,8 +268,6 @@ function doUpdate(){
       <div id="xp-bar-wrap"></div>
       <!-- 알림 -->
       <div id="home-notice"></div>
-      <!-- 푸시 알림 설정 -->
-      <div id="push-status-wrap" style="padding:0 14px 8px;"></div>
       <!-- 오늘 체크리스트 -->
       <div id="home-todo"></div>
       <!-- 달력 -->
@@ -514,6 +499,60 @@ function doUpdate(){
       </div>
     </div>
 
+    <!-- ONLINE -->
+    <div id="pol" class="pg">
+      <div style="padding:14px 14px 0;">
+        <div style="font-size:22px;font-weight:800;letter-spacing:-.5px;margin-bottom:4px;">온라인 강의 🎬</div>
+        <div style="font-size:12px;color:var(--mu);margin-bottom:14px;">강의 관리 · 수강생 관리 · 결제 내역</div>
+      </div>
+      <div class="tbb" style="margin:0 14px 14px;">
+        <button class="tbn on" onclick="olTab('course',this)">강의관리</button>
+        <button class="tbn" onclick="olTab('sub',this)">수강생</button>
+        <button class="tbn" onclick="olTab('pay',this)">결제내역</button>
+      </div>
+
+      <!-- 강의관리 탭 -->
+      <div id="ol-course" style="padding:0 14px;">
+        <!-- 새 강의 만들기 -->
+        <div class="card" style="margin-bottom:12px;">
+          <div style="font-size:13px;font-weight:700;margin-bottom:10px;">📦 새 강의 만들기</div>
+          <input class="inp" type="text" id="ol-title" placeholder="강의 제목 (예: 7월 온라인 강의)">
+          <input class="inp" type="month" id="ol-month" style="margin-bottom:8px;">
+          <input class="inp" type="number" id="ol-price" placeholder="수강료 (원)" min="0">
+          <textarea id="ol-desc" style="height:60px;margin-bottom:8px;" placeholder="강의 설명 (선택)"></textarea>
+          <button onclick="saveOnlineCourse()" style="width:100%;padding:12px;border-radius:11px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">강의 만들기</button>
+        </div>
+        <!-- 강의 목록 -->
+        <div class="sec">등록된 강의</div>
+        <div id="ol-course-list"><div class="loading">로딩중...</div></div>
+      </div>
+
+      <!-- 수강생 탭 -->
+      <div id="ol-sub" style="display:none;padding:0 14px;">
+        <div class="card" style="margin-bottom:12px;">
+          <div style="font-size:13px;font-weight:700;margin-bottom:10px;">🎫 수강권 열어주기</div>
+          <div style="font-size:12px;font-weight:600;margin-bottom:6px;">강의 선택</div>
+          <select id="ol-sub-course" style="margin-bottom:8px;"><option value="">강의를 선택하세요</option></select>
+          <div style="font-size:12px;font-weight:600;margin-bottom:6px;">학생 선택</div>
+          <select id="ol-sub-student" style="margin-bottom:8px;"><option value="">학생을 선택하세요</option></select>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+            <div><div style="font-size:11px;color:var(--mu);margin-bottom:4px;">시작일</div><input type="date" id="ol-sub-start" style="width:100%;padding:10px;border:1.5px solid var(--brd);border-radius:var(--rs);font-size:12px;background:var(--sf);font-family:inherit;"></div>
+            <div><div style="font-size:11px;color:var(--mu);margin-bottom:4px;">만료일</div><input type="date" id="ol-sub-end" style="width:100%;padding:10px;border:1.5px solid var(--brd);border-radius:var(--rs);font-size:12px;background:var(--sf);font-family:inherit;"></div>
+          </div>
+          <input class="inp" type="text" id="ol-sub-memo" placeholder="결제 메모 (예: 토스 이체 확인)" style="margin-bottom:8px;">
+          <button onclick="grantSubscription()" style="width:100%;padding:12px;border-radius:11px;background:linear-gradient(135deg,#534AB7,#3C3489);color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">수강권 열어주기</button>
+        </div>
+        <div class="sec">수강 현황</div>
+        <div id="ol-sub-list"><div class="loading">로딩중...</div></div>
+      </div>
+
+      <!-- 결제내역 탭 -->
+      <div id="ol-pay" style="display:none;padding:0 14px;">
+        <div class="sec">결제 내역</div>
+        <div id="ol-pay-list"><div class="loading">로딩중...</div></div>
+      </div>
+    </div>
+
     <!-- ADMIN -->
     <div id="pad" class="pg">
       <div class="tbb" style="font-size:10px;">
@@ -700,7 +739,6 @@ function doUpdate(){
 const SU='https://hrmiyejhhzptwjzbrzvv.supabase.co';
 const SK='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhybWl5ZWpoaHpwdHdqemJyenZ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYyODIxMzcsImV4cCI6MjA5MTg1ODEzN30.yL9kiPLI3LibWyEJitPliS4HbyWrGdGYh4YZ0lqjTZQ';
 const sb=supabase.createClient(SU,SK);
-const VAPID_PUB='BPlxJBqxjUR4lkm90XJa4PofdQQJIqRBW1c7jVMOrDMW-7fJGNiOdrQRWQl0APEY2Jn3WRwaVT7n7OlTKNseR4Q';
 
 // ── UTILS ──
 function dispName(name, email){
@@ -714,7 +752,7 @@ function dispInitial(name, email){
 }
 
 
-let U=null,P=null,AID=null,cY,cM;
+let U=null,P=null,cY,cM;
 let aMap={},rMap={};// 달력용
 let vc=[],tv=[],ci=0,fl=false,doneToday=0;
 let les=[],sts=[],classes=[];
@@ -725,28 +763,14 @@ let lsClsState={},editLessonId=null;
 let selSignupCls='';
 
 // ── AUTH ──
-function goForgot(){
-  document.getElementById('lbox').style.display='none';
-  document.getElementById('fpbox').style.display='block';
-  document.getElementById('fperr').textContent='';
-}
-function goLogin(){
-  document.getElementById('subox').style.display='none';
-  document.getElementById('fpbox').style.display='none';
-  document.getElementById('lbox').style.display='block';
-}
-async function doForgot(){
-  const e=document.getElementById('fpe').value.trim();
-  const er=document.getElementById('fperr');er.textContent='';er.style.color='#E24B4A';
-  if(!e){er.textContent='이메일을 입력해주세요';return;}
-  const{error}=await sb.auth.resetPasswordForEmail(e,{redirectTo:'https://noahdaun.github.io/speakinggym-app/'});
-  if(error){er.textContent='오류: '+error.message;return;}
-  er.style.color='var(--g)';er.textContent='재설정 링크를 보냈어요! 이메일을 확인해주세요 ✉️';
-}
 function goSignup(){
   document.getElementById('lbox').style.display='none';
   document.getElementById('subox').style.display='block';
   loadSignupClasses();
+}
+function goLogin(){
+  document.getElementById('subox').style.display='none';
+  document.getElementById('lbox').style.display='block';
 }
 async function loadSignupClasses(){
   const{data}=await sb.from('classes').select('name').order('name');
@@ -799,20 +823,12 @@ async function initApp(u){
   document.getElementById('uav').title=dispName(P?.name,u.email);
   document.getElementById('ls').classList.remove('on');
   document.getElementById('as').classList.add('on');
-  // academy_id 확보 (메시지 발송 RLS용)
-  try{
-    if(P?.role==='admin'){
-      const{data:ac}=await sb.from('academies').select('id').eq('owner_id',u.id).maybeSingle();
-      AID=ac?.id||null;
-    }else{
-      const{data:am}=await sb.from('academy_members').select('academy_id').eq('user_id',u.id).maybeSingle();
-      AID=am?.academy_id||null;
-    }
-  }catch(e){console.warn('academy_id 로드 실패',e);}
   const n=new Date();cY=n.getFullYear();cM=n.getMonth();
   if(P?.role==='admin'){
     document.getElementById('bnav').insertAdjacentHTML('beforeend',
       `<button class="bni" onclick="gp('admin')"><svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="7" r="3" stroke="#1D9E75" stroke-width="1.6"/><path d="M4 17c0-3.314 2.686-6 6-6s6 2.686 6 6" stroke="#1D9E75" stroke-width="1.6" stroke-linecap="round"/></svg><span>관리</span></button>`);
+    document.getElementById('bnav').insertAdjacentHTML('beforeend',
+      `<button class="bni" onclick="gp('online')"><svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="2" y="4" width="16" height="11" rx="2" stroke="#1D9E75" stroke-width="1.6"/><path d="M8 9l4 2.5L8 14V9z" fill="#1D9E75"/><line x1="6" y1="17" x2="14" y2="17" stroke="#1D9E75" stroke-width="1.6" stroke-linecap="round"/></svg><span>온라인</span></button>`);
     await loadClasses();
     await loadStudents();
     await lAdm();
@@ -828,8 +844,6 @@ async function initApp(u){
     loadProfilePhoto();
     buildHomeTodo();
     loadMyNotices();
-    startRealtimeMsgs();
-    checkPushStatus();
   }
 }
 
@@ -2110,7 +2124,7 @@ function renderMissingAlert(doneSet, cls='all'){
   alertDiv.innerHTML=`<div style="background:#FFF8F0;border-radius:11px;padding:11px 13px;border:1.5px solid #FAC775;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;">
       <div style="font-size:12px;font-weight:700;color:var(--amd);">⚠️ 미완료 학생 ${missing.length}명</div>
-      <div onclick="openNotifyAll()" style="font-size:11px;color:#854F0B;background:var(--aml);padding:4px 10px;border-radius:8px;cursor:pointer;font-weight:600;">전체 알림</div>
+      <div onclick="openNotify(null)" style="font-size:11px;color:#854F0B;background:var(--aml);padding:4px 10px;border-radius:8px;cursor:pointer;font-weight:600;">전체 알림</div>
     </div>
     <div style="display:flex;gap:5px;flex-wrap:wrap;">
       ${missing.map(s=>`<div style="background:#fff;border-radius:99px;padding:4px 11px;font-size:11px;border:1px solid #FAC775;display:flex;align-items:center;gap:5px;">
@@ -2220,7 +2234,7 @@ function sAdCls(cls,btn){
         alertDiv.innerHTML=`<div style="background:#FFF8F0;border-radius:11px;padding:11px 13px;border:1.5px solid #FAC775;">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;">
             <div style="font-size:12px;font-weight:700;color:var(--amd);">⚠️ 미완료 학생 ${missing.length}명</div>
-            <div onclick="openNotifyAll()" style="font-size:11px;color:#854F0B;background:var(--aml);padding:4px 10px;border-radius:8px;cursor:pointer;font-weight:600;">전체 알림</div>
+            <div onclick="openNotify(null)" style="font-size:11px;color:#854F0B;background:var(--aml);padding:4px 10px;border-radius:8px;cursor:pointer;font-weight:600;">전체 알림</div>
           </div>
           <div style="display:flex;gap:5px;flex-wrap:wrap;">
             ${missing.map(s=>`<div style="background:#fff;border-radius:99px;padding:4px 11px;font-size:11px;border:1px solid #FAC775;display:flex;align-items:center;gap:5px;">
@@ -2835,34 +2849,6 @@ async function delStudent(sid,name,e){
 }
 
 // ── 알림 ──
-async function openNotifyAll(){
-  const pop=document.createElement('div');
-  pop.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9000;display:flex;align-items:flex-end;justify-content:center;';
-  pop.innerHTML=`<div style="background:var(--bg);border-radius:20px 20px 0 0;width:100%;max-width:480px;padding:16px 14px 30px;">
-    <div style="font-size:15px;font-weight:800;margin-bottom:4px;">전체 메시지 보내기</div>
-    <div style="font-size:12px;color:var(--mu);margin-bottom:12px;">미완료 학생 전원에게 발송됩니다</div>
-    <textarea id="notify-all-msg" class="inp" placeholder="메시지 입력..." style="height:80px;margin-bottom:12px;"></textarea>
-    <button onclick="sendNotifyAll()" style="width:100%;padding:13px;border-radius:12px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;">전체 발송</button>
-    <button onclick="this.closest('div[style*=fixed]').remove()" style="width:100%;margin-top:8px;padding:11px;border-radius:12px;background:var(--sf);border:1.5px solid var(--brd);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">취소</button>
-  </div>`;
-  document.body.appendChild(pop);
-  pop.addEventListener('click',e=>{if(e.target===pop)pop.remove();});
-}
-async function sendNotifyAll(){
-  const msg=document.getElementById('notify-all-msg')?.value?.trim();
-  if(!msg){tst('메시지를 입력해주세요');return;}
-  // 미완료 학생들을 찾아서 개별 발송
-  const td=new Date().toISOString().slice(0,10);
-  const{data:lg}=await sb.from('review_logs').select('student_id').eq('completed',true).gte('completed_at',td);
-  const doneSet=new Set((lg||[]).map(l=>l.student_id));
-  const missing=sts.filter(s=>s.class_name&&!doneSet.has(s.id));
-  if(!missing.length){tst('미완료 학생이 없어요');document.querySelector('div[style*="position:fixed"][style*="9000"]')?.remove();return;}
-  const inserts=missing.map(s=>({sender_id:U.id,academy_id:AID,target_student_id:s.id,content:msg,read:false}));
-  const{error}=await sb.from('messages').insert(inserts);
-  if(error){tst('전송 실패: '+error.message);return;}
-  document.querySelector('div[style*="position:fixed"][style*="9000"]')?.remove();
-  tst(`${missing.length}명에게 메시지를 보냈어요!`);
-}
 function openNotify(sid){
   const pop=document.createElement('div');
   pop.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9000;display:flex;align-items:flex-end;justify-content:center;';
@@ -2886,7 +2872,7 @@ function renderSDNotify(stuList){
 
 async function sendNotify(targetStudentId,msg){
   if(!msg?.trim()){tst('메시지를 입력해주세요');return;}
-  const{error}=await sb.from('messages').insert({sender_id:U.id,academy_id:AID,target_student_id:targetStudentId||null,content:msg.trim(),read:false});
+  const{error}=await sb.from('messages').insert({sender_id:U.id,target_student_id:targetStudentId||null,content:msg.trim(),read:false});
   if(error){tst('전송 실패: '+error.message);return;}
   document.querySelector('div[style*="position:fixed"][style*="9000"]')?.remove();
   tst('메시지를 보냈어요!');
@@ -2896,176 +2882,25 @@ async function sendNotify(targetStudentId,msg){
 async function loadMyNotices(){
   if(P?.role==='admin')return;
   try{
-    const{data,error}=await sb.from('messages').select('*').eq('target_student_id',U.id).order('created_at',{ascending:false}).limit(50);
+    const{data,error}=await sb.from('messages').select('*').or(`target_student_id.eq.${U.id},and(target_student_id.is.null,target_class_id.is.null)`).order('created_at',{ascending:false}).limit(5);
     if(error){console.warn('알림 로드 실패',error);return;}
-    const all=data||[];
-    const unread=all.filter(m=>!m.read);
-    // 홈 상단 뱃지 업데이트
-    const wrap=document.getElementById('home-notice');
-    if(wrap){
-      if(!all.length){wrap.innerHTML='';}
-      else{
-        const unreadCount=unread.length;
-        wrap.innerHTML=`<div style="padding:0 14px 8px;">
-          <button onclick="openMsgInbox()" style="width:100%;padding:12px 16px;border-radius:14px;background:${unreadCount>0?'linear-gradient(135deg,#FFB347,#E8940A)':'linear-gradient(135deg,#4B5563,#374151)'};border:none;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:12px;box-shadow:0 4px 16px rgba(0,0,0,.15);">
-            <div style="width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px;">💬</div>
-            <div style="flex:1;text-align:left;">
-              <div style="font-size:13px;font-weight:800;color:#fff;">선생님 메시지함</div>
-              <div style="font-size:11px;color:rgba(255,255,255,.85);margin-top:2px;">${unreadCount>0?`새 메시지 ${unreadCount}개`:`전체 ${all.length}개 · 모두 읽음`}</div>
-            </div>
-            <div style="font-size:11px;color:rgba(255,255,255,.8);font-weight:600;">보기 →</div>
-          </button>
-        </div>`;
-      }
-    }
-    // 캐시
-    window._allMsgs=all;
+    const unread=(data||[]).filter(m=>!m.read);
+    const wrap=document.getElementById('home-notice');if(!wrap)return;
+    if(!unread.length){wrap.innerHTML='';return;}
+    wrap.innerHTML=unread.map(m=>`
+      <div style="background:linear-gradient(135deg,#FFF4E0,#FFE8C2);border:1.5px solid #FAC775;border-radius:13px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:flex-start;gap:10px;cursor:pointer;" onclick="markNoticeRead('${m.id}')">
+        <div style="font-size:18px;flex-shrink:0;">💬</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:13px;font-weight:600;color:#854F0B;word-break:break-all;">${m.content}</div>
+          <div style="font-size:10px;color:#A87B33;margin-top:3px;">${new Date(m.created_at).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})} · 탭하여 확인</div>
+        </div>
+      </div>`).join('');
   }catch(e){console.warn('알림 로드 실패',e);}
-}
-
-function openMsgInbox(){
-  const all=window._allMsgs||[];
-  const pop=document.createElement('div');
-  pop.id='msg-inbox-pop';
-  pop.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9000;display:flex;align-items:flex-end;justify-content:center;';
-  const msgs=all.map(m=>{
-    const dt=new Date(m.created_at).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
-    const unread=!m.read;
-    return`<div style="padding:14px 16px;border-bottom:1px solid var(--brd);${unread?'background:#FFFBF0;':''}" onclick="markNoticeRead('${m.id}')">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-        ${unread?'<div style="width:8px;height:8px;border-radius:50%;background:#E8940A;flex-shrink:0;"></div>':'<div style="width:8px;height:8px;flex-shrink:0;"></div>'}
-        <div style="font-size:10px;color:var(--mu);">${dt}</div>
-        ${unread?'<span style="font-size:9px;font-weight:700;padding:2px 7px;border-radius:99px;background:#FEF3C7;color:#92400E;">새 메시지</span>':''}
-      </div>
-      <div style="font-size:14px;font-weight:600;color:var(--text);line-height:1.6;word-break:break-all;">${m.content}</div>
-    </div>`;
-  }).join('');
-  pop.innerHTML=`<div style="background:var(--bg);border-radius:24px 24px 0 0;width:100%;max-width:480px;max-height:80vh;display:flex;flex-direction:column;">
-    <div style="padding:16px 16px 12px;border-bottom:1px solid var(--brd);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
-      <div style="font-size:17px;font-weight:800;">선생님 메시지 📬</div>
-      <button onclick="document.getElementById('msg-inbox-pop').remove()" style="width:32px;height:32px;border-radius:50%;background:var(--sf);border:none;cursor:pointer;font-size:16px;">✕</button>
-    </div>
-    <div style="overflow-y:auto;flex:1;">
-      ${msgs.length?msgs:'<div style="padding:40px;text-align:center;color:var(--mu);font-size:13px;">메시지가 없어요</div>'}
-    </div>
-    <div style="padding:12px 16px;flex-shrink:0;border-top:1px solid var(--brd);">
-      <button onclick="markAllRead()" style="width:100%;padding:11px;border-radius:11px;background:var(--sf);border:1.5px solid var(--brd);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;color:var(--text);">전체 읽음 처리</button>
-    </div>
-  </div>`;
-  document.body.appendChild(pop);
-  pop.addEventListener('click',e=>{if(e.target===pop)pop.remove();});
-}
-
-async function markAllRead(){
-  const unread=(window._allMsgs||[]).filter(m=>!m.read);
-  if(!unread.length){tst('모두 읽었어요');return;}
-  await Promise.all(unread.map(m=>sb.from('messages').update({read:true}).eq('id',m.id)));
-  tst('전체 읽음 처리됐어요');
-  await loadMyNotices();
-  document.getElementById('msg-inbox-pop')?.remove();
-  openMsgInbox();
-}
-
-// ── 실시간 메시지 구독 (앱 내 팝업) ──
-let realtimeSub=null;
-function startRealtimeMsgs(){
-  if(realtimeSub||P?.role==='admin')return;
-  realtimeSub=sb.channel('my-messages')
-    .on('postgres_changes',{event:'INSERT',schema:'public',table:'messages',filter:`target_student_id=eq.${U.id}`},
-      payload=>{
-        showInAppPopup(payload.new);
-        loadMyNotices();
-      })
-    .subscribe();
-}
-function showInAppPopup(msg){
-  const existing=document.getElementById('msg-modal');
-  if(existing)existing.remove();
-  const pop=document.createElement('div');
-  pop.id='msg-modal';
-  pop.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:99999;display:flex;align-items:center;justify-content:center;padding:24px;';
-  const dt=new Date(msg.created_at).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
-  pop.innerHTML=`<div style="background:var(--bg);border-radius:24px;width:100%;max-width:420px;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.4);">
-    <div style="background:linear-gradient(135deg,#1D9E75,#159468);padding:20px 20px 24px;">
-      <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,.7);margin-bottom:6px;">선생님 메시지</div>
-      <div style="font-size:13px;color:rgba(255,255,255,.6);">${dt}</div>
-    </div>
-    <div style="padding:24px 20px 20px;">
-      <div style="font-size:18px;font-weight:700;color:var(--text);line-height:1.7;word-break:break-all;margin-bottom:24px;">${msg.content}</div>
-      <button onclick="closeMsgModal('${msg.id}')" style="width:100%;padding:14px;border-radius:14px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;">확인했어요</button>
-      <button onclick="openMsgInbox()" style="width:100%;margin-top:8px;padding:11px;border-radius:12px;background:var(--sf);border:1.5px solid var(--brd);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;color:var(--text);">전체 메시지 보기</button>
-    </div>
-  </div>`;
-  document.body.appendChild(pop);
-}
-function closeMsgModal(mid){
-  document.getElementById('msg-modal')?.remove();
-  markNoticeRead(mid);
-}
-
-// ── 푸시 알림 ──
-function urlB64ToUint8Array(base64String){
-  const padding='='.repeat((4-base64String.length%4)%4);
-  const base64=(base64String+padding).replace(/-/g,'+').replace(/_/g,'/');
-  const rawData=window.atob(base64);
-  return Uint8Array.from([...rawData].map(c=>c.charCodeAt(0)));
-}
-async function requestPushPermission(){
-  if(!('Notification' in window)||!('serviceWorker' in navigator)||!('PushManager' in window)){
-    tst('이 기기는 푸시 알림을 지원하지 않아요');return;
-  }
-  const perm=await Notification.requestPermission();
-  if(perm!=='granted'){tst('알림이 차단됐어요. 브라우저 설정에서 허용해주세요');return;}
-  try{
-    const reg=await navigator.serviceWorker.ready;
-    const sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:urlB64ToUint8Array(VAPID_PUB)});
-    const subJson=sub.toJSON();
-    await sb.from('push_subscriptions').upsert({user_id:U.id,endpoint:subJson.endpoint,p256dh:subJson.keys.p256dh,auth:subJson.keys.auth},{onConflict:'user_id'});
-    tst('✅ 푸시 알림이 켜졌어요!');
-    document.getElementById('push-btn')?.remove();
-    renderPushStatus(true);
-  }catch(e){tst('알림 설정 실패: '+e.message);}
-}
-async function checkPushStatus(){
-  if(!('Notification' in window)||!('PushManager' in window))return;
-  const perm=Notification.permission;
-  const reg=await navigator.serviceWorker.ready.catch(()=>null);
-  const sub=reg?await reg.pushManager.getSubscription():null;
-  renderPushStatus(perm==='granted'&&!!sub);
-}
-function renderPushStatus(enabled){
-  const el=document.getElementById('push-status-wrap');
-  if(!el)return;
-  if(enabled){
-    el.innerHTML=`<div style="display:flex;align-items:center;gap:8px;padding:10px 13px;background:#E1F5EE;border-radius:11px;border:1.5px solid #C0E8D8;">
-      <div style="font-size:16px;">🔔</div>
-      <div style="font-size:13px;font-weight:600;color:var(--gd);">푸시 알림 켜짐</div>
-      <div style="flex:1;"></div>
-      <button onclick="disablePush()" style="font-size:11px;color:var(--mu);background:none;border:none;cursor:pointer;font-family:inherit;text-decoration:underline;">끄기</button>
-    </div>`;
-  } else {
-    el.innerHTML=`<button id="push-btn" onclick="requestPushPermission()" style="width:100%;padding:12px;border-radius:11px;background:linear-gradient(135deg,#534AB7,#3C3489);color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:8px;">
-      <span style="font-size:16px;">🔔</span> 푸시 알림 켜기
-    </button>`;
-  }
-}
-async function disablePush(){
-  const reg=await navigator.serviceWorker.ready.catch(()=>null);
-  const sub=reg?await reg.pushManager.getSubscription():null;
-  if(sub)await sub.unsubscribe();
-  await sb.from('push_subscriptions').delete().eq('user_id',U.id);
-  renderPushStatus(false);
-  tst('푸시 알림이 꺼졌어요');
 }
 
 async function markNoticeRead(mid){
   await sb.from('messages').update({read:true}).eq('id',mid);
-  await loadMyNotices();
-  // inbox 팝업이 열려있으면 새로고침
-  if(document.getElementById('msg-inbox-pop')){
-    document.getElementById('msg-inbox-pop').remove();
-    openMsgInbox();
-  }
+  loadMyNotices();
 }
 
 // ── 리뷰 새로고침 ──
@@ -3366,10 +3201,10 @@ async function submitCert(){
 function gp(n){
   document.querySelectorAll('.pg').forEach(p=>p.classList.remove('on'));
   document.querySelectorAll('.bni').forEach(b=>b.classList.remove('on'));
-  const ids={home:'ph',vocab:'pv',review:'pr',record:'prc',rank:'prk',cert:'pct',admin:'pad'};
+  const ids={home:'ph',vocab:'pv',review:'pr',record:'prc',rank:'prk',cert:'pct',admin:'pad',online:'pol'};
   const pg=document.getElementById(ids[n]);if(pg)pg.classList.add('on');
   // 네비 버튼은 home,record,rank,cert,admin 순서 (vocab/review는 네비에 없음, 홈에서 진입)
-  const navOrd=['home','record','rank','cert','admin'];
+  const navOrd=['home','record','rank','cert','admin','online'];
   const idx=navOrd.indexOf(n);
   const btns=document.querySelectorAll('.bni');if(idx>=0&&btns[idx])btns[idx].classList.add('on');
   if(n==='vocab'){if(!loaded.vocab){loaded.vocab=true;startVocab();}else{renderVHead();renderFC();}}
@@ -3378,6 +3213,7 @@ function gp(n){
   if(n==='record'){if(!loaded.record){loaded.record=true;lRec();}}
   if(n==='rank'){lRank();}
   if(n==='cert'){lCert();}
+  if(n==='online'){lOnline();}
   if(n==='admin'){
     if(!classes.length)loadClasses().then(()=>loadStudents().then(()=>{lAdm();adTab('st',document.querySelector('#pad>.tbb .tbn'));}));
     else{lAdm();adTab('st',document.querySelector('#pad>.tbb .tbn'));}
@@ -3556,6 +3392,287 @@ async function renderCertHistory(){
 }
 </script>
 <script>
+// ── 온라인 강의 ──
+let olCourses = [];
+
+async function lOnline(){
+  await loadOlCourses();
+  olTab('course', document.querySelector('#pol .tbb .tbn'));
+}
+
+async function loadOlCourses(){
+  const{data}=await sb.from('online_courses').select('*').order('month',{ascending:false});
+  olCourses=data||[];
+  renderOlCourseList();
+  // 수강생 탭 강의 셀렉트 업데이트
+  const sel=document.getElementById('ol-sub-course');
+  if(sel){
+    sel.innerHTML='<option value="">강의를 선택하세요</option>'+
+      olCourses.map(c=>`<option value="${c.id}">${c.title} (${c.month})</option>`).join('');
+  }
+  // 학생 셀렉트 업데이트
+  const stuSel=document.getElementById('ol-sub-student');
+  if(stuSel){
+    stuSel.innerHTML='<option value="">학생을 선택하세요</option>'+
+      sts.map(s=>`<option value="${s.id}">${s.name||s.email}</option>`).join('');
+  }
+}
+
+function renderOlCourseList(){
+  const el=document.getElementById('ol-course-list');if(!el)return;
+  if(!olCourses.length){el.innerHTML='<div class="empty">등록된 강의가 없어요</div>';return;}
+  el.innerHTML=olCourses.map(c=>`
+    <div class="card" style="margin-bottom:10px;">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:8px;">
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:14px;font-weight:700;">${c.title}</div>
+          <div style="font-size:11px;color:var(--mu);margin-top:2px;">${c.month} · ${c.price.toLocaleString()}원</div>
+          ${c.description?`<div style="font-size:11px;color:var(--text3);margin-top:3px;">${c.description}</div>`:''}
+        </div>
+        <div style="display:flex;gap:5px;flex-shrink:0;margin-left:8px;">
+          <span style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:99px;background:${c.is_active?'var(--gl)':'var(--sf)'};color:${c.is_active?'var(--gd)':'var(--mu)'};">${c.is_active?'판매중':'비공개'}</span>
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button onclick="openOlLessonMgr('${c.id}','${c.title.replace(/'/g,"\'")}',${c.is_active})" style="flex:1;padding:9px;border-radius:9px;background:var(--gl);color:var(--gd);border:1.5px solid #C0E8D8;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">영상 관리</button>
+        <button onclick="toggleCourseActive('${c.id}',${c.is_active})" style="flex:1;padding:9px;border-radius:9px;background:var(--sf);color:var(--text);border:1.5px solid var(--brd);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">${c.is_active?'비공개로':'공개하기'}</button>
+        <button onclick="deleteOnlineCourse('${c.id}')" style="padding:9px 12px;border-radius:9px;background:var(--rl);color:var(--rd);border:1.5px solid #FCA5A5;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">삭제</button>
+      </div>
+    </div>`).join('');
+}
+
+async function saveOnlineCourse(){
+  const title=document.getElementById('ol-title')?.value?.trim();
+  const month=document.getElementById('ol-month')?.value;
+  const price=parseInt(document.getElementById('ol-price')?.value)||0;
+  const desc=document.getElementById('ol-desc')?.value?.trim()||null;
+  if(!title||!month){tst('제목과 월을 입력해주세요');return;}
+  const{error}=await sb.from('online_courses').insert({title,month,price,description:desc});
+  if(error){tst('저장 실패: '+error.message);return;}
+  ['ol-title','ol-month','ol-price','ol-desc'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  tst('강의가 만들어졌어요!');
+  await loadOlCourses();
+}
+
+async function toggleCourseActive(cid, cur){
+  await sb.from('online_courses').update({is_active:!cur}).eq('id',cid);
+  tst(!cur?'공개됐어요':'비공개로 변경됐어요');
+  await loadOlCourses();
+}
+
+async function deleteOnlineCourse(cid){
+  if(!confirm('강의를 삭제할까요? 영상과 수강권도 모두 삭제됩니다.'))return;
+  await sb.from('online_courses').delete().eq('id',cid);
+  tst('삭제됐어요');
+  await loadOlCourses();
+}
+
+// ── 영상 관리 팝업 ──
+async function openOlLessonMgr(cid, ctitle){
+  const pop=document.createElement('div');
+  pop.id='ol-lesson-pop';
+  pop.style.cssText='position:fixed;inset:0;background:var(--bg);z-index:500;overflow-y:auto;max-width:480px;margin:0 auto;';
+  pop.innerHTML=`
+    <div style="background:var(--bg);padding:13px 16px 9px;border-bottom:1.5px solid var(--brd);display:flex;align-items:center;gap:9px;position:sticky;top:0;z-index:10;">
+      <div onclick="document.getElementById('ol-lesson-pop').remove()" style="width:28px;height:28px;border-radius:8px;background:var(--sf);display:flex;align-items:center;justify-content:center;cursor:pointer;">
+        <svg width="11" height="11" viewBox="0 0 11 11"><polyline points="7.5,1 2,5.5 7.5,10" fill="none" stroke="#888" stroke-width="1.8"/></svg>
+      </div>
+      <span style="font-size:15px;font-weight:700;">영상 관리</span>
+      <span style="font-size:11px;color:var(--mu);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${ctitle}</span>
+    </div>
+    <div style="padding:14px;">
+      <!-- 영상 추가 폼 -->
+      <div class="card" style="margin-bottom:12px;">
+        <div style="font-size:13px;font-weight:700;margin-bottom:10px;">➕ 영상 추가</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+          <div>
+            <div style="font-size:11px;color:var(--mu);margin-bottom:4px;">주차</div>
+            <select id="ol-ls-week" style="width:100%;padding:9px;border:1.5px solid var(--brd);border-radius:var(--rs);font-size:12px;background:var(--sf);font-family:inherit;">
+              <option value="1">1주차</option><option value="2">2주차</option><option value="3">3주차</option><option value="4">4주차</option>
+            </select>
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--mu);margin-bottom:4px;">요일</div>
+            <select id="ol-ls-day" style="width:100%;padding:9px;border:1.5px solid var(--brd);border-radius:var(--rs);font-size:12px;background:var(--sf);font-family:inherit;">
+              <option value="월수">월수</option><option value="화목">화목</option>
+            </select>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+          <div>
+            <div style="font-size:11px;color:var(--mu);margin-bottom:4px;">강의 유형</div>
+            <select id="ol-ls-type" style="width:100%;padding:9px;border:1.5px solid var(--brd);border-radius:var(--rs);font-size:12px;background:var(--sf);font-family:inherit;">
+              <option value="메인">메인강의</option><option value="발음">발음강의</option><option value="복습">복습</option><option value="문장만들기">문장만들기</option>
+            </select>
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--mu);margin-bottom:4px;">시간 (분)</div>
+            <input type="number" id="ol-ls-dur" value="20" min="1" style="width:100%;padding:9px;border:1.5px solid var(--brd);border-radius:var(--rs);font-size:12px;background:var(--sf);font-family:inherit;">
+          </div>
+        </div>
+        <input class="inp" type="text" id="ol-ls-title" placeholder="영상 제목">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+          <input class="inp" type="text" id="ol-ls-vid" placeholder="Bunny 영상 ID" style="flex:1;margin-bottom:0;">
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;white-space:nowrap;">
+            <input type="checkbox" id="ol-ls-free" style="accent-color:var(--g);width:15px;height:15px;">무료공개
+          </label>
+        </div>
+        <button onclick="saveOlLesson('${cid}')" style="width:100%;padding:11px;border-radius:11px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">영상 추가</button>
+      </div>
+      <!-- 영상 목록 -->
+      <div class="sec">등록된 영상</div>
+      <div id="ol-lesson-list"><div class="loading">로딩중...</div></div>
+    </div>`;
+  document.body.appendChild(pop);
+  await loadOlLessons(cid);
+}
+
+async function loadOlLessons(cid){
+  const el=document.getElementById('ol-lesson-list');if(!el)return;
+  const{data}=await sb.from('online_lessons').select('*').eq('course_id',cid).order('week').order('sort_order');
+  const lessons=data||[];
+  if(!lessons.length){el.innerHTML='<div class="empty">등록된 영상이 없어요</div>';return;}
+  // 주차별 그룹
+  const byWeek={};
+  lessons.forEach(l=>{if(!byWeek[l.week])byWeek[l.week]=[];byWeek[l.week].push(l);});
+  el.innerHTML=Object.entries(byWeek).map(([week,ls])=>`
+    <div style="margin-bottom:12px;">
+      <div style="font-size:12px;font-weight:700;color:var(--gd);margin-bottom:6px;">${week}주차</div>
+      ${ls.map(l=>`
+        <div style="background:var(--sf);border-radius:11px;padding:11px 13px;margin-bottom:6px;border:1.5px solid var(--brd);">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${l.title}</div>
+              <div style="font-size:10px;color:var(--mu);margin-top:2px;">${l.day_type} · ${l.lesson_type} · ${l.duration_min}분${l.is_free?' · 🆓 무료':''}</div>
+            </div>
+            <button onclick="deleteOlLesson('${l.id}','${cid}')" style="margin-left:8px;padding:4px 10px;border-radius:7px;background:var(--rl);color:var(--rd);border:none;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">삭제</button>
+          </div>
+          ${l.bunny_video_id?`<div style="font-size:10px;color:var(--mu);font-family:monospace;background:var(--bg);padding:4px 8px;border-radius:6px;border:1px solid var(--brd);">ID: ${l.bunny_video_id}</div>`:'<div style="font-size:10px;color:#E24B4A;">⚠️ Bunny ID 미등록</div>'}
+        </div>`).join('')}
+    </div>`).join('');
+}
+
+async function saveOlLesson(cid){
+  const week=parseInt(document.getElementById('ol-ls-week')?.value)||1;
+  const day_type=document.getElementById('ol-ls-day')?.value||'월수';
+  const lesson_type=document.getElementById('ol-ls-type')?.value||'메인';
+  const duration_min=parseInt(document.getElementById('ol-ls-dur')?.value)||20;
+  const title=document.getElementById('ol-ls-title')?.value?.trim();
+  const bunny_video_id=document.getElementById('ol-ls-vid')?.value?.trim()||null;
+  const is_free=document.getElementById('ol-ls-free')?.checked||false;
+  if(!title){tst('영상 제목을 입력해주세요');return;}
+  const sort_order=(week-1)*10+(day_type==='월수'?0:1);
+  const{error}=await sb.from('online_lessons').insert({course_id:cid,week,day_type,lesson_type,title,bunny_video_id,duration_min,is_free,sort_order});
+  if(error){tst('저장 실패: '+error.message);return;}
+  ['ol-ls-title','ol-ls-vid'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  document.getElementById('ol-ls-free').checked=false;
+  tst('영상이 추가됐어요!');
+  await loadOlLessons(cid);
+}
+
+async function deleteOlLesson(lid, cid){
+  if(!confirm('이 영상을 삭제할까요?'))return;
+  await sb.from('online_lessons').delete().eq('id',lid);
+  tst('삭제됐어요');
+  await loadOlLessons(cid);
+}
+
+// ── 수강권 ──
+async function grantSubscription(){
+  const cid=document.getElementById('ol-sub-course')?.value;
+  const sid=document.getElementById('ol-sub-student')?.value;
+  const start=document.getElementById('ol-sub-start')?.value;
+  const end=document.getElementById('ol-sub-end')?.value;
+  const memo=document.getElementById('ol-sub-memo')?.value?.trim()||null;
+  if(!cid||!sid||!start||!end){tst('강의, 학생, 날짜를 모두 선택해주세요');return;}
+  if(start>end){tst('만료일이 시작일보다 빠를 수 없어요');return;}
+  // 중복 체크
+  const{data:ex}=await sb.from('course_subscriptions').select('id').eq('student_id',sid).eq('course_id',cid).maybeSingle();
+  if(ex){
+    // 이미 있으면 업데이트
+    await sb.from('course_subscriptions').update({starts_at:start,expires_at:end,payment_memo:memo,granted_by:U.id}).eq('id',ex.id);
+    tst('수강권이 업데이트됐어요!');
+  } else {
+    const{error}=await sb.from('course_subscriptions').insert({student_id:sid,course_id:cid,starts_at:start,expires_at:end,payment_memo:memo,granted_by:U.id});
+    if(error){tst('저장 실패: '+error.message);return;}
+    tst('수강권이 열렸어요! 🎫');
+  }
+  ['ol-sub-memo'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  await loadOlSubList();
+}
+
+async function loadOlSubList(){
+  const el=document.getElementById('ol-sub-list');if(!el)return;
+  const{data}=await sb.from('course_subscriptions').select('*,profiles(name,email),online_courses(title,month)').order('created_at',{ascending:false});
+  const subs=data||[];
+  if(!subs.length){el.innerHTML='<div class="empty">수강생이 없어요</div>';return;}
+  const today=new Date().toISOString().slice(0,10);
+  el.innerHTML=subs.map(s=>{
+    const name=s.profiles?.name||s.profiles?.email||'?';
+    const course=s.online_courses?.title||'?';
+    const expired=s.expires_at<today;
+    return`<div class="csm" style="margin-bottom:7px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+        <div>
+          <div style="font-size:13px;font-weight:700;">${name}</div>
+          <div style="font-size:11px;color:var(--mu);">${course}</div>
+        </div>
+        <div style="text-align:right;">
+          <span style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:99px;background:${expired?'var(--rl)':'var(--gl)'};color:${expired?'var(--rd)':'var(--gd)'};">${expired?'만료':'수강중'}</span>
+          <div style="font-size:10px;color:var(--mu);margin-top:2px;">${s.expires_at}까지</div>
+        </div>
+      </div>
+      ${s.payment_memo?`<div style="font-size:11px;color:var(--mu);background:var(--sf);padding:4px 8px;border-radius:6px;">💳 ${s.payment_memo}</div>`:''}
+      <button onclick="revokeSubscription('${s.id}')" style="margin-top:6px;width:100%;padding:7px;border-radius:8px;background:var(--rl);color:var(--rd);border:1px solid #FCA5A5;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">수강권 취소</button>
+    </div>`;
+  }).join('');
+}
+
+async function revokeSubscription(sid){
+  if(!confirm('수강권을 취소할까요?'))return;
+  await sb.from('course_subscriptions').delete().eq('id',sid);
+  tst('수강권이 취소됐어요');
+  await loadOlSubList();
+}
+
+async function loadOlPayList(){
+  const el=document.getElementById('ol-pay-list');if(!el)return;
+  const{data}=await sb.from('course_subscriptions').select('*,profiles(name,email),online_courses(title,price)').order('created_at',{ascending:false});
+  const subs=data||[];
+  if(!subs.length){el.innerHTML='<div class="empty">결제 내역이 없어요</div>';return;}
+  let total=0;
+  const rows=subs.map(s=>{
+    const name=s.profiles?.name||s.profiles?.email||'?';
+    const course=s.online_courses?.title||'?';
+    const price=s.online_courses?.price||0;
+    total+=price;
+    return`<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--brd);">
+      <div>
+        <div style="font-size:13px;font-weight:600;">${name}</div>
+        <div style="font-size:11px;color:var(--mu);">${course} · ${new Date(s.created_at).toLocaleDateString('ko-KR')}</div>
+        ${s.payment_memo?`<div style="font-size:10px;color:var(--mu);">${s.payment_memo}</div>`:''}
+      </div>
+      <div style="font-size:14px;font-weight:700;color:var(--gd);">${price.toLocaleString()}원</div>
+    </div>`;
+  }).join('');
+  el.innerHTML=`<div style="background:var(--gl);border-radius:11px;padding:12px 14px;margin-bottom:12px;border:1.5px solid #C0E8D8;">
+    <div style="font-size:11px;color:var(--gm);">총 수강 등록</div>
+    <div style="font-size:22px;font-weight:800;color:var(--gd);">${total.toLocaleString()}원</div>
+    <div style="font-size:10px;color:var(--gm);margin-top:2px;">${subs.length}명</div>
+  </div>${rows}`;
+}
+
+function olTab(t, b){
+  ['course','sub','pay'].forEach(x=>{
+    const el=document.getElementById(`ol-${x}`);
+    if(el)el.style.display=x===t?'block':'none';
+  });
+  document.querySelectorAll('#pol .tbb .tbn').forEach(x=>x.classList.remove('on'));
+  if(b)b.classList.add('on');
+  if(t==='sub')loadOlSubList();
+  if(t==='pay')loadOlPayList();
+}
+
 async function lRank(){
   const myEl=document.getElementById('rank-my');
   const listEl=document.getElementById('rank-list');if(!listEl)return;

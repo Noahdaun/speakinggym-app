@@ -1,4 +1,4 @@
-const VERSION = "sg-v38";
+const VERSION = "sg-v39";
 const CACHE = `speakinggym-${VERSION}`;
 const ASSETS = [
   '/speakinggym-app/',
@@ -50,32 +50,4 @@ self.addEventListener('fetch', e => {
 // 업데이트 감지 — 새 버전 있으면 클라이언트에 알림
 self.addEventListener('message', e => {
   if (e.data === 'SKIP_WAITING') self.skipWaiting();
-});
-
-// 푸시 알림 수신
-self.addEventListener('push', e => {
-  const data = e.data ? e.data.json() : {};
-  const title = data.title || 'Speaking Gym';
-  const body = data.body || '새 메시지가 있어요';
-  e.waitUntil(
-    self.registration.showNotification(title, {
-      body,
-      icon: '/speakinggym-app/icon-192.png',
-      badge: '/speakinggym-app/icon-192.png',
-      vibrate: [200, 100, 200],
-      data: { url: '/speakinggym-app/' }
-    })
-  );
-});
-
-// 알림 클릭 시 앱 열기
-self.addEventListener('notificationclick', e => {
-  e.notification.close();
-  e.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(cs => {
-      const c = cs.find(x => x.url.includes('speakinggym-app'));
-      if (c) { c.focus(); return; }
-      return clients.openWindow(e.notification.data?.url || '/speakinggym-app/');
-    })
-  );
 });
