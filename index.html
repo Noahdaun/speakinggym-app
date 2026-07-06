@@ -531,14 +531,43 @@ function doUpdate(){
       <div id="ol-sub" style="display:none;padding:0 14px;">
         <div class="card" style="margin-bottom:12px;">
           <div style="font-size:13px;font-weight:700;margin-bottom:10px;">🎫 수강권 열어주기</div>
+
+          <!-- 코스 타입 -->
+          <div style="font-size:12px;font-weight:600;margin-bottom:6px;">코스 타입</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:10px;">
+            <button id="ol-type-btn-일반" onclick="selectCourseType('일반')" style="padding:10px;border-radius:10px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">일반형</button>
+            <button id="ol-type-btn-관리" onclick="selectCourseType('관리')" style="padding:10px;border-radius:10px;background:var(--sf);color:var(--mu);border:1.5px solid var(--brd);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">관리형</button>
+          </div>
+
+          <!-- 결제 플랜 -->
+          <div style="font-size:12px;font-weight:600;margin-bottom:6px;">결제 플랜</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin-bottom:10px;">
+            <button id="ol-plan-btn-1개월" onclick="selectPlan('1개월')" style="padding:9px 4px;border-radius:10px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">1개월</button>
+            <button id="ol-plan-btn-6개월" onclick="selectPlan('6개월')" style="padding:9px 4px;border-radius:10px;background:var(--sf);color:var(--mu);border:1.5px solid var(--brd);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">6개월</button>
+            <button id="ol-plan-btn-1년" onclick="selectPlan('1년')" style="padding:9px 4px;border-radius:10px;background:var(--sf);color:var(--mu);border:1.5px solid var(--brd);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">1년</button>
+          </div>
+
+          <!-- 강의 선택 -->
           <div style="font-size:12px;font-weight:600;margin-bottom:6px;">강의 선택</div>
           <select id="ol-sub-course" style="margin-bottom:8px;"><option value="">강의를 선택하세요</option></select>
+
+          <!-- 학생 선택 -->
           <div style="font-size:12px;font-weight:600;margin-bottom:6px;">학생 선택</div>
-          <select id="ol-sub-student" style="margin-bottom:8px;"><option value="">학생을 선택하세요</option></select>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
-            <div><div style="font-size:11px;color:var(--mu);margin-bottom:4px;">시작일</div><input type="date" id="ol-sub-start" style="width:100%;padding:10px;border:1.5px solid var(--brd);border-radius:var(--rs);font-size:12px;background:var(--sf);font-family:inherit;"></div>
-            <div><div style="font-size:11px;color:var(--mu);margin-bottom:4px;">만료일</div><input type="date" id="ol-sub-end" style="width:100%;padding:10px;border:1.5px solid var(--brd);border-radius:var(--rs);font-size:12px;background:var(--sf);font-family:inherit;"></div>
+          <select id="ol-sub-student" onchange="onSubStudentChange(this.value)" style="margin-bottom:8px;"><option value="">학생을 선택하세요</option></select>
+
+          <!-- 관리형 전화번호 (관리형 선택 시 표시) -->
+          <div id="ol-phone-wrap" style="display:none;margin-bottom:8px;">
+            <div style="font-size:12px;font-weight:600;margin-bottom:4px;color:var(--pud);">📱 전화번호 <span style="color:var(--rd);">*필수</span></div>
+            <input class="inp" type="tel" id="ol-sub-phone" placeholder="010-0000-0000" style="margin-bottom:0;">
+            <div style="font-size:10px;color:var(--mu);margin-top:3px;">관리형은 주 1회 개별 연락을 드려요</div>
           </div>
+
+          <!-- 날짜 (자동 계산) -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+            <div><div style="font-size:11px;color:var(--mu);margin-bottom:4px;">시작일</div><input type="date" id="ol-sub-start" onchange="autoCalcEndDate()" style="width:100%;padding:10px;border:1.5px solid var(--brd);border-radius:var(--rs);font-size:12px;background:var(--sf);font-family:inherit;"></div>
+            <div><div style="font-size:11px;color:var(--mu);margin-bottom:4px;">만료일 (자동계산)</div><input type="date" id="ol-sub-end" style="width:100%;padding:10px;border:1.5px solid var(--brd);border-radius:var(--rs);font-size:12px;background:var(--sf);font-family:inherit;"></div>
+          </div>
+
           <input class="inp" type="text" id="ol-sub-memo" placeholder="결제 메모 (예: 토스 이체 확인)" style="margin-bottom:8px;">
           <button onclick="grantSubscription()" style="width:100%;padding:12px;border-radius:11px;background:linear-gradient(135deg,#534AB7,#3C3489);color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">수강권 열어주기</button>
         </div>
@@ -3578,32 +3607,93 @@ async function deleteOlLesson(lid, cid){
 }
 
 // ── 수강권 ──
+// 코스 타입/플랜 선택 상태
+let _olCourseType='일반';
+let _olPlan='1개월';
+
+function selectCourseType(type){
+  _olCourseType=type;
+  ['일반','관리'].forEach(t=>{
+    const btn=document.getElementById(`ol-type-btn-${t}`);
+    if(btn){
+      if(t===type){btn.style.background='linear-gradient(135deg,#1D9E75,#159468)';btn.style.color='#fff';btn.style.border='none';}
+      else{btn.style.background='var(--sf)';btn.style.color='var(--mu)';btn.style.border='1.5px solid var(--brd)';}
+    }
+  });
+  // 관리형이면 전화번호 필드 표시
+  const phoneWrap=document.getElementById('ol-phone-wrap');
+  if(phoneWrap)phoneWrap.style.display=type==='관리'?'block':'none';
+  // 선택된 학생이 있으면 전화번호 자동 채우기
+  const sid=document.getElementById('ol-sub-student')?.value;
+  if(sid&&type==='관리')onSubStudentChange(sid);
+}
+
+function selectPlan(plan){
+  _olPlan=plan;
+  ['1개월','6개월','1년'].forEach(p=>{
+    const btn=document.getElementById(`ol-plan-btn-${p}`);
+    if(btn){
+      if(p===plan){btn.style.background='linear-gradient(135deg,#1D9E75,#159468)';btn.style.color='#fff';btn.style.border='none';}
+      else{btn.style.background='var(--sf)';btn.style.color='var(--mu)';btn.style.border='1.5px solid var(--brd)';}
+    }
+  });
+  autoCalcEndDate();
+}
+
+function autoCalcEndDate(){
+  const start=document.getElementById('ol-sub-start')?.value;
+  if(!start)return;
+  const d=new Date(start);
+  if(_olPlan==='1개월')d.setMonth(d.getMonth()+1);
+  else if(_olPlan==='6개월')d.setMonth(d.getMonth()+6);
+  else if(_olPlan==='1년')d.setFullYear(d.getFullYear()+1);
+  d.setDate(d.getDate()-1); // 만료일은 하루 전
+  const endEl=document.getElementById('ol-sub-end');
+  if(endEl)endEl.value=d.toISOString().slice(0,10);
+}
+
+async function onSubStudentChange(sid){
+  if(!sid||_olCourseType!=='관리')return;
+  // 학생 전화번호 자동 채우기
+  const stu=sts.find(s=>s.id===sid);
+  const phoneEl=document.getElementById('ol-sub-phone');
+  if(phoneEl&&stu?.phone)phoneEl.value=stu.phone;
+}
+
 async function grantSubscription(){
   const cid=document.getElementById('ol-sub-course')?.value;
   const sid=document.getElementById('ol-sub-student')?.value;
   const start=document.getElementById('ol-sub-start')?.value;
   const end=document.getElementById('ol-sub-end')?.value;
   const memo=document.getElementById('ol-sub-memo')?.value?.trim()||null;
+  const phone=document.getElementById('ol-sub-phone')?.value?.trim()||null;
   if(!cid||!sid||!start||!end){tst('강의, 학생, 날짜를 모두 선택해주세요');return;}
   if(start>end){tst('만료일이 시작일보다 빠를 수 없어요');return;}
+  // 관리형이면 전화번호 필수
+  if(_olCourseType==='관리'&&!phone){tst('관리형은 전화번호가 필수예요');return;}
+  // 관리형이면 전화번호 profiles에 저장
+  if(_olCourseType==='관리'&&phone){
+    await sb.from('profiles').update({phone}).eq('id',sid);
+    const stu=sts.find(s=>s.id===sid);if(stu)stu.phone=phone;
+  }
   // 중복 체크
-  const{data:ex}=await sb.from('course_subscriptions').select('id').eq('student_id',sid).eq('course_id',cid).maybeSingle();
+  const{data:ex}=await sb.from('course_subscriptions').select('id').eq('student_id',sid).eq('course_id',cid).eq('course_type',_olCourseType).maybeSingle();
   if(ex){
-    // 이미 있으면 업데이트
-    await sb.from('course_subscriptions').update({starts_at:start,expires_at:end,payment_memo:memo,granted_by:U.id}).eq('id',ex.id);
+    await sb.from('course_subscriptions').update({starts_at:start,expires_at:end,payment_memo:memo,granted_by:U.id,plan:_olPlan}).eq('id',ex.id);
     tst('수강권이 업데이트됐어요!');
   } else {
-    const{error}=await sb.from('course_subscriptions').insert({student_id:sid,course_id:cid,starts_at:start,expires_at:end,payment_memo:memo,granted_by:U.id});
+    const{error}=await sb.from('course_subscriptions').insert({student_id:sid,course_id:cid,starts_at:start,expires_at:end,payment_memo:memo,granted_by:U.id,course_type:_olCourseType,plan:_olPlan});
     if(error){tst('저장 실패: '+error.message);return;}
     tst('수강권이 열렸어요! 🎫');
   }
-  ['ol-sub-memo'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  document.getElementById('ol-sub-memo').value='';
+  if(document.getElementById('ol-sub-phone'))document.getElementById('ol-sub-phone').value='';
   await loadOlSubList();
 }
 
 async function loadOlSubList(){
   const el=document.getElementById('ol-sub-list');if(!el)return;
-  const{data}=await sb.from('course_subscriptions').select('*,profiles(name,email),online_courses(title,month)').order('created_at',{ascending:false});
+  const{data}=await sb.from('course_subscriptions').select('*,profiles(name,email,phone),online_courses(title,month)').order('created_at',{ascending:false});
   const subs=data||[];
   if(!subs.length){el.innerHTML='<div class="empty">수강생이 없어요</div>';return;}
   const today=new Date().toISOString().slice(0,10);
@@ -3611,19 +3701,25 @@ async function loadOlSubList(){
     const name=s.profiles?.name||s.profiles?.email||'?';
     const course=s.online_courses?.title||'?';
     const expired=s.expires_at<today;
+    const isManaged=s.course_type==='관리';
     return`<div class="csm" style="margin-bottom:7px;">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
         <div>
-          <div style="font-size:13px;font-weight:700;">${name}</div>
-          <div style="font-size:11px;color:var(--mu);">${course}</div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <div style="font-size:13px;font-weight:700;">${name}</div>
+            <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px;background:${isManaged?'var(--pul)':'var(--gl)'};color:${isManaged?'var(--pud)':'var(--gd)'};">${s.course_type||'일반'}형</span>
+            <span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:99px;background:var(--aml);color:var(--amd);">${s.plan||'1개월'}</span>
+          </div>
+          <div style="font-size:11px;color:var(--mu);margin-top:2px;">${course}</div>
+          ${isManaged&&s.profiles?.phone?`<div style="font-size:11px;color:var(--pud);margin-top:2px;">📱 ${s.profiles.phone}</div>`:''}
         </div>
         <div style="text-align:right;">
           <span style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:99px;background:${expired?'var(--rl)':'var(--gl)'};color:${expired?'var(--rd)':'var(--gd)'};">${expired?'만료':'수강중'}</span>
           <div style="font-size:10px;color:var(--mu);margin-top:2px;">${s.expires_at}까지</div>
         </div>
       </div>
-      ${s.payment_memo?`<div style="font-size:11px;color:var(--mu);background:var(--sf);padding:4px 8px;border-radius:6px;">💳 ${s.payment_memo}</div>`:''}
-      <button onclick="revokeSubscription('${s.id}')" style="margin-top:6px;width:100%;padding:7px;border-radius:8px;background:var(--rl);color:var(--rd);border:1px solid #FCA5A5;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">수강권 취소</button>
+      ${s.payment_memo?`<div style="font-size:11px;color:var(--mu);background:var(--sf);padding:4px 8px;border-radius:6px;margin-bottom:5px;">💳 ${s.payment_memo}</div>`:''}
+      <button onclick="revokeSubscription('${s.id}')" style="width:100%;padding:7px;border-radius:8px;background:var(--rl);color:var(--rd);border:1px solid #FCA5A5;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">수강권 취소</button>
     </div>`;
   }).join('');
 }
@@ -3646,9 +3742,14 @@ async function loadOlPayList(){
     const course=s.online_courses?.title||'?';
     const price=s.online_courses?.price||0;
     total+=price;
+    const isManaged2=s.course_type==='관리';
     return`<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--brd);">
       <div>
-        <div style="font-size:13px;font-weight:600;">${name}</div>
+        <div style="display:flex;align-items:center;gap:5px;">
+          <div style="font-size:13px;font-weight:600;">${name}</div>
+          <span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:99px;background:${isManaged2?'var(--pul)':'var(--gl)'};color:${isManaged2?'var(--pud)':'var(--gd)'}">${s.course_type||'일반'}형</span>
+          <span style="font-size:9px;font-weight:600;padding:2px 6px;border-radius:99px;background:var(--aml);color:var(--amd)">${s.plan||'1개월'}</span>
+        </div>
         <div style="font-size:11px;color:var(--mu);">${course} · ${new Date(s.created_at).toLocaleDateString('ko-KR')}</div>
         ${s.payment_memo?`<div style="font-size:10px;color:var(--mu);">${s.payment_memo}</div>`:''}
       </div>
@@ -3669,7 +3770,13 @@ function olTab(t, b){
   });
   document.querySelectorAll('#pol .tbb .tbn').forEach(x=>x.classList.remove('on'));
   if(b)b.classList.add('on');
-  if(t==='sub')loadOlSubList();
+  if(t==='sub'){
+    // 시작일 기본값 오늘
+    const startEl=document.getElementById('ol-sub-start');
+    if(startEl&&!startEl.value)startEl.value=new Date().toISOString().slice(0,10);
+    autoCalcEndDate();
+    loadOlSubList();
+  }
   if(t==='pay')loadOlPayList();
 }
 
