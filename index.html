@@ -508,6 +508,7 @@ function doUpdate(){
       <div class="tbb" style="margin:0 14px 14px;">
         <button class="tbn on" onclick="olTab('course',this)">강의관리</button>
         <button class="tbn" onclick="olTab('sub',this)">수강생</button>
+        <button class="tbn" onclick="olTab('schedule',this)">전화스케줄</button>
         <button class="tbn" onclick="olTab('pay',this)">결제내역</button>
       </div>
 
@@ -529,6 +530,10 @@ function doUpdate(){
 
       <!-- 수강생 탭 -->
       <div id="ol-sub" style="display:none;padding:0 14px;">
+        <!-- 학생 검색 -->
+        <div style="position:relative;margin-bottom:12px;">
+          <input class="inp" type="text" id="ol-stu-search" placeholder="🔍 학생 이름으로 검색..." oninput="filterOlStudents(this.value)" style="margin-bottom:0;padding-left:14px;">
+        </div>
         <div class="card" style="margin-bottom:12px;">
           <div style="font-size:13px;font-weight:700;margin-bottom:10px;">🎫 수강권 열어주기</div>
 
@@ -573,6 +578,37 @@ function doUpdate(){
         </div>
         <div class="sec">수강 현황</div>
         <div id="ol-sub-list"><div class="loading">로딩중...</div></div>
+      </div>
+
+      <!-- 전화스케줄 탭 -->
+      <div id="ol-schedule" style="display:none;padding:0 14px;">
+        <!-- 관리자: 시간 슬롯 설정 -->
+        <div class="card" style="margin-bottom:12px;">
+          <div style="font-size:13px;font-weight:700;margin-bottom:10px;">⏰ 운영 시간 설정</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+            <div>
+              <div style="font-size:11px;color:var(--mu);margin-bottom:4px;">요일</div>
+              <select id="slot-day" style="width:100%;padding:9px;border:1.5px solid var(--brd);border-radius:var(--rs);font-size:12px;background:var(--sf);font-family:inherit;">
+                <option value="화">화요일</option>
+                <option value="목">목요일</option>
+              </select>
+            </div>
+            <div>
+              <div style="font-size:11px;color:var(--mu);margin-bottom:4px;">시작 시간</div>
+              <input type="time" id="slot-time" step="1800" style="width:100%;padding:9px;border:1.5px solid var(--brd);border-radius:var(--rs);font-size:12px;background:var(--sf);font-family:inherit;">
+            </div>
+          </div>
+          <button onclick="addCallSlot()" style="width:100%;padding:11px;border-radius:11px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">시간 추가</button>
+        </div>
+        <!-- 등록된 슬롯 -->
+        <div class="sec">운영 시간 목록</div>
+        <div id="slot-list" style="margin-bottom:16px;"><div class="loading">로딩중...</div></div>
+        <!-- 예약 현황 -->
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <div class="sec" style="margin-bottom:0;">예약 현황</div>
+          <input type="date" id="booking-date-filter" onchange="loadBookings()" style="padding:5px 8px;border:1.5px solid var(--brd);border-radius:8px;font-size:12px;background:var(--sf);font-family:inherit;">
+        </div>
+        <div id="booking-list"><div class="loading">로딩중...</div></div>
       </div>
 
       <!-- 결제내역 탭 -->
@@ -873,6 +909,7 @@ async function initApp(u){
     loadProfilePhoto();
     buildHomeTodo();
     loadMyNotices();
+    checkCallBookingBanner();
   }
 }
 
@@ -2908,6 +2945,184 @@ async function sendNotify(targetStudentId,msg){
 }
 
 // ── 학생: 알림 로드 및 표시 ──
+// ── 학생: 전화 예약 배너 ──
+async function checkCallBookingBanner(){
+  if(P?.role==='admin')return;
+  // 관리형 수강권이 있는지 확인
+  const today=new Date().toISOString().slice(0,10);
+  const{data:sub}=await sb.from('course_subscriptions')
+    .select('id,course_type')
+    .eq('student_id',U.id)
+    .eq('course_type','관리')
+    .lte('starts_at',today)
+    .gte('expires_at',today)
+    .maybeSingle();
+  if(!sub)return;
+  // 관리형 수강생이면 예약 배너 표시
+  const wrap=document.getElementById('push-status-wrap');
+  if(!wrap)return;
+  // 이번 주 예약이 있는지 확인
+  const mon=getThisMonday();
+  const sun=new Date(mon);sun.setDate(sun.getDate()+6);
+  const{data:booking}=await sb.from('call_bookings')
+    .select('id,booking_date,call_slots(day_of_week,slot_time),status')
+    .eq('student_id',U.id)
+    .gte('booking_date',mon)
+    .lte('booking_date',sun.toISOString().slice(0,10))
+    .neq('status','cancelled')
+    .maybeSingle();
+  const existing=wrap.innerHTML;
+  let callHtml='';
+  if(booking){
+    const time=booking.call_slots?.slot_time||'?';
+    const day=booking.call_slots?.day_of_week||'?';
+    callHtml=`<div style="padding:0 0 8px;">
+      <div style="background:linear-gradient(135deg,#534AB7,#3C3489);border-radius:14px;padding:13px 16px;display:flex;align-items:center;gap:12px;">
+        <div style="font-size:22px;">📞</div>
+        <div style="flex:1;">
+          <div style="font-size:13px;font-weight:800;color:#fff;">이번 주 전화 상담</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.8);margin-top:2px;">${day}요일 ${time} 예약됨</div>
+        </div>
+        <button onclick="openCallBooking()" style="font-size:11px;font-weight:600;padding:6px 11px;border-radius:99px;background:rgba(255,255,255,.2);color:#fff;border:none;cursor:pointer;font-family:inherit;">변경</button>
+      </div>
+    </div>`;
+  } else {
+    callHtml=`<div style="padding:0 0 8px;">
+      <button onclick="openCallBooking()" style="width:100%;padding:13px 16px;border-radius:14px;background:linear-gradient(135deg,#534AB7,#3C3489);border:none;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:12px;box-shadow:0 4px 16px rgba(83,74,183,.3);">
+        <div style="font-size:22px;">📞</div>
+        <div style="flex:1;text-align:left;">
+          <div style="font-size:13px;font-weight:800;color:#fff;">이번 주 전화 상담 예약</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.8);margin-top:2px;">화 · 목 30분 단위로 예약 가능</div>
+        </div>
+        <div style="font-size:11px;color:rgba(255,255,255,.8);font-weight:600;">예약 →</div>
+      </button>
+    </div>`;
+  }
+  wrap.innerHTML=callHtml+(existing||'');
+}
+
+function getThisMonday(){
+  const d=new Date();
+  const day=d.getDay();
+  const diff=d.getDate()-(day===0?6:day-1);
+  const mon=new Date(d);mon.setDate(diff);
+  return mon.toISOString().slice(0,10);
+}
+
+async function openCallBooking(){
+  const pop=document.createElement('div');
+  pop.id='call-booking-pop';
+  pop.style.cssText='position:fixed;inset:0;background:var(--bg);z-index:500;overflow-y:auto;max-width:480px;margin:0 auto;';
+  pop.innerHTML=`
+    <div style="background:var(--bg);padding:13px 16px 9px;border-bottom:1.5px solid var(--brd);display:flex;align-items:center;gap:9px;position:sticky;top:0;z-index:10;">
+      <div onclick="document.getElementById('call-booking-pop').remove()" style="width:28px;height:28px;border-radius:8px;background:var(--sf);display:flex;align-items:center;justify-content:center;cursor:pointer;">
+        <svg width="11" height="11" viewBox="0 0 11 11"><polyline points="7.5,1 2,5.5 7.5,10" fill="none" stroke="#888" stroke-width="1.8"/></svg>
+      </div>
+      <span style="font-size:15px;font-weight:700;">전화 상담 예약</span>
+    </div>
+    <div style="padding:16px 14px;">
+      <div style="background:var(--pul);border-radius:12px;padding:12px 14px;margin-bottom:14px;border:1.5px solid #BDB8EF;">
+        <div style="font-size:12px;font-weight:700;color:var(--pud);margin-bottom:3px;">📞 관리형 전화 상담</div>
+        <div style="font-size:11px;color:var(--pu);line-height:1.7;">매주 화요일 또는 목요일에 30분씩 선생님과 1:1 상담이 진행돼요. 원하는 시간을 예약해주세요.</div>
+      </div>
+      <!-- 주 선택 -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <button onclick="moveBookingWeek(-1)" style="width:32px;height:32px;border-radius:8px;background:var(--sf);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;">
+          <svg width="10" height="10" viewBox="0 0 10 10"><polyline points="7,1 2,5 7,9" fill="none" stroke="#888" stroke-width="1.8"/></svg>
+        </button>
+        <div style="font-size:14px;font-weight:700;" id="booking-week-lbl"></div>
+        <button onclick="moveBookingWeek(1)" style="width:32px;height:32px;border-radius:8px;background:var(--sf);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;">
+          <svg width="10" height="10" viewBox="0 0 10 10"><polyline points="3,1 8,5 3,9" fill="none" stroke="#888" stroke-width="1.8"/></svg>
+        </button>
+      </div>
+      <div id="booking-slots-wrap"><div class="loading">로딩중...</div></div>
+    </div>`;
+  document.body.appendChild(pop);
+  window._bookingWeekOffset=0;
+  await renderBookingSlots();
+}
+
+async function moveBookingWeek(dir){
+  window._bookingWeekOffset=(window._bookingWeekOffset||0)+dir;
+  await renderBookingSlots();
+}
+
+async function renderBookingSlots(){
+  const offset=window._bookingWeekOffset||0;
+  const mon=new Date(getThisMonday());
+  mon.setDate(mon.getDate()+offset*7);
+  const sun=new Date(mon);sun.setDate(sun.getDate()+6);
+  const monStr=mon.toISOString().slice(0,10);
+  const sunStr=sun.toISOString().slice(0,10);
+  const lbl=document.getElementById('booking-week-lbl');
+  if(lbl)lbl.textContent=`${mon.getMonth()+1}/${mon.getDate()} ~ ${sun.getMonth()+1}/${sun.getDate()}`;
+  const wrap=document.getElementById('booking-slots-wrap');
+  if(!wrap)return;
+  // 이번 주 화/목 날짜 계산
+  const tue=new Date(mon);tue.setDate(mon.getDate()+1); // 화
+  const thu=new Date(mon);thu.setDate(mon.getDate()+3); // 목
+  const tueStr=tue.toISOString().slice(0,10);
+  const thuStr=thu.toISOString().slice(0,10);
+  // 슬롯 로드
+  const{data:slots}=await sb.from('call_slots').select('*').eq('is_active',true).order('slot_time');
+  // 예약된 슬롯 로드
+  const{data:bookings}=await sb.from('call_bookings').select('*').gte('booking_date',monStr).lte('booking_date',sunStr);
+  const bookedMap={};
+  (bookings||[]).forEach(b=>{
+    if(b.status!=='cancelled')bookedMap[`${b.booking_date}_${b.slot_id}`]=b;
+  });
+  // 내 예약
+  const myBooking=(bookings||[]).find(b=>b.student_id===U.id&&b.status!=='cancelled');
+  const daySlots={화:slots?.filter(s=>s.day_of_week==='화')||[],목:slots?.filter(s=>s.day_of_week==='목')||[]};
+  const dayDates={화:tueStr,목:thuStr};
+  const today=new Date().toISOString().slice(0,10);
+  let html='';
+  ['화','목'].forEach(day=>{
+    const date=dayDates[day];
+    const daySlotList=daySlots[day];
+    if(!daySlotList.length)return;
+    const d=new Date(date);
+    html+=`<div style="margin-bottom:14px;">
+      <div style="font-size:13px;font-weight:700;margin-bottom:8px;">${day}요일 <span style="font-size:11px;font-weight:400;color:var(--mu);">${d.getMonth()+1}/${d.getDate()}</span></div>
+      <div style="display:flex;flex-wrap:wrap;gap:7px;">
+        ${daySlotList.map(s=>{
+          const key=`${date}_${s.id}`;
+          const booked=bookedMap[key];
+          const isMine=booked&&booked.student_id===U.id;
+          const isOthers=booked&&!isMine;
+          const isPast=date<today;
+          if(isPast)return`<div style="padding:9px 14px;border-radius:10px;background:#F5F3F0;border:1.5px solid var(--brd);font-size:12px;color:#CCC;">${s.slot_time}</div>`;
+          if(isMine)return`<button onclick="cancelBooking('${booked.id}')" style="padding:9px 14px;border-radius:10px;background:linear-gradient(135deg,#534AB7,#3C3489);color:#fff;border:none;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">${s.slot_time} ✓ 취소</button>`;
+          if(isOthers)return`<div style="padding:9px 14px;border-radius:10px;background:#F5F3F0;border:1.5px solid var(--brd);font-size:12px;color:#BBB;">${s.slot_time} 예약됨</div>`;
+          return`<button onclick="makeBooking('${s.id}','${date}','${s.slot_time}')" style="padding:9px 14px;border-radius:10px;background:var(--gl);color:var(--gd);border:1.5px solid #C0E8D8;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">${s.slot_time}</button>`;
+        }).join('')}
+      </div>
+    </div>`;
+  });
+  wrap.innerHTML=html||'<div class="empty">이 주에 예약 가능한 시간이 없어요</div>';
+}
+
+async function makeBooking(slotId, date, time){
+  if(!confirm(`${date} ${time}에 예약할까요?`))return;
+  const{error}=await sb.from('call_bookings').insert({student_id:U.id,slot_id:slotId,booking_date:date,status:'confirmed'});
+  if(error){
+    if(error.message?.includes('unique'))tst('이미 예약된 시간이에요');
+    else tst('예약 실패: '+error.message);
+    return;
+  }
+  tst('예약됐어요! 📞');
+  await renderBookingSlots();
+  checkCallBookingBanner();
+}
+
+async function cancelBooking(bookingId){
+  if(!confirm('예약을 취소할까요?'))return;
+  await sb.from('call_bookings').update({status:'cancelled'}).eq('id',bookingId);
+  tst('예약이 취소됐어요');
+  await renderBookingSlots();
+  checkCallBookingBanner();
+}
+
 async function loadMyNotices(){
   if(P?.role==='admin')return;
   try{
@@ -3691,6 +3906,109 @@ async function grantSubscription(){
   await loadOlSubList();
 }
 
+// ── 학생 검색 ──
+function filterOlStudents(query){
+  const sel=document.getElementById('ol-sub-student');if(!sel)return;
+  const q=query.trim().toLowerCase();
+  const filtered=q?sts.filter(s=>(s.name||s.email||'').toLowerCase().includes(q)):sts;
+  sel.innerHTML='<option value="">학생을 선택하세요</option>'+
+    filtered.map(s=>`<option value="${s.id}">${s.name||s.email}</option>`).join('');
+}
+
+// ── 전화 슬롯 관리 ──
+async function loadCallSlots(){
+  const el=document.getElementById('slot-list');if(!el)return;
+  const{data}=await sb.from('call_slots').select('*').order('day_of_week').order('slot_time');
+  const slots=data||[];
+  if(!slots.length){el.innerHTML='<div class="empty">등록된 시간이 없어요</div>';return;}
+  const byDay={화:[],목:[]};
+  slots.forEach(s=>{if(byDay[s.day_of_week])byDay[s.day_of_week].push(s);});
+  el.innerHTML=Object.entries(byDay).map(([day,ss])=>!ss.length?'':
+    `<div style="margin-bottom:10px;">
+      <div style="font-size:12px;font-weight:700;color:var(--gd);margin-bottom:6px;">${day}요일</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;">
+        ${ss.map(s=>`<div style="display:flex;align-items:center;gap:5px;background:${s.is_active?'var(--gl)':'var(--sf)'};border:1.5px solid ${s.is_active?'#C0E8D8':'var(--brd)'};border-radius:99px;padding:5px 11px;">
+          <span style="font-size:12px;font-weight:600;color:${s.is_active?'var(--gd)':'var(--mu)'};">${s.slot_time}</span>
+          <div onclick="toggleSlot('${s.id}',${s.is_active})" style="font-size:10px;cursor:pointer;color:${s.is_active?'var(--gd)':'var(--mu)'};">${s.is_active?'ON':'OFF'}</div>
+          <div onclick="deleteSlot('${s.id}')" style="width:14px;height:14px;border-radius:50%;background:var(--rl);display:flex;align-items:center;justify-content:center;cursor:pointer;">
+            <svg width="7" height="7" viewBox="0 0 7 7"><line x1="1" y1="1" x2="6" y2="6" stroke="#A32D2D" stroke-width="1.5"/><line x1="6" y1="1" x2="1" y2="6" stroke="#A32D2D" stroke-width="1.5"/></svg>
+          </div>
+        </div>`).join('')}
+      </div>
+    </div>`
+  ).join('');
+}
+
+async function addCallSlot(){
+  const day=document.getElementById('slot-day')?.value;
+  const time=document.getElementById('slot-time')?.value;
+  if(!day||!time){tst('요일과 시간을 선택해주세요');return;}
+  // 30분 단위 체크
+  const [h,m]=time.split(':').map(Number);
+  if(m!==0&&m!==30){tst('30분 단위로 입력해주세요 (예: 09:00, 09:30)');return;}
+  const fmt=`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+  const{error}=await sb.from('call_slots').insert({day_of_week:day,slot_time:fmt});
+  if(error&&error.message?.includes('duplicate')){tst('이미 등록된 시간이에요');return;}
+  if(error){tst('추가 실패: '+error.message);return;}
+  tst(`${day}요일 ${fmt} 추가됐어요!`);
+  await loadCallSlots();
+}
+
+async function toggleSlot(id, cur){
+  await sb.from('call_slots').update({is_active:!cur}).eq('id',id);
+  await loadCallSlots();
+}
+
+async function deleteSlot(id){
+  if(!confirm('이 시간을 삭제할까요?'))return;
+  await sb.from('call_slots').delete().eq('id',id);
+  tst('삭제됐어요');
+  await loadCallSlots();
+}
+
+// ── 예약 현황 (관리자) ──
+async function loadBookings(){
+  const el=document.getElementById('booking-list');if(!el)return;
+  const date=document.getElementById('booking-date-filter')?.value;
+  if(!date){el.innerHTML='<div class="empty">날짜를 선택해주세요</div>';return;}
+  const{data}=await sb.from('call_bookings')
+    .select('*,profiles(name,email,phone),call_slots(day_of_week,slot_time)')
+    .eq('booking_date',date)
+    .order('created_at');
+  const bookings=data||[];
+  if(!bookings.length){el.innerHTML='<div class="empty">이 날 예약이 없어요</div>';return;}
+  el.innerHTML=bookings.map(b=>{
+    const name=b.profiles?.name||b.profiles?.email||'?';
+    const phone=b.profiles?.phone||'전화번호 없음';
+    const time=b.call_slots?.slot_time||'?';
+    const statusColor=b.status==='done'?'var(--gd)':b.status==='cancelled'?'var(--rd)':'var(--amd)';
+    const statusLabel=b.status==='done'?'완료':b.status==='cancelled'?'취소':'예약확정';
+    return`<div class="csm" style="margin-bottom:7px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">
+        <div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <div style="font-size:16px;font-weight:800;color:var(--gd);">${time}</div>
+            <div style="font-size:13px;font-weight:600;">${name}</div>
+          </div>
+          <div style="font-size:11px;color:var(--mu);margin-top:2px;">📱 ${phone}</div>
+        </div>
+        <span style="font-size:11px;font-weight:700;padding:4px 10px;border-radius:99px;background:${b.status==='done'?'var(--gl)':b.status==='cancelled'?'var(--rl)':'var(--aml)'};color:${statusColor};">${statusLabel}</span>
+      </div>
+      ${b.memo?`<div style="font-size:11px;color:var(--mu);background:var(--sf);padding:4px 8px;border-radius:6px;margin-bottom:5px;">${b.memo}</div>`:''}
+      <div style="display:flex;gap:6px;">
+        ${b.status!=='done'?`<button onclick="updateBookingStatus('${b.id}','done')" style="flex:1;padding:7px;border-radius:8px;background:var(--gl);color:var(--gd);border:1.5px solid #C0E8D8;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">통화완료</button>`:''}
+        ${b.status!=='cancelled'?`<button onclick="updateBookingStatus('${b.id}','cancelled')" style="flex:1;padding:7px;border-radius:8px;background:var(--rl);color:var(--rd);border:1px solid #FCA5A5;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">취소</button>`:''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function updateBookingStatus(id, status){
+  await sb.from('call_bookings').update({status}).eq('id',id);
+  tst(status==='done'?'통화 완료로 변경됐어요':'예약이 취소됐어요');
+  await loadBookings();
+}
+
 async function loadOlSubList(){
   const el=document.getElementById('ol-sub-list');if(!el)return;
   const{data}=await sb.from('course_subscriptions').select('*,profiles(name,email,phone),online_courses(title,month)').order('created_at',{ascending:false});
@@ -3764,18 +4082,24 @@ async function loadOlPayList(){
 }
 
 function olTab(t, b){
-  ['course','sub','pay'].forEach(x=>{
+  ['course','sub','schedule','pay'].forEach(x=>{
     const el=document.getElementById(`ol-${x}`);
     if(el)el.style.display=x===t?'block':'none';
   });
   document.querySelectorAll('#pol .tbb .tbn').forEach(x=>x.classList.remove('on'));
   if(b)b.classList.add('on');
   if(t==='sub'){
-    // 시작일 기본값 오늘
     const startEl=document.getElementById('ol-sub-start');
     if(startEl&&!startEl.value)startEl.value=new Date().toISOString().slice(0,10);
     autoCalcEndDate();
     loadOlSubList();
+  }
+  if(t==='schedule'){
+    // 날짜 필터 기본값 오늘
+    const df=document.getElementById('booking-date-filter');
+    if(df&&!df.value)df.value=new Date().toISOString().slice(0,10);
+    loadCallSlots();
+    loadBookings();
   }
   if(t==='pay')loadOlPayList();
 }
