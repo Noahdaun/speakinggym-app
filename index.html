@@ -3627,6 +3627,7 @@ async function submitPayment(){
   document.getElementById('mg-pay-memo').value='';
   loadMgPayHistory();
   renderRevenueSummary();
+  renderMgGrid(); // 등록현황 그리드도 갱신
 }
 
 async function loadMgPayHistory(){
@@ -3657,30 +3658,99 @@ async function deletePayment(pid){
   renderRevenueSummary();
 }
 
-async function renderRevenueSummary(){
+let _revMode='thisMonth'; // 현재 선택된 수입 모드
+
+async function renderRevenueSummary(mode){
+  if(mode)_revMode=mode;
   const el=document.getElementById('mg-revenue-summary');if(!el)return;
   el.innerHTML='<div class="loading">로딩중...</div>';
-  const end=(()=>{const n=new Date();return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`;})();
-  const start=ymAdd(end,-11);
-  const{data}=await sb.from('payments').select('amount,pay_date').gte('pay_date',start+'-01').lte('pay_date',end+'-31');
-  const byMonth={};
-  (data||[]).forEach(p=>{const ym=p.pay_date.slice(0,7);byMonth[ym]=(byMonth[ym]||0)+p.amount;});
-  const months=[];for(let i=0;i<12;i++)months.push(ymAdd(start,i));
-  const maxVal=Math.max(...months.map(m=>byMonth[m]||0),1);
-  const total=months.reduce((s,m)=>s+(byMonth[m]||0),0);
+
+  // 모든 payments 로드 (분산 계산용)
+  const{data:allPay}=await sb.from('payments').select('amount,pay_date,months').order('pay_date');
+  const payments=allPay||[];
+
+  // 월분산 맵 생성 (60만원 2개월 → 7월 30만, 8월 30만)
+  const spreadMap={}; // { 'YYYY-MM': 총액 }
+  payments.forEach(p=>{
+    const months=p.months||1;
+    const perMonth=Math.round(p.amount/months);
+    const startYM=p.pay_date.slice(0,7);
+    for(let i=0;i<months;i++){
+      const ym=ymAdd(startYM,i);
+      spreadMap[ym]=(spreadMap[ym]||0)+perMonth;
+    }
+  });
+
+  const today=new Date();
+  const thisYM=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
+  const nextYM=ymAdd(thisYM,1);
+
+  // 모드별 계산
+  let rangeLabel='';
+  let totalAmount=0;
+  let chartMonths=[];
+
+  if(_revMode==='thisMonth'){
+    totalAmount=spreadMap[thisYM]||0;
+    rangeLabel='이번달 수입';
+    chartMonths=[thisYM];
+  } else if(_revMode==='nextMonth'){
+    totalAmount=spreadMap[nextYM]||0;
+    rangeLabel='다음달 예상수입';
+    chartMonths=[nextYM];
+  } else if(_revMode==='3months'){
+    chartMonths=[];for(let i=2;i>=0;i--)chartMonths.push(ymAdd(thisYM,-i));
+    totalAmount=chartMonths.reduce((s,m)=>s+(spreadMap[m]||0),0);
+    rangeLabel='지난 3개월 합계';
+  } else if(_revMode==='6months'){
+    chartMonths=[];for(let i=5;i>=0;i--)chartMonths.push(ymAdd(thisYM,-i));
+    totalAmount=chartMonths.reduce((s,m)=>s+(spreadMap[m]||0),0);
+    rangeLabel='지난 6개월 합계';
+  } else if(_revMode==='1year'){
+    chartMonths=[];for(let i=11;i>=0;i--)chartMonths.push(ymAdd(thisYM,-i));
+    totalAmount=chartMonths.reduce((s,m)=>s+(spreadMap[m]||0),0);
+    rangeLabel='지난 1년 합계';
+  }
+
+  const maxVal=Math.max(...chartMonths.map(m=>spreadMap[m]||0),1);
+
+  // 버튼 목록
+  const btns=[
+    {key:'thisMonth',label:'이번달'},
+    {key:'nextMonth',label:'다음달 예상'},
+    {key:'3months',label:'3개월'},
+    {key:'6months',label:'6개월'},
+    {key:'1year',label:'1년'},
+  ];
+
   el.innerHTML=`
-    <div style="font-size:12px;color:var(--mu);margin-bottom:8px;">최근 12개월 합계: <span style="font-weight:700;color:var(--gd);">${total.toLocaleString()}원</span></div>
-    ${months.map(m=>{
-      const val=byMonth[m]||0;
-      const pct=Math.round(val/maxVal*100);
-      return `<div style="margin-bottom:7px;">
-        <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
-          <div style="font-size:11px;font-weight:600;">${ymLabel(m)}</div>
-          <div style="font-size:11px;font-weight:700;color:var(--gd);">${val.toLocaleString()}원</div>
-        </div>
-        <div style="background:var(--brd);border-radius:99px;height:7px;"><div style="background:var(--g);border-radius:99px;height:7px;width:${pct}%;"></div></div>
-      </div>`;
-    }).join('')}
+    <!-- 기간 선택 버튼 -->
+    <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:12px;">
+      ${btns.map(b=>`
+        <button onclick="renderRevenueSummary('${b.key}')" style="padding:6px 12px;border-radius:99px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;border:1.5px solid ${_revMode===b.key?'var(--g)':'var(--brd)'};background:${_revMode===b.key?'var(--g)':'var(--sf)'};color:${_revMode===b.key?'#fff':'var(--text)'};">${b.label}</button>
+      `).join('')}
+    </div>
+    <!-- 총액 표시 -->
+    <div style="background:var(--gl);border-radius:13px;padding:14px 16px;margin-bottom:12px;border:1.5px solid #C0E8D8;">
+      <div style="font-size:11px;color:var(--gm);margin-bottom:3px;">${rangeLabel}</div>
+      <div style="font-size:26px;font-weight:800;color:var(--gd);">${totalAmount.toLocaleString()}원</div>
+    </div>
+    <!-- 월별 바 차트 (단일 달이면 숨김) -->
+    ${chartMonths.length>1?`
+      <div>
+        ${chartMonths.map(m=>{
+          const val=spreadMap[m]||0;
+          const pct=Math.round(val/maxVal*100);
+          return `<div style="margin-bottom:7px;">
+            <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
+              <div style="font-size:11px;font-weight:600;">${ymLabel(m)}</div>
+              <div style="font-size:11px;font-weight:700;color:var(--gd);">${val.toLocaleString()}원</div>
+            </div>
+            <div style="background:var(--brd);border-radius:99px;height:7px;"><div style="background:var(--g);border-radius:99px;height:7px;width:${pct}%;transition:width .3s;"></div></div>
+          </div>`;
+        }).join('')}
+      </div>
+    `:''}
   `;
 }
 
