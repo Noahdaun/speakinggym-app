@@ -627,6 +627,7 @@ function doUpdate(){
         <button class="tbn" onclick="adTab('at',this)">출석</button>
         <button class="tbn" onclick="adTab('vo',this)">단어</button>
         <button class="tbn" onclick="adTab('ct',this)">인증현황</button>
+        <button class="tbn" onclick="adTab('mg',this)">학생관리</button>
       </div>
 
       <!-- 학생현황 -->
@@ -748,6 +749,47 @@ function doUpdate(){
         <div id="admin-cert-body"><div class="loading">로딩중...</div></div>
       </div>
     </div>
+
+      <!-- 학생관리 -->
+      <div id="ad-mg" style="display:none;">
+        <div class="tbb" id="mg-subtabs">
+          <button class="tbn on" onclick="mgTab('grid')">등록현황</button>
+          <button class="tbn" onclick="mgTab('pay')">결제 · 매출</button>
+        </div>
+
+        <!-- 등록현황 그리드 -->
+        <div id="mg-grid-wrap">
+          <div class="pills" id="mg-cls-pills"></div>
+          <div class="row" style="margin-bottom:8px;">
+            <button onclick="mgShiftRange(-6)" style="padding:6px 12px;border-radius:8px;background:var(--sf);border:1.5px solid var(--brd);font-size:12px;cursor:pointer;font-family:inherit;">← 이전 6개월</button>
+            <div id="mg-range-label" style="font-size:12px;font-weight:700;color:var(--mu);"></div>
+            <button onclick="mgShiftRange(6)" style="padding:6px 12px;border-radius:8px;background:var(--sf);border:1.5px solid var(--brd);font-size:12px;cursor:pointer;font-family:inherit;">다음 6개월 →</button>
+          </div>
+          <div style="font-size:11px;color:var(--mu);margin-bottom:8px;">이름을 누르면 과정 · 등록일 · 홀딩 · 메모를 수정할 수 있어요. 칸을 누르면 등록여부가 토글돼요.</div>
+          <div style="overflow-x:auto;border:1.5px solid var(--brd);border-radius:12px;" id="mg-grid-table"></div>
+        </div>
+
+        <!-- 결제 입력 + 매출 -->
+        <div id="mg-pay-wrap" style="display:none;">
+          <div class="card" style="margin-bottom:12px;">
+            <div style="font-size:13px;font-weight:700;margin-bottom:10px;">결제 입력</div>
+            <select id="mg-pay-student" style="margin-bottom:8px;"></select>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+              <input class="inp" type="number" id="mg-pay-amount" placeholder="결제 금액" style="margin-bottom:0;">
+              <input class="inp" type="number" id="mg-pay-months" placeholder="등록 개월수" value="1" min="1" style="margin-bottom:0;">
+            </div>
+            <input class="inp" type="date" id="mg-pay-date">
+            <input class="inp" type="text" id="mg-pay-memo" placeholder="메모 (선택)">
+            <button class="btn btn-p" onclick="submitPayment()">결제 저장</button>
+          </div>
+          <div class="sec">월별 매출 (최근 12개월)</div>
+          <div class="card" id="mg-revenue-summary" style="margin-bottom:14px;"><div class="loading">로딩중...</div></div>
+          <div class="sec">최근 결제 내역</div>
+          <div id="mg-pay-history"><div class="loading">로딩중...</div></div>
+        </div>
+      </div>
+    </div>
+
 
   </div><!-- pages -->
 
@@ -3367,7 +3409,7 @@ function playMemSeg(idx){
 
 // ── 관리자 탭 전환 ──
 function adTab(t,b){
-  ['st','cl','ls','at','vo','ct'].forEach(x=>{const el=document.getElementById(`ad-${x}`);if(el)el.style.display=x===t?'block':'none';});
+  ['st','cl','ls','at','vo','ct','mg'].forEach(x=>{const el=document.getElementById(`ad-${x}`);if(el)el.style.display=x===t?'block':'none';});
   document.querySelectorAll('#pad>.tbb .tbn').forEach(x=>x.classList.remove('on'));
   if(b)b.classList.add('on');
   if(t==='cl'){const clDiv=document.getElementById('ad-cls');if(clDiv)clDiv.style.display='block';rClsList();}
@@ -3379,6 +3421,7 @@ function adTab(t,b){
   }
   if(t==='vo'){rVTgt();}
   if(t==='ct'){loadAdminCert();}
+  if(t==='mg'){mgInit();}
 }
 
 // ── 인증 사진 미리보기 ──
@@ -3429,6 +3472,218 @@ async function submitCert(){
     await renderCertHistory();
   }catch(e){console.error('submitCert error:',e);tst('오류: '+e.message);}
 }
+
+// ── 학생관리 (등록현황 그리드 + 결제/매출) ──
+let mgCls='all';
+let mgEndYM=(()=>{const n=new Date();return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`;})();
+
+function ymAdd(ym,delta){
+  const[y,m]=ym.split('-').map(Number);
+  const d=new Date(y,m-1+delta,1);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+}
+function ymLabel(ym){
+  const[y,m]=ym.split('-');
+  return `${y.slice(2)}.${m}`;
+}
+
+function mgInit(){
+  mgRenderClsPills();
+  const dateEl=document.getElementById('mg-pay-date');
+  if(dateEl&&!dateEl.value)dateEl.value=new Date().toISOString().slice(0,10);
+  mgTab('grid');
+}
+
+function mgTab(sub){
+  const gridWrap=document.getElementById('mg-grid-wrap');
+  const payWrap=document.getElementById('mg-pay-wrap');
+  if(gridWrap)gridWrap.style.display=sub==='grid'?'block':'none';
+  if(payWrap)payWrap.style.display=sub==='pay'?'block':'none';
+  document.querySelectorAll('#mg-subtabs .tbn').forEach(b=>b.classList.remove('on'));
+  const idx=sub==='grid'?0:1;
+  const btns=document.querySelectorAll('#mg-subtabs .tbn');
+  if(btns[idx])btns[idx].classList.add('on');
+  if(sub==='grid')renderMgGrid();
+  if(sub==='pay'){mgPopulateStudentSelect();loadMgPayHistory();renderRevenueSummary();}
+}
+
+function mgRenderClsPills(){
+  const el=document.getElementById('mg-cls-pills');if(!el)return;
+  const cls=['all',...classes];
+  el.innerHTML=cls.map(c=>`<div class="pill ${c===mgCls?'on':''}" onclick="mgSetCls('${c}')">${c==='all'?'전체':c}</div>`).join('');
+}
+function mgSetCls(c){mgCls=c;mgRenderClsPills();renderMgGrid();}
+function mgShiftRange(delta){mgEndYM=ymAdd(mgEndYM,delta);renderMgGrid();}
+
+async function renderMgGrid(){
+  const wrap=document.getElementById('mg-grid-table');
+  if(!wrap)return;
+  wrap.innerHTML='<div class="loading">로딩중...</div>';
+  const filtStu=mgCls==='all'?sts.filter(s=>s.class_name):sts.filter(s=>s.class_name===mgCls);
+  if(!filtStu.length){wrap.innerHTML='<div class="empty">학생이 없어요</div>';document.getElementById('mg-range-label').textContent='';return;}
+  const startYM=ymAdd(mgEndYM,-11);
+  const months=[];
+  for(let i=0;i<12;i++)months.push(ymAdd(startYM,i));
+  const ids=filtStu.map(s=>s.id);
+  const{data:enr}=await sb.from('enrollments').select('student_id,year_month,enrolled').in('student_id',ids).gte('year_month',startYM).lte('year_month',mgEndYM);
+  const emap={};(enr||[]).forEach(e=>{emap[`${e.student_id}_${e.year_month}`]=e.enrolled;});
+  document.getElementById('mg-range-label').textContent=`${ymLabel(startYM)} ~ ${ymLabel(mgEndYM)}`;
+  let h=`<table style="border-collapse:collapse;width:100%;font-size:12px;">
+    <thead><tr>
+      <th style="position:sticky;left:0;background:var(--card);z-index:2;padding:8px 10px;text-align:left;border-bottom:1.5px solid var(--brd);min-width:88px;">이름</th>
+      ${months.map(m=>`<th style="padding:8px 5px;text-align:center;border-bottom:1.5px solid var(--brd);min-width:38px;color:var(--mu);font-weight:600;">${ymLabel(m)}</th>`).join('')}
+    </tr></thead><tbody>`;
+  filtStu.forEach((s,i)=>{
+    const rowBg=i%2?'var(--sf)':'var(--card)';
+    h+=`<tr>
+      <td onclick="openMgEdit('${s.id}')" style="position:sticky;left:0;background:${rowBg};z-index:1;padding:8px 10px;font-weight:600;cursor:pointer;color:var(--gd);white-space:nowrap;border-bottom:1px solid var(--brd);">${dispName(s.name,s.email)}</td>
+      ${months.map(m=>{
+        const on=emap[`${s.id}_${m}`]===true;
+        return `<td onclick="toggleEnroll('${s.id}','${m}')" style="text-align:center;padding:8px 3px;cursor:pointer;background:${rowBg};border-bottom:1px solid var(--brd);">
+          <span style="display:inline-flex;width:20px;height:20px;border-radius:6px;align-items:center;justify-content:center;background:${on?'var(--g)':'transparent'};border:${on?'none':'1.5px solid var(--brd)'};color:#fff;font-size:11px;font-weight:700;">${on?'✓':''}</span>
+        </td>`;
+      }).join('')}
+    </tr>`;
+  });
+  h+='</tbody></table>';
+  wrap.innerHTML=h;
+}
+
+async function toggleEnroll(sid,ym){
+  const{data:ex}=await sb.from('enrollments').select('id,enrolled').eq('student_id',sid).eq('year_month',ym).maybeSingle();
+  const newVal=ex?!ex.enrolled:true;
+  if(ex)await sb.from('enrollments').update({enrolled:newVal}).eq('id',ex.id);
+  else await sb.from('enrollments').insert({student_id:sid,year_month:ym,enrolled:newVal});
+  renderMgGrid();
+}
+
+async function openMgEdit(sid){
+  const stu=sts.find(s=>s.id===sid);if(!stu)return;
+  const{data:info}=await sb.from('student_biz_info').select('*').eq('student_id',sid).maybeSingle();
+  const pop=document.createElement('div');
+  pop.id='mg-edit-pop';
+  pop.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9000;display:flex;align-items:flex-end;justify-content:center;';
+  pop.innerHTML=`<div style="background:var(--bg);border-radius:20px 20px 0 0;width:100%;max-width:480px;max-height:88vh;overflow-y:auto;padding:16px 14px 30px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <div style="font-size:16px;font-weight:800;">${dispName(stu.name,stu.email)}</div>
+      <div onclick="document.getElementById('mg-edit-pop').remove()" style="width:28px;height:28px;border-radius:8px;background:var(--sf);display:flex;align-items:center;justify-content:center;cursor:pointer;">
+        <svg width="12" height="12" viewBox="0 0 12 12"><line x1="1" y1="1" x2="11" y2="11" stroke="#888" stroke-width="1.8"/><line x1="11" y1="1" x2="1" y2="11" stroke="#888" stroke-width="1.8"/></svg>
+      </div>
+    </div>
+    <div style="font-size:12px;font-weight:600;margin-bottom:5px;">해당 과정</div>
+    <input class="inp" type="text" id="mg-course" placeholder="예: 오전반 프리토킹" value="${info?.course||''}">
+    <div style="font-size:12px;font-weight:600;margin-bottom:5px;">등록일</div>
+    <input class="inp" type="date" id="mg-regdate" value="${info?.reg_date||''}">
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:12px;">
+      <input type="checkbox" id="mg-holding" ${info?.holding?'checked':''} style="width:18px;height:18px;accent-color:var(--g);">
+      <span style="font-size:13px;font-weight:600;">홀딩 중</span>
+    </label>
+    <div style="font-size:12px;font-weight:600;margin-bottom:5px;">추가사항 메모 (학생평가)</div>
+    <textarea class="inp" id="mg-memo" style="height:110px;" placeholder="예: 발음 좋음, 숙제 성실함, 다음 레벨업 필요">${info?.memo||''}</textarea>
+    <button class="btn btn-p" onclick="saveMgInfo('${sid}')" style="margin-top:6px;">저장</button>
+  </div>`;
+  document.body.appendChild(pop);
+  pop.addEventListener('click',e=>{if(e.target===pop)pop.remove();});
+}
+
+async function saveMgInfo(sid){
+  const course=document.getElementById('mg-course')?.value?.trim()||null;
+  const reg_date=document.getElementById('mg-regdate')?.value||null;
+  const holding=document.getElementById('mg-holding')?.checked||false;
+  const memo=document.getElementById('mg-memo')?.value?.trim()||null;
+  const{error}=await sb.from('student_biz_info').upsert({student_id:sid,course,reg_date,holding,memo,updated_at:new Date().toISOString()},{onConflict:'student_id'});
+  if(error){tst('저장 실패: '+error.message);return;}
+  tst('저장됐어요!');
+  document.getElementById('mg-edit-pop')?.remove();
+  renderMgGrid();
+}
+
+function mgPopulateStudentSelect(){
+  const sel=document.getElementById('mg-pay-student');if(!sel)return;
+  sel.innerHTML='<option value="">학생 선택...</option>'+sts.map(s=>`<option value="${s.id}">${dispName(s.name,s.email)}${s.class_name?` (${s.class_name})`:''}</option>`).join('');
+}
+
+async function submitPayment(){
+  const sid=document.getElementById('mg-pay-student')?.value;
+  const amount=parseInt(document.getElementById('mg-pay-amount')?.value);
+  const pay_date=document.getElementById('mg-pay-date')?.value;
+  const months=parseInt(document.getElementById('mg-pay-months')?.value)||1;
+  const memo=document.getElementById('mg-pay-memo')?.value?.trim()||null;
+  if(!sid){tst('학생을 선택해주세요');return;}
+  if(!amount||amount<=0){tst('금액을 입력해주세요');return;}
+  if(!pay_date){tst('결제일을 입력해주세요');return;}
+  const{error}=await sb.from('payments').insert({student_id:sid,amount,pay_date,months,memo});
+  if(error){tst('저장 실패: '+error.message);return;}
+  // 등록 개월수만큼 enrollments 자동 채우기
+  const startYM=pay_date.slice(0,7);
+  for(let i=0;i<months;i++){
+    const ym=ymAdd(startYM,i);
+    const{data:ex}=await sb.from('enrollments').select('id').eq('student_id',sid).eq('year_month',ym).maybeSingle();
+    if(ex)await sb.from('enrollments').update({enrolled:true}).eq('id',ex.id);
+    else await sb.from('enrollments').insert({student_id:sid,year_month:ym,enrolled:true});
+  }
+  tst(`결제 저장 완료! ${months}개월 등록처리 됐어요`);
+  document.getElementById('mg-pay-amount').value='';
+  document.getElementById('mg-pay-memo').value='';
+  loadMgPayHistory();
+  renderRevenueSummary();
+}
+
+async function loadMgPayHistory(){
+  const el=document.getElementById('mg-pay-history');if(!el)return;
+  el.innerHTML='<div class="loading">로딩중...</div>';
+  const{data}=await sb.from('payments').select('*').order('pay_date',{ascending:false}).limit(30);
+  if(!data?.length){el.innerHTML='<div class="empty">결제 내역이 없어요</div>';return;}
+  el.innerHTML=data.map(p=>{
+    const stu=sts.find(s=>s.id===p.student_id);
+    return `<div class="csm row">
+      <div>
+        <div style="font-size:13px;font-weight:600;">${stu?dispName(stu.name,stu.email):'?'}</div>
+        <div class="mu">${p.pay_date} · ${p.months}개월${p.memo?' · '+p.memo:''}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div style="font-size:13px;font-weight:700;color:var(--gd);">${p.amount.toLocaleString()}원</div>
+        <div onclick="deletePayment('${p.id}')" style="font-size:10px;color:var(--rd);background:var(--rl);padding:3px 8px;border-radius:7px;cursor:pointer;font-weight:600;">삭제</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function deletePayment(pid){
+  if(!confirm('이 결제 기록을 삭제할까요?'))return;
+  await sb.from('payments').delete().eq('id',pid);
+  tst('삭제됐어요');
+  loadMgPayHistory();
+  renderRevenueSummary();
+}
+
+async function renderRevenueSummary(){
+  const el=document.getElementById('mg-revenue-summary');if(!el)return;
+  el.innerHTML='<div class="loading">로딩중...</div>';
+  const end=(()=>{const n=new Date();return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`;})();
+  const start=ymAdd(end,-11);
+  const{data}=await sb.from('payments').select('amount,pay_date').gte('pay_date',start+'-01').lte('pay_date',end+'-31');
+  const byMonth={};
+  (data||[]).forEach(p=>{const ym=p.pay_date.slice(0,7);byMonth[ym]=(byMonth[ym]||0)+p.amount;});
+  const months=[];for(let i=0;i<12;i++)months.push(ymAdd(start,i));
+  const maxVal=Math.max(...months.map(m=>byMonth[m]||0),1);
+  const total=months.reduce((s,m)=>s+(byMonth[m]||0),0);
+  el.innerHTML=`
+    <div style="font-size:12px;color:var(--mu);margin-bottom:8px;">최근 12개월 합계: <span style="font-weight:700;color:var(--gd);">${total.toLocaleString()}원</span></div>
+    ${months.map(m=>{
+      const val=byMonth[m]||0;
+      const pct=Math.round(val/maxVal*100);
+      return `<div style="margin-bottom:7px;">
+        <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
+          <div style="font-size:11px;font-weight:600;">${ymLabel(m)}</div>
+          <div style="font-size:11px;font-weight:700;color:var(--gd);">${val.toLocaleString()}원</div>
+        </div>
+        <div style="background:var(--brd);border-radius:99px;height:7px;"><div style="background:var(--g);border-radius:99px;height:7px;width:${pct}%;"></div></div>
+      </div>`;
+    }).join('')}
+  `;
+}
+
 
 // ── INIT ──
 (async()=>{
