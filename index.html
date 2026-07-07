@@ -3476,7 +3476,8 @@ async function submitCert(){
 // ── 학생관리 (등록현황 그리드 + 결제/매출) ──
 let mgCls='all';
 let mgHoldFilter=false; // 홀딩 학생만 보기
-let mgEndYM=(()=>{const n=new Date();return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`;})();
+const _thisYM=(()=>{const n=new Date();return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`;})();
+let mgStartYM=_thisYM; // 항상 현재달이 제일 왼쪽
 
 function ymAdd(ym,delta){
   const[y,m]=ym.split('-').map(Number);
@@ -3516,7 +3517,7 @@ function mgRenderClsPills(){
 }
 function mgSetCls(c){mgCls=c;mgHoldFilter=false;mgRenderClsPills();renderMgGrid();}
 function mgToggleHold(){mgHoldFilter=!mgHoldFilter;if(mgHoldFilter)mgCls='all';mgRenderClsPills();renderMgGrid();}
-function mgShiftRange(delta){mgEndYM=ymAdd(mgEndYM,delta);renderMgGrid();}
+function mgShiftRange(delta){mgStartYM=ymAdd(mgStartYM,delta);renderMgGrid();}
 
 async function renderMgGrid(){
   const wrap=document.getElementById('mg-grid-table');
@@ -3532,16 +3533,18 @@ async function renderMgGrid(){
     filtStu=baseStu.filter(s=>holdSet.has(s.id));
   }
   if(!filtStu.length){wrap.innerHTML='<div class="empty">${mgHoldFilter?"홀딩 중인 학생이 없어요":"학생이 없어요"}</div>';document.getElementById('mg-range-label').textContent='';return;}
-  const startYM=ymAdd(mgEndYM,-11);
+  // 현재달(mgStartYM)부터 오른쪽으로 6개월
   const months=[];
-  for(let i=0;i<12;i++)months.push(ymAdd(startYM,i));
+  for(let i=0;i<6;i++)months.push(ymAdd(mgStartYM,i));
+  const startYM=months[0];
   const ids=filtStu.map(s=>s.id);
-  const{data:enr}=await sb.from('enrollments').select('student_id,year_month,enrolled').in('student_id',ids).gte('year_month',startYM).lte('year_month',mgEndYM);
+  const endYM=months[months.length-1];
+const{data:enr}=await sb.from('enrollments').select('student_id,year_month,enrolled').in('student_id',ids).gte('year_month',startYM).lte('year_month',endYM);
   // 홀딩 목록 (뱃지용)
   const{data:holdInfo}=await sb.from('student_biz_info').select('student_id,holding').in('student_id',ids).eq('holding',true);
   const holdingIds=new Set((holdInfo||[]).map(h=>h.student_id));
   const emap={};(enr||[]).forEach(e=>{emap[`${e.student_id}_${e.year_month}`]=e.enrolled;});
-  document.getElementById('mg-range-label').textContent=`${ymLabel(startYM)} ~ ${ymLabel(mgEndYM)}`;
+  document.getElementById('mg-range-label').textContent=`${ymLabel(months[0])} ~ ${ymLabel(months[months.length-1])}`;
   let h=`<table style="border-collapse:collapse;width:100%;font-size:12px;">
     <thead><tr>
       <th style="position:sticky;left:0;background:var(--card);z-index:2;padding:8px 10px;text-align:left;border-bottom:1.5px solid var(--brd);min-width:88px;">이름</th>
