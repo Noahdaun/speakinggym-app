@@ -1357,9 +1357,18 @@ async function oSes(lid,title,url,round){
 
   if(type==='follow'){
     // 1·2회차 — iframe + 5회 체크
+    // URL에 학생 토큰+uid+lid 자동 추가 (sg_builder 찍기 기능용)
+    let iframeSrc=url;
+    try{
+      const{data:{session:sess}}=await sb.auth.getSession();
+      if(sess?.access_token&&url.includes('github.io')){
+        const sep=url.includes('?')?'&':'?';
+        iframeSrc=`${url}${sep}token=${encodeURIComponent(sess.access_token)}&uid=${encodeURIComponent(U.id)}&lid=${encodeURIComponent(lid)}`;
+      }
+    }catch(e){console.warn('토큰 추가 실패',e);}
     document.getElementById('rs-content').innerHTML=`
       <div style="position:relative;">
-        <iframe src="${url}" style="width:100%;height:calc(100vh - 220px);border:none;display:block;" allowfullscreen></iframe>
+        <iframe src="${iframeSrc}" style="width:100%;height:calc(100vh - 220px);border:none;display:block;" allowfullscreen></iframe>
         <div style="position:absolute;bottom:8px;right:8px;display:flex;gap:4px;" id="rs-overlay-btns"></div>
       </div>`;
     renderBotFollow(lg?.count||0);
