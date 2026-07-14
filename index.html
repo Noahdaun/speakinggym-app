@@ -268,8 +268,6 @@ function doUpdate(){
       <div id="xp-bar-wrap"></div>
       <!-- 알림 -->
       <div id="home-notice"></div>
-      <!-- 문장 학습 통계 -->
-      <div id="home-sent-stats"></div>
       <!-- 오늘 체크리스트 -->
       <div id="home-todo"></div>
       <!-- 달력 -->
@@ -352,6 +350,29 @@ function doUpdate(){
       <div class="dv"></div>
       <div class="sec">지난 리뷰 기록</div>
       <div id="rhs"><div class="loading">로딩중...</div></div>
+    </div>
+
+    <!-- QUIZ -->
+    <div id="pqz" class="pg">
+      <div style="padding:14px 14px 0;display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+        <div style="font-size:22px;font-weight:800;letter-spacing:-.5px;">문장 퀴즈 📝</div>
+      </div>
+      <!-- 레슨 선택 -->
+      <div style="padding:0 14px 10px;overflow-x:auto;white-space:nowrap;" id="quiz-lesson-pills"></div>
+      <!-- 진행률 -->
+      <div style="padding:0 14px;margin-bottom:12px;" id="quiz-progress-wrap" style="display:none;">
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--mu);margin-bottom:5px;">
+          <span id="quiz-progress-label">0 / 0</span>
+          <span id="quiz-score-label"></span>
+        </div>
+        <div style="background:var(--brd);border-radius:99px;height:5px;">
+          <div id="quiz-progress-bar" style="background:var(--g);border-radius:99px;height:5px;width:0%;transition:width .3s;"></div>
+        </div>
+      </div>
+      <!-- 카드 영역 -->
+      <div style="padding:0 14px;" id="quiz-card-wrap">
+        <div class="empty" style="padding:60px 0;">레슨을 선택하면 퀴즈가 시작돼요</div>
+      </div>
     </div>
 
     <!-- CERT -->
@@ -812,6 +833,10 @@ function doUpdate(){
       <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="3" y="3" width="14" height="14" rx="2" stroke="#1D9E75" stroke-width="1.6"/><circle cx="10" cy="9" r="3" stroke="#1D9E75" stroke-width="1.6"/><path d="M5 17c0-2.8 2.2-5 5-5s5 2.2 5 5" stroke="#1D9E75" stroke-width="1.6" stroke-linecap="round"/></svg>
       <span>인증</span>
     </button>
+    <button class="bni" onclick="gp('quiz')">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="3" y="4" width="14" height="12" rx="2" stroke="#1D9E75" stroke-width="1.6"/><path d="M7 9h2.5M7 12h6" stroke="#1D9E75" stroke-width="1.6" stroke-linecap="round"/><circle cx="13.5" cy="9" r="1.5" stroke="#1D9E75" stroke-width="1.4"/></svg>
+      <span>퀴즈</span>
+    </button>
   </nav>
 </div><!-- as -->
 
@@ -954,7 +979,6 @@ async function initApp(u){
     buildHomeTodo();
     loadMyNotices();
     checkCallBookingBanner();
-    loadSentenceStats();
   }
 }
 
@@ -1357,18 +1381,9 @@ async function oSes(lid,title,url,round){
 
   if(type==='follow'){
     // 1·2회차 — iframe + 5회 체크
-    // URL에 학생 토큰+uid+lid 자동 추가 (sg_builder 찍기 기능용)
-    let iframeSrc=url;
-    try{
-      const{data:{session:sess}}=await sb.auth.getSession();
-      if(sess?.access_token&&url.includes('github.io')){
-        const sep=url.includes('?')?'&':'?';
-        iframeSrc=`${url}${sep}token=${encodeURIComponent(sess.access_token)}&uid=${encodeURIComponent(U.id)}&lid=${encodeURIComponent(lid)}`;
-      }
-    }catch(e){console.warn('토큰 추가 실패',e);}
     document.getElementById('rs-content').innerHTML=`
       <div style="position:relative;">
-        <iframe src="${iframeSrc}" style="width:100%;height:calc(100vh - 220px);border:none;display:block;" allowfullscreen></iframe>
+        <iframe src="${url}" style="width:100%;height:calc(100vh - 220px);border:none;display:block;" allowfullscreen></iframe>
         <div style="position:absolute;bottom:8px;right:8px;display:flex;gap:4px;" id="rs-overlay-btns"></div>
       </div>`;
     renderBotFollow(lg?.count||0);
@@ -1511,6 +1526,19 @@ function parseSGImport(){
     filled++;
   }
 
+  // 빈칸 퀴즈 → ls-blanks (hidden input에 저장)
+  const blanksKey=Object.keys(sections).find(k=>k.includes('빈칸'));
+  if(blanksKey){
+    let blanksEl=document.getElementById('ls-blanks');
+    if(!blanksEl){
+      blanksEl=document.createElement('input');
+      blanksEl.type='hidden';blanksEl.id='ls-blanks';
+      document.getElementById('sg-import').parentNode.appendChild(blanksEl);
+    }
+    blanksEl.value=sections[blanksKey];
+    filled++;
+  }
+
   if(filled>0){
     tst(`✨ ${filled}개 항목 자동 채워졌어요!`);
     document.getElementById('sg-import').value='';
@@ -1578,13 +1606,11 @@ function renderBotMemorize(lesson, existingSub){
       </div>
       <div style="font-size:10px;color:#0F6E56;">${subs.length}문장 중 ${Math.round(subs.length*score/100)}개 알겠어요</div>
       ${score<75?`<button onclick="retryMemorize()" style="margin-top:9px;width:100%;padding:9px;border-radius:9px;background:linear-gradient(135deg,#FFB347,#E8940A);color:#fff;border:none;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">다시 도전하기</button>`:''}
-      <button onclick="openSentenceList()" style="margin-top:7px;width:100%;padding:9px;border-radius:9px;background:#F5F2EC;border:1.5px solid #EDE8DF;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;color:#1a1a1a;">📋 문장 목록 보기</button>
+
     </div>`;return;
   }
 
   // 하단에 문장 목록 버튼 추가
-  bot.innerHTML=`<button onclick="openSentenceList()" style="width:100%;padding:11px;border-radius:11px;background:#F5F2EC;border:1.5px solid #EDE8DF;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;color:#1a1a1a;margin-bottom:10px;">📋 전체 문장 목록 보기</button>`;
-
   // 플래시카드 상태
   window._memCards={subs,idx:0,known:0,unknown:[],total:subs.length};
   renderMemCard();
@@ -3004,43 +3030,6 @@ async function sendNotify(targetStudentId,msg){
 
 // ── 학생: 알림 로드 및 표시 ──
 // ── 학생: 전화 예약 배너 ──
-async function loadSentenceStats(){
-  if(P?.role==='admin')return;
-  const wrap=document.getElementById('home-sent-stats');if(!wrap)return;
-  const today=new Date().toISOString().slice(0,10);
-  const weekAgo=new Date(Date.now()-7*24*60*60*1000).toISOString().slice(0,10);
-  const{data}=await sb.from('sentence_logs').select('starred,status,updated_at').eq('student_id',U.id).gte('updated_at',weekAgo);
-  if(!data?.length){wrap.innerHTML='';return;}
-  const starred=data.filter(d=>d.starred).length;
-  const known=data.filter(d=>d.status==='known').length;
-  const unsure=data.filter(d=>d.status==='unsure').length;
-  const total=data.length;
-  const pct=total?Math.round(known/total*100):0;
-  wrap.innerHTML=`<div style="padding:0 14px 8px;">
-    <div style="background:var(--sf);border:1.5px solid var(--brd);border-radius:14px;padding:12px 14px;">
-      <div style="font-size:12px;font-weight:700;margin-bottom:8px;">📊 이번 주 문장 학습</div>
-      <div style="display:flex;gap:10px;margin-bottom:8px;">
-        <div style="flex:1;text-align:center;">
-          <div style="font-size:18px;font-weight:800;color:var(--gd);">${known}</div>
-          <div style="font-size:10px;color:var(--mu);">알아요</div>
-        </div>
-        <div style="flex:1;text-align:center;">
-          <div style="font-size:18px;font-weight:800;color:var(--rd);">${unsure}</div>
-          <div style="font-size:10px;color:var(--mu);">모르겠어요</div>
-        </div>
-        <div style="flex:1;text-align:center;">
-          <div style="font-size:18px;font-weight:800;color:#E8940A;">${starred}</div>
-          <div style="font-size:10px;color:var(--mu);">★ 찍은 문장</div>
-        </div>
-      </div>
-      <div style="background:var(--brd);border-radius:99px;height:6px;">
-        <div style="background:linear-gradient(90deg,var(--g),#25C48E);border-radius:99px;height:6px;width:${pct}%;transition:width .5s;"></div>
-      </div>
-      <div style="font-size:10px;color:var(--mu);margin-top:4px;text-align:right;">${pct}% 이해</div>
-    </div>
-  </div>`;
-}
-
 async function checkCallBookingBanner(){
   if(P?.role==='admin')return;
   // 관리형 수강권이 있는지 확인
@@ -3450,180 +3439,6 @@ async function saveAllAtt(d, cls){
   lAdm();
 }
 
-// ── 문장 목록 (찍기 + 빈칸 + 알아요/모르겠어요) ──
-let _sentLogs={}; // {sentKey: {starred, status}}
-let _sentFilter='all'; // all | starred | unsure
-let _blankMode=null; // null | 'eng' | 'kor'
-let _currentLessonId=null;
-
-async function openSentenceList(){
-  // 현재 레슨 자막 가져오기
-  const l=ses?les.find(x=>x.id===ses.lid):null;
-  if(!l?.subtitles){tst('자막 데이터가 없어요');return;}
-  let subs=[];
-  try{subs=JSON.parse(l.subtitles).filter(s=>s.kor);}catch{tst('자막 파싱 실패');return;}
-  if(!subs.length){tst('자막이 없어요');return;}
-  _currentLessonId=l.id;
-
-  // DB에서 학생 문장 로그 불러오기
-  const{data}=await sb.from('sentence_logs').select('*').eq('student_id',U.id).eq('lesson_id',l.id);
-  _sentLogs={};
-  (data||[]).forEach(r=>{_sentLogs[r.sentence_index]={id:r.id,starred:r.starred,status:r.status};});
-
-  // 팝업 생성
-  const pop=document.createElement('div');
-  pop.id='sent-list-pop';
-  pop.style.cssText='position:fixed;inset:0;background:var(--bg);z-index:500;overflow-y:auto;max-width:480px;margin:0 auto;display:flex;flex-direction:column;';
-
-  pop.innerHTML=`
-    <div style="background:var(--bg);padding:13px 16px 9px;border-bottom:1.5px solid var(--brd);display:flex;align-items:center;gap:9px;position:sticky;top:0;z-index:10;">
-      <div onclick="document.getElementById('sent-list-pop').remove();_sentFilter='all';_blankMode=null;" style="width:28px;height:28px;border-radius:8px;background:var(--sf);display:flex;align-items:center;justify-content:center;cursor:pointer;">
-        <svg width="11" height="11" viewBox="0 0 11 11"><polyline points="7.5,1 2,5.5 7.5,10" fill="none" stroke="#888" stroke-width="1.8"/></svg>
-      </div>
-      <span style="font-size:15px;font-weight:700;">문장 목록</span>
-      <span id="sent-stats" style="font-size:11px;color:var(--mu);flex:1;"></span>
-    </div>
-    <!-- 필터 버튼 -->
-    <div style="padding:10px 14px 0;display:flex;gap:6px;flex-wrap:wrap;position:sticky;top:50px;background:var(--bg);z-index:9;border-bottom:1px solid var(--brd);padding-bottom:10px;">
-      <button id="sf-all" onclick="setSentFilter('all')" style="padding:6px 12px;border-radius:99px;border:1.5px solid var(--g);background:var(--g);color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">전체</button>
-      <button id="sf-starred" onclick="setSentFilter('starred')" style="padding:6px 12px;border-radius:99px;border:1.5px solid var(--brd);background:var(--sf);color:var(--text);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">★ 찍은 문장</button>
-      <button id="sf-unsure" onclick="setSentFilter('unsure')" style="padding:6px 12px;border-radius:99px;border:1.5px solid var(--brd);background:var(--sf);color:var(--text);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">❓ 모르겠어요</button>
-    </div>
-    <!-- 빈칸 모드 -->
-    <div style="padding:8px 14px;display:flex;gap:6px;position:sticky;top:95px;background:var(--bg);z-index:8;border-bottom:1px solid var(--brd);">
-      <button id="bm-off" onclick="setBlankMode(null)" style="padding:5px 11px;border-radius:99px;border:1.5px solid var(--g);background:var(--g);color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">일반</button>
-      <button id="bm-eng" onclick="setBlankMode('eng')" style="padding:5px 11px;border-radius:99px;border:1.5px solid var(--brd);background:var(--sf);color:var(--text);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">빈칸 영어</button>
-      <button id="bm-kor" onclick="setBlankMode('kor')" style="padding:5px 11px;border-radius:99px;border:1.5px solid var(--brd);background:var(--sf);color:var(--text);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">빈칸 한국어</button>
-    </div>
-    <div id="sent-list-body" style="padding:12px 14px;flex:1;"></div>`;
-
-  document.body.appendChild(pop);
-  window._sentSubs=subs;
-  renderSentList();
-}
-
-function setSentFilter(f){
-  _sentFilter=f;
-  ['all','starred','unsure'].forEach(x=>{
-    const btn=document.getElementById(`sf-${x}`);
-    if(!btn)return;
-    if(x===f){btn.style.background='var(--g)';btn.style.color='#fff';btn.style.borderColor='var(--g)';}
-    else{btn.style.background='var(--sf)';btn.style.color='var(--text)';btn.style.borderColor='var(--brd)';}
-  });
-  renderSentList();
-}
-
-function setBlankMode(m){
-  _blankMode=m;
-  ['off','eng','kor'].forEach(x=>{
-    const btn=document.getElementById(`bm-${x}`);
-    if(!btn)return;
-    const active=(x==='off'&&m===null)||(x===m);
-    if(active){btn.style.background='var(--g)';btn.style.color='#fff';btn.style.borderColor='var(--g)';}
-    else{btn.style.background='var(--sf)';btn.style.color='var(--text)';btn.style.borderColor='var(--brd)';}
-  });
-  renderSentList();
-}
-
-function makeBlank(text){
-  // 단어를 빈칸으로 (2단어 이상, 핵심 단어 위주)
-  const words=text.split(' ');
-  if(words.length<3)return `<span class="sent-blank" onclick="revealBlank(this)" data-word="${text}" style="display:inline-block;min-width:60px;height:20px;background:var(--sf);border:1.5px solid var(--brd);border-radius:4px;vertical-align:middle;cursor:pointer;"></span>`;
-  // 중간 단어들 중 랜덤으로 2~3개 빈칸
-  const blanked=words.map((w,i)=>{
-    if(i===0||i===words.length-1)return w; // 첫/마지막 단어는 유지
-    if(Math.random()<0.45&&w.length>2)return `<span class="sent-blank" onclick="revealBlank(this)" data-word="${w}" style="display:inline-block;min-width:${w.length*8}px;height:20px;background:var(--sf);border:1.5px solid var(--brd);border-radius:4px;vertical-align:middle;cursor:pointer;"></span>`;
-    return w;
-  });
-  return blanked.join(' ');
-}
-
-function revealBlank(el){
-  el.textContent=el.dataset.word;
-  el.style.background='var(--gl)';
-  el.style.borderColor='#C0E8D8';
-  el.style.color='var(--gd)';
-  el.style.fontWeight='700';
-  el.onclick=null;
-}
-
-function renderSentList(){
-  const body=document.getElementById('sent-list-body');if(!body)return;
-  const subs=window._sentSubs||[];
-
-  // 필터 적용
-  let filtered=subs.map((s,i)=>({...s,idx:i}));
-  if(_sentFilter==='starred')filtered=filtered.filter(s=>_sentLogs[s.idx]?.starred);
-  if(_sentFilter==='unsure')filtered=filtered.filter(s=>_sentLogs[s.idx]?.status==='unsure');
-
-  // 통계 업데이트
-  const statEl=document.getElementById('sent-stats');
-  if(statEl){
-    const starCount=subs.filter((_,i)=>_sentLogs[i]?.starred).length;
-    const unsureCount=subs.filter((_,i)=>_sentLogs[i]?.status==='unsure').length;
-    const knownCount=subs.filter((_,i)=>_sentLogs[i]?.status==='known').length;
-    statEl.textContent=`★${starCount} · 알아요${knownCount} · 모르겠어요${unsureCount}`;
-  }
-
-  if(!filtered.length){
-    body.innerHTML='<div style="text-align:center;padding:40px;color:var(--mu);font-size:13px;">해당하는 문장이 없어요</div>';
-    return;
-  }
-
-  body.innerHTML=filtered.map(s=>{
-    const log=_sentLogs[s.idx]||{};
-    const starred=log.starred||false;
-    const status=log.status||null;
-    const isUnsure=status==='unsure';
-    const isKnown=status==='known';
-
-    let engContent=s.eng||'';
-    let korContent=s.kor||'';
-    if(_blankMode==='eng')engContent=makeBlank(engContent);
-    if(_blankMode==='kor')korContent=makeBlank(korContent);
-
-    return`<div id="sent-row-${s.idx}" style="background:${starred?'var(--aml)':isUnsure?'var(--rl)':'var(--sf)'};border:1.5px solid ${starred?'#FAC775':isUnsure?'#FCA5A5':'var(--brd)'};border-radius:13px;padding:12px 13px;margin-bottom:8px;">
-      <div style="display:flex;align-items:flex-start;gap:10px;">
-        <div style="flex:1;min-width:0;">
-          <div style="font-size:15px;color:var(--text);line-height:1.6;margin-bottom:4px;">${engContent}</div>
-          <div style="font-size:13px;color:var(--mu);line-height:1.6;">${korContent}</div>
-        </div>
-        <button onclick="toggleStar(${s.idx})" style="width:32px;height:32px;border-radius:50%;border:1.5px solid ${starred?'#FAC775':'var(--brd)'};background:${starred?'#FFF8E7':'var(--bg)'};font-size:17px;flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;">${starred?'★':'☆'}</button>
-      </div>
-      <div style="display:flex;gap:6px;margin-top:9px;">
-        <button onclick="setSentStatus(${s.idx},'known')" style="flex:1;padding:7px;border-radius:9px;border:1.5px solid ${isKnown?'#C0E8D8':'var(--brd)'};background:${isKnown?'var(--gl)':'var(--bg)'};font-size:12px;font-weight:${isKnown?'700':'500'};color:${isKnown?'var(--gd)':'var(--text)'};cursor:pointer;font-family:inherit;">✓ 알아요</button>
-        <button onclick="setSentStatus(${s.idx},'unsure')" style="flex:1;padding:7px;border-radius:9px;border:1.5px solid ${isUnsure?'#FCA5A5':'var(--brd)'};background:${isUnsure?'var(--rl)':'var(--bg)'};font-size:12px;font-weight:${isUnsure?'700':'500'};color:${isUnsure?'var(--rd)':'var(--text)'};cursor:pointer;font-family:inherit;">❓ 모르겠어요</button>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-async function toggleStar(idx){
-  const cur=_sentLogs[idx]?.starred||false;
-  const newVal=!cur;
-  if(_sentLogs[idx]){
-    _sentLogs[idx].starred=newVal;
-    // DB upsert
-    await sb.from('sentence_logs').upsert({student_id:U.id,lesson_id:_currentLessonId,sentence_index:idx,starred:newVal,status:_sentLogs[idx].status||null},{onConflict:'student_id,lesson_id,sentence_index'});
-  } else {
-    _sentLogs[idx]={starred:newVal,status:null};
-    await sb.from('sentence_logs').upsert({student_id:U.id,lesson_id:_currentLessonId,sentence_index:idx,starred:newVal,status:null},{onConflict:'student_id,lesson_id,sentence_index'});
-  }
-  renderSentList();
-}
-
-async function setSentStatus(idx, status){
-  const cur=_sentLogs[idx]?.status||null;
-  const newStatus=cur===status?null:status; // 같은 버튼 누르면 토글
-  if(_sentLogs[idx]){
-    _sentLogs[idx].status=newStatus;
-  } else {
-    _sentLogs[idx]={starred:false,status:newStatus};
-  }
-  await sb.from('sentence_logs').upsert({student_id:U.id,lesson_id:_currentLessonId,sentence_index:idx,starred:_sentLogs[idx]?.starred||false,status:newStatus},{onConflict:'student_id,lesson_id,sentence_index'});
-  renderSentList();
-}
-
 // ── sg_builder 자막 세그먼트 재생 ──
 function playMemSeg(idx){
   const seg=window._segs?.[idx];if(!seg)return;
@@ -4014,10 +3829,10 @@ async function renderRevenueSummary(mode){
 function gp(n){
   document.querySelectorAll('.pg').forEach(p=>p.classList.remove('on'));
   document.querySelectorAll('.bni').forEach(b=>b.classList.remove('on'));
-  const ids={home:'ph',vocab:'pv',review:'pr',record:'prc',rank:'prk',cert:'pct',admin:'pad',online:'pol'};
+  const ids={home:'ph',vocab:'pv',review:'pr',record:'prc',rank:'prk',cert:'pct',admin:'pad',online:'pol',quiz:'pqz'};
   const pg=document.getElementById(ids[n]);if(pg)pg.classList.add('on');
   // 네비 버튼은 home,record,rank,cert,admin 순서 (vocab/review는 네비에 없음, 홈에서 진입)
-  const navOrd=['home','record','rank','cert','admin','online'];
+  const navOrd=['home','record','rank','cert','quiz','admin','online'];
   const idx=navOrd.indexOf(n);
   const btns=document.querySelectorAll('.bni');if(idx>=0&&btns[idx])btns[idx].classList.add('on');
   if(n==='vocab'){if(!loaded.vocab){loaded.vocab=true;startVocab();}else{renderVHead();renderFC();}}
@@ -4027,6 +3842,7 @@ function gp(n){
   if(n==='rank'){lRank();}
   if(n==='cert'){lCert();}
   if(n==='online'){lOnline();}
+  if(n==='quiz'){lQuiz();}
   if(n==='admin'){
     if(!classes.length)loadClasses().then(()=>loadStudents().then(()=>{lAdm();adTab('st',document.querySelector('#pad>.tbb .tbn'));}));
     else{lAdm();adTab('st',document.querySelector('#pad>.tbb .tbn'));}
@@ -4205,6 +4021,158 @@ async function renderCertHistory(){
 }
 </script>
 <script>
+// ── 문장 퀴즈 ──
+let _quizLessons=[]; // 학생이 수강한 레슨들
+let _quizSubs=[]; // 현재 레슨 자막
+let _quizBlanks={}; // 빈칸 데이터
+let _quizCards=[]; // 퀴즈 카드 배열 {sub, blankIdxs}
+let _quizIdx=0;
+let _quizKnown=0;
+let _quizUnknown=0;
+let _quizRevealed=false;
+
+async function lQuiz(){
+  if(P?.role==='admin'){
+    document.getElementById('quiz-card-wrap').innerHTML='<div class="empty">학생 계정으로 로그인하세요</div>';
+    return;
+  }
+  // 학생이 출석한 레슨 목록 가져오기
+  const{data:att}=await sb.from('attendance').select('lesson_date').eq('student_id',U.id);
+  const dates=(att||[]).map(a=>a.lesson_date);
+  if(!dates.length){document.getElementById('quiz-card-wrap').innerHTML='<div class="empty">출석한 수업이 없어요</div>';return;}
+  const{data:scheds}=await sb.from('lesson_schedules').select('lesson_id,lesson_date').in('lesson_date',dates);
+  const lessonIds=[...new Set((scheds||[]).map(s=>s.lesson_id))];
+  if(!lessonIds.length){document.getElementById('quiz-card-wrap').innerHTML='<div class="empty">퀴즈 레슨이 없어요</div>';return;}
+  const{data:lsData}=await sb.from('lessons').select('id,title,subtitles,blanks').in('id',lessonIds).not('subtitles','is',null).not('blanks','is',null).order('created_at',{ascending:false});
+  _quizLessons=lsData||[];
+  if(!_quizLessons.length){document.getElementById('quiz-card-wrap').innerHTML='<div class="empty">퀴즈 데이터가 있는 레슨이 없어요<br><span style="font-size:11px;color:var(--mu);">선생님이 빈칸 퀴즈를 등록하면 여기서 풀 수 있어요</span></div>';return;}
+  renderQuizLessonPills();
+  startQuiz(_quizLessons[0]);
+}
+
+function renderQuizLessonPills(){
+  const el=document.getElementById('quiz-lesson-pills');if(!el)return;
+  el.innerHTML=_quizLessons.map((l,i)=>`
+    <span onclick="startQuiz(_quizLessons[${i}])" id="quiz-pill-${l.id}" style="display:inline-block;margin-right:7px;padding:5px 13px;border-radius:99px;font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid ${i===0?'var(--g)':'var(--brd)'};background:${i===0?'var(--g)':'var(--sf)'};color:${i===0?'#fff':'var(--text)'};">${l.title}</span>
+  `).join('');
+}
+
+function startQuiz(lesson){
+  // 선택된 pill 스타일
+  _quizLessons.forEach(l=>{
+    const pill=document.getElementById('quiz-pill-'+l.id);
+    if(!pill)return;
+    if(l.id===lesson.id){pill.style.background='var(--g)';pill.style.color='#fff';pill.style.borderColor='var(--g)';}
+    else{pill.style.background='var(--sf)';pill.style.color='var(--text)';pill.style.borderColor='var(--brd)';}
+  });
+
+  // 자막 파싱
+  try{
+    _quizSubs=lesson.subtitles.split('
+').map(l=>{
+      const p=l.split('|');
+      return p.length>=3?{start:+p[0],end:+p[1],text:p[2],kor:p[3]||''}:null;
+    }).filter(Boolean);
+  }catch{_quizSubs=[];}
+
+  // 빈칸 데이터 파싱
+  try{_quizBlanks=JSON.parse(lesson.blanks)||{};}catch{_quizBlanks={};}
+
+  // 빈칸 있는 문장만 카드로
+  _quizCards=_quizSubs.map((s,i)=>({sub:s,idx:i,blankIdxs:_quizBlanks[i]||_quizBlanks[String(i)]}))
+    .filter(c=>c.blankIdxs&&c.blankIdxs.length);
+
+  if(!_quizCards.length){
+    document.getElementById('quiz-card-wrap').innerHTML='<div class="empty">이 레슨에 퀴즈 데이터가 없어요</div>';
+    document.getElementById('quiz-progress-wrap').style.display='none';
+    return;
+  }
+
+  // 섞기
+  _quizCards.sort(()=>Math.random()-.5);
+  _quizIdx=0;_quizKnown=0;_quizUnknown=0;
+  document.getElementById('quiz-progress-wrap').style.display='block';
+  renderQuizCard();
+}
+
+function renderQuizCard(){
+  const wrap=document.getElementById('quiz-card-wrap');
+  const total=_quizCards.length;
+
+  // 진행률 업데이트
+  const pct=Math.round(_quizIdx/total*100);
+  document.getElementById('quiz-progress-bar').style.width=pct+'%';
+  document.getElementById('quiz-progress-label').textContent=`${_quizIdx} / ${total}`;
+  document.getElementById('quiz-score-label').textContent=_quizIdx>0?`✓${_quizKnown} ✗${_quizUnknown}`:'';
+
+  if(_quizIdx>=total){
+    // 완료
+    const pct2=Math.round(_quizKnown/total*100);
+    wrap.innerHTML=`<div style="text-align:center;padding:32px 0;">
+      <div style="font-size:48px;margin-bottom:12px;">${pct2>=80?'🎉':pct2>=50?'👍':'💪'}</div>
+      <div style="font-size:22px;font-weight:800;margin-bottom:6px;">${pct2}%</div>
+      <div style="font-size:13px;color:var(--mu);margin-bottom:24px;">${total}문장 중 ${_quizKnown}개 알아요</div>
+      <button onclick="startQuiz(_quizLessons.find(l=>document.getElementById('quiz-pill-'+l.id)?.style.background==='var(--g)'))||_quizLessons[0])" style="padding:12px 28px;border-radius:12px;background:var(--g);color:#fff;border:none;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;">다시 풀기</button>
+    </div>`;
+    return;
+  }
+
+  const card=_quizCards[_quizIdx];
+  const words=card.sub.text.split(' ');
+  _quizRevealed=false;
+
+  // 영어 문장 (빈칸 포함)
+  const engHtml=words.map((w,wi)=>{
+    if(card.blankIdxs.includes(wi)){
+      return`<span id="qblank-${wi}" onclick="revealQuizBlanks()" style="display:inline-block;min-width:${Math.max(48,w.length*9)}px;height:26px;background:var(--aml);border:1.5px solid #FAC775;border-radius:6px;vertical-align:middle;cursor:pointer;margin:0 2px;"></span>`;
+    }
+    return w;
+  }).join(' ');
+
+  wrap.innerHTML=`
+    <div style="background:var(--sf);border:1.5px solid var(--brd);border-radius:16px;padding:20px 18px;margin-bottom:14px;min-height:160px;display:flex;flex-direction:column;justify-content:center;">
+      <div style="font-size:11px;color:var(--mu);margin-bottom:12px;letter-spacing:.5px;">빈칸을 탭해서 정답 확인</div>
+      <div style="font-size:17px;color:var(--text);line-height:1.8;margin-bottom:14px;">${engHtml}</div>
+      <div style="font-size:14px;color:var(--mu);line-height:1.6;">${card.sub.kor}</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;" id="quiz-action-btns" style="display:none;">
+      <button onclick="quizAnswer('unknown')" style="padding:14px;border-radius:12px;border:1.5px solid var(--brd);background:var(--sf);font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;color:var(--rd);">✗ 모르겠어요</button>
+      <button onclick="quizAnswer('known')" style="padding:14px;border-radius:12px;border:1.5px solid var(--brd);background:var(--sf);font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;color:var(--gd);">✓ 알아요</button>
+    </div>
+    <div id="quiz-tap-hint" style="text-align:center;padding:12px;font-size:13px;color:var(--mu);">빈칸을 탭하면 알아요/모르겠어요 버튼이 나타나요</div>`;
+}
+
+function revealQuizBlanks(){
+  if(_quizRevealed)return;
+  _quizRevealed=true;
+  const card=_quizCards[_quizIdx];
+  const words=card.sub.text.split(' ');
+  card.blankIdxs.forEach(wi=>{
+    const el=document.getElementById('qblank-'+wi);
+    if(!el)return;
+    el.textContent=words[wi];
+    el.style.background='var(--gl)';
+    el.style.borderColor='#C0E8D8';
+    el.style.color='var(--gd)';
+    el.style.fontWeight='700';
+    el.style.padding='0 8px';
+    el.style.minWidth='auto';
+    el.onclick=null;
+  });
+  // 버튼 표시
+  const btns=document.getElementById('quiz-action-btns');
+  const hint=document.getElementById('quiz-tap-hint');
+  if(btns)btns.style.display='grid';
+  if(hint)hint.style.display='none';
+}
+
+function quizAnswer(result){
+  if(result==='known')_quizKnown++;
+  else _quizUnknown++;
+  _quizIdx++;
+  renderQuizCard();
+}
+
 // ── 온라인 강의 ──
 let olCourses = [];
 
@@ -4857,6 +4825,10 @@ async function saveLesson(){
     if(exps.length)key_expressions=JSON.stringify(exps);
   }
   const guide=document.getElementById('ls-guide')?.value?.trim()||null;
+  // 빈칸 퀴즈 데이터
+  const blanksRaw=document.getElementById('ls-blanks')?.value?.trim()||null;
+  let blanks=null;
+  if(blanksRaw){try{blanks=blanksRaw;}catch(e){}}
 
   // 수업 날짜 수집 (lsDates 배열 사용)
   const schedules=lsDates.map(d=>({lesson_date:d}));
@@ -4866,14 +4838,14 @@ async function saveLesson(){
 
   let lessonId;
   if(isEdit&&editId){
-    await sb.from('lessons').update({title,url,subtitles,key_expressions,guide}).eq('id',editId);
+    await sb.from('lessons').update({title,url,subtitles,key_expressions,guide,blanks}).eq('id',editId);
     lessonId=editId;
     tst('수정됐어요!');
     document.getElementById('ls-form-title').textContent='새 토픽 등록';
     delete document.getElementById('ls-form-title').dataset.editId;
     document.getElementById('ls-form-btns').innerHTML='<button class="btn btn-p" onclick="saveLesson()">토픽 등록</button>';
   } else {
-    const{data:newLesson,error}=await sb.from('lessons').insert({title,url,subtitles,key_expressions,guide}).select().single();
+    const{data:newLesson,error}=await sb.from('lessons').insert({title,url,subtitles,key_expressions,guide,blanks}).select().single();
     if(error){tst('등록 실패: '+error.message);return;}
     lessonId=newLesson.id;
     tst('토픽이 등록됐어요!');
