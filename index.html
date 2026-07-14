@@ -268,6 +268,8 @@ function doUpdate(){
       <div id="xp-bar-wrap"></div>
       <!-- 알림 -->
       <div id="home-notice"></div>
+      <!-- 문장 학습 통계 -->
+      <div id="home-sent-stats"></div>
       <!-- 오늘 체크리스트 -->
       <div id="home-todo"></div>
       <!-- 달력 -->
@@ -952,6 +954,7 @@ async function initApp(u){
     buildHomeTodo();
     loadMyNotices();
     checkCallBookingBanner();
+    loadSentenceStats();
   }
 }
 
@@ -1566,8 +1569,12 @@ function renderBotMemorize(lesson, existingSub){
       </div>
       <div style="font-size:10px;color:#0F6E56;">${subs.length}문장 중 ${Math.round(subs.length*score/100)}개 알겠어요</div>
       ${score<75?`<button onclick="retryMemorize()" style="margin-top:9px;width:100%;padding:9px;border-radius:9px;background:linear-gradient(135deg,#FFB347,#E8940A);color:#fff;border:none;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">다시 도전하기</button>`:''}
+      <button onclick="openSentenceList()" style="margin-top:7px;width:100%;padding:9px;border-radius:9px;background:#F5F2EC;border:1.5px solid #EDE8DF;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;color:#1a1a1a;">📋 문장 목록 보기</button>
     </div>`;return;
   }
+
+  // 하단에 문장 목록 버튼 추가
+  bot.innerHTML=`<button onclick="openSentenceList()" style="width:100%;padding:11px;border-radius:11px;background:#F5F2EC;border:1.5px solid #EDE8DF;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;color:#1a1a1a;margin-bottom:10px;">📋 전체 문장 목록 보기</button>`;
 
   // 플래시카드 상태
   window._memCards={subs,idx:0,known:0,unknown:[],total:subs.length};
@@ -2988,6 +2995,43 @@ async function sendNotify(targetStudentId,msg){
 
 // ── 학생: 알림 로드 및 표시 ──
 // ── 학생: 전화 예약 배너 ──
+async function loadSentenceStats(){
+  if(P?.role==='admin')return;
+  const wrap=document.getElementById('home-sent-stats');if(!wrap)return;
+  const today=new Date().toISOString().slice(0,10);
+  const weekAgo=new Date(Date.now()-7*24*60*60*1000).toISOString().slice(0,10);
+  const{data}=await sb.from('sentence_logs').select('starred,status,updated_at').eq('student_id',U.id).gte('updated_at',weekAgo);
+  if(!data?.length){wrap.innerHTML='';return;}
+  const starred=data.filter(d=>d.starred).length;
+  const known=data.filter(d=>d.status==='known').length;
+  const unsure=data.filter(d=>d.status==='unsure').length;
+  const total=data.length;
+  const pct=total?Math.round(known/total*100):0;
+  wrap.innerHTML=`<div style="padding:0 14px 8px;">
+    <div style="background:var(--sf);border:1.5px solid var(--brd);border-radius:14px;padding:12px 14px;">
+      <div style="font-size:12px;font-weight:700;margin-bottom:8px;">📊 이번 주 문장 학습</div>
+      <div style="display:flex;gap:10px;margin-bottom:8px;">
+        <div style="flex:1;text-align:center;">
+          <div style="font-size:18px;font-weight:800;color:var(--gd);">${known}</div>
+          <div style="font-size:10px;color:var(--mu);">알아요</div>
+        </div>
+        <div style="flex:1;text-align:center;">
+          <div style="font-size:18px;font-weight:800;color:var(--rd);">${unsure}</div>
+          <div style="font-size:10px;color:var(--mu);">모르겠어요</div>
+        </div>
+        <div style="flex:1;text-align:center;">
+          <div style="font-size:18px;font-weight:800;color:#E8940A;">${starred}</div>
+          <div style="font-size:10px;color:var(--mu);">★ 찍은 문장</div>
+        </div>
+      </div>
+      <div style="background:var(--brd);border-radius:99px;height:6px;">
+        <div style="background:linear-gradient(90deg,var(--g),#25C48E);border-radius:99px;height:6px;width:${pct}%;transition:width .5s;"></div>
+      </div>
+      <div style="font-size:10px;color:var(--mu);margin-top:4px;text-align:right;">${pct}% 이해</div>
+    </div>
+  </div>`;
+}
+
 async function checkCallBookingBanner(){
   if(P?.role==='admin')return;
   // 관리형 수강권이 있는지 확인
@@ -3395,6 +3439,180 @@ async function saveAllAtt(d, cls){
   }
   tst(`출석 저장 완료! ✅ ${checked.length}명 출석`);
   lAdm();
+}
+
+// ── 문장 목록 (찍기 + 빈칸 + 알아요/모르겠어요) ──
+let _sentLogs={}; // {sentKey: {starred, status}}
+let _sentFilter='all'; // all | starred | unsure
+let _blankMode=null; // null | 'eng' | 'kor'
+let _currentLessonId=null;
+
+async function openSentenceList(){
+  // 현재 레슨 자막 가져오기
+  const l=ses?les.find(x=>x.id===ses.lid):null;
+  if(!l?.subtitles){tst('자막 데이터가 없어요');return;}
+  let subs=[];
+  try{subs=JSON.parse(l.subtitles).filter(s=>s.kor);}catch{tst('자막 파싱 실패');return;}
+  if(!subs.length){tst('자막이 없어요');return;}
+  _currentLessonId=l.id;
+
+  // DB에서 학생 문장 로그 불러오기
+  const{data}=await sb.from('sentence_logs').select('*').eq('student_id',U.id).eq('lesson_id',l.id);
+  _sentLogs={};
+  (data||[]).forEach(r=>{_sentLogs[r.sentence_index]={id:r.id,starred:r.starred,status:r.status};});
+
+  // 팝업 생성
+  const pop=document.createElement('div');
+  pop.id='sent-list-pop';
+  pop.style.cssText='position:fixed;inset:0;background:var(--bg);z-index:500;overflow-y:auto;max-width:480px;margin:0 auto;display:flex;flex-direction:column;';
+
+  pop.innerHTML=`
+    <div style="background:var(--bg);padding:13px 16px 9px;border-bottom:1.5px solid var(--brd);display:flex;align-items:center;gap:9px;position:sticky;top:0;z-index:10;">
+      <div onclick="document.getElementById('sent-list-pop').remove();_sentFilter='all';_blankMode=null;" style="width:28px;height:28px;border-radius:8px;background:var(--sf);display:flex;align-items:center;justify-content:center;cursor:pointer;">
+        <svg width="11" height="11" viewBox="0 0 11 11"><polyline points="7.5,1 2,5.5 7.5,10" fill="none" stroke="#888" stroke-width="1.8"/></svg>
+      </div>
+      <span style="font-size:15px;font-weight:700;">문장 목록</span>
+      <span id="sent-stats" style="font-size:11px;color:var(--mu);flex:1;"></span>
+    </div>
+    <!-- 필터 버튼 -->
+    <div style="padding:10px 14px 0;display:flex;gap:6px;flex-wrap:wrap;position:sticky;top:50px;background:var(--bg);z-index:9;border-bottom:1px solid var(--brd);padding-bottom:10px;">
+      <button id="sf-all" onclick="setSentFilter('all')" style="padding:6px 12px;border-radius:99px;border:1.5px solid var(--g);background:var(--g);color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">전체</button>
+      <button id="sf-starred" onclick="setSentFilter('starred')" style="padding:6px 12px;border-radius:99px;border:1.5px solid var(--brd);background:var(--sf);color:var(--text);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">★ 찍은 문장</button>
+      <button id="sf-unsure" onclick="setSentFilter('unsure')" style="padding:6px 12px;border-radius:99px;border:1.5px solid var(--brd);background:var(--sf);color:var(--text);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">❓ 모르겠어요</button>
+    </div>
+    <!-- 빈칸 모드 -->
+    <div style="padding:8px 14px;display:flex;gap:6px;position:sticky;top:95px;background:var(--bg);z-index:8;border-bottom:1px solid var(--brd);">
+      <button id="bm-off" onclick="setBlankMode(null)" style="padding:5px 11px;border-radius:99px;border:1.5px solid var(--g);background:var(--g);color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">일반</button>
+      <button id="bm-eng" onclick="setBlankMode('eng')" style="padding:5px 11px;border-radius:99px;border:1.5px solid var(--brd);background:var(--sf);color:var(--text);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">빈칸 영어</button>
+      <button id="bm-kor" onclick="setBlankMode('kor')" style="padding:5px 11px;border-radius:99px;border:1.5px solid var(--brd);background:var(--sf);color:var(--text);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">빈칸 한국어</button>
+    </div>
+    <div id="sent-list-body" style="padding:12px 14px;flex:1;"></div>`;
+
+  document.body.appendChild(pop);
+  window._sentSubs=subs;
+  renderSentList();
+}
+
+function setSentFilter(f){
+  _sentFilter=f;
+  ['all','starred','unsure'].forEach(x=>{
+    const btn=document.getElementById(`sf-${x}`);
+    if(!btn)return;
+    if(x===f){btn.style.background='var(--g)';btn.style.color='#fff';btn.style.borderColor='var(--g)';}
+    else{btn.style.background='var(--sf)';btn.style.color='var(--text)';btn.style.borderColor='var(--brd)';}
+  });
+  renderSentList();
+}
+
+function setBlankMode(m){
+  _blankMode=m;
+  ['off','eng','kor'].forEach(x=>{
+    const btn=document.getElementById(`bm-${x}`);
+    if(!btn)return;
+    const active=(x==='off'&&m===null)||(x===m);
+    if(active){btn.style.background='var(--g)';btn.style.color='#fff';btn.style.borderColor='var(--g)';}
+    else{btn.style.background='var(--sf)';btn.style.color='var(--text)';btn.style.borderColor='var(--brd)';}
+  });
+  renderSentList();
+}
+
+function makeBlank(text){
+  // 단어를 빈칸으로 (2단어 이상, 핵심 단어 위주)
+  const words=text.split(' ');
+  if(words.length<3)return `<span class="sent-blank" onclick="revealBlank(this)" data-word="${text}" style="display:inline-block;min-width:60px;height:20px;background:var(--sf);border:1.5px solid var(--brd);border-radius:4px;vertical-align:middle;cursor:pointer;"></span>`;
+  // 중간 단어들 중 랜덤으로 2~3개 빈칸
+  const blanked=words.map((w,i)=>{
+    if(i===0||i===words.length-1)return w; // 첫/마지막 단어는 유지
+    if(Math.random()<0.45&&w.length>2)return `<span class="sent-blank" onclick="revealBlank(this)" data-word="${w}" style="display:inline-block;min-width:${w.length*8}px;height:20px;background:var(--sf);border:1.5px solid var(--brd);border-radius:4px;vertical-align:middle;cursor:pointer;"></span>`;
+    return w;
+  });
+  return blanked.join(' ');
+}
+
+function revealBlank(el){
+  el.textContent=el.dataset.word;
+  el.style.background='var(--gl)';
+  el.style.borderColor='#C0E8D8';
+  el.style.color='var(--gd)';
+  el.style.fontWeight='700';
+  el.onclick=null;
+}
+
+function renderSentList(){
+  const body=document.getElementById('sent-list-body');if(!body)return;
+  const subs=window._sentSubs||[];
+
+  // 필터 적용
+  let filtered=subs.map((s,i)=>({...s,idx:i}));
+  if(_sentFilter==='starred')filtered=filtered.filter(s=>_sentLogs[s.idx]?.starred);
+  if(_sentFilter==='unsure')filtered=filtered.filter(s=>_sentLogs[s.idx]?.status==='unsure');
+
+  // 통계 업데이트
+  const statEl=document.getElementById('sent-stats');
+  if(statEl){
+    const starCount=subs.filter((_,i)=>_sentLogs[i]?.starred).length;
+    const unsureCount=subs.filter((_,i)=>_sentLogs[i]?.status==='unsure').length;
+    const knownCount=subs.filter((_,i)=>_sentLogs[i]?.status==='known').length;
+    statEl.textContent=`★${starCount} · 알아요${knownCount} · 모르겠어요${unsureCount}`;
+  }
+
+  if(!filtered.length){
+    body.innerHTML='<div style="text-align:center;padding:40px;color:var(--mu);font-size:13px;">해당하는 문장이 없어요</div>';
+    return;
+  }
+
+  body.innerHTML=filtered.map(s=>{
+    const log=_sentLogs[s.idx]||{};
+    const starred=log.starred||false;
+    const status=log.status||null;
+    const isUnsure=status==='unsure';
+    const isKnown=status==='known';
+
+    let engContent=s.eng||'';
+    let korContent=s.kor||'';
+    if(_blankMode==='eng')engContent=makeBlank(engContent);
+    if(_blankMode==='kor')korContent=makeBlank(korContent);
+
+    return`<div id="sent-row-${s.idx}" style="background:${starred?'var(--aml)':isUnsure?'var(--rl)':'var(--sf)'};border:1.5px solid ${starred?'#FAC775':isUnsure?'#FCA5A5':'var(--brd)'};border-radius:13px;padding:12px 13px;margin-bottom:8px;">
+      <div style="display:flex;align-items:flex-start;gap:10px;">
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:15px;color:var(--text);line-height:1.6;margin-bottom:4px;">${engContent}</div>
+          <div style="font-size:13px;color:var(--mu);line-height:1.6;">${korContent}</div>
+        </div>
+        <button onclick="toggleStar(${s.idx})" style="width:32px;height:32px;border-radius:50%;border:1.5px solid ${starred?'#FAC775':'var(--brd)'};background:${starred?'#FFF8E7':'var(--bg)'};font-size:17px;flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;">${starred?'★':'☆'}</button>
+      </div>
+      <div style="display:flex;gap:6px;margin-top:9px;">
+        <button onclick="setSentStatus(${s.idx},'known')" style="flex:1;padding:7px;border-radius:9px;border:1.5px solid ${isKnown?'#C0E8D8':'var(--brd)'};background:${isKnown?'var(--gl)':'var(--bg)'};font-size:12px;font-weight:${isKnown?'700':'500'};color:${isKnown?'var(--gd)':'var(--text)'};cursor:pointer;font-family:inherit;">✓ 알아요</button>
+        <button onclick="setSentStatus(${s.idx},'unsure')" style="flex:1;padding:7px;border-radius:9px;border:1.5px solid ${isUnsure?'#FCA5A5':'var(--brd)'};background:${isUnsure?'var(--rl)':'var(--bg)'};font-size:12px;font-weight:${isUnsure?'700':'500'};color:${isUnsure?'var(--rd)':'var(--text)'};cursor:pointer;font-family:inherit;">❓ 모르겠어요</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function toggleStar(idx){
+  const cur=_sentLogs[idx]?.starred||false;
+  const newVal=!cur;
+  if(_sentLogs[idx]){
+    _sentLogs[idx].starred=newVal;
+    // DB upsert
+    await sb.from('sentence_logs').upsert({student_id:U.id,lesson_id:_currentLessonId,sentence_index:idx,starred:newVal,status:_sentLogs[idx].status||null},{onConflict:'student_id,lesson_id,sentence_index'});
+  } else {
+    _sentLogs[idx]={starred:newVal,status:null};
+    await sb.from('sentence_logs').upsert({student_id:U.id,lesson_id:_currentLessonId,sentence_index:idx,starred:newVal,status:null},{onConflict:'student_id,lesson_id,sentence_index'});
+  }
+  renderSentList();
+}
+
+async function setSentStatus(idx, status){
+  const cur=_sentLogs[idx]?.status||null;
+  const newStatus=cur===status?null:status; // 같은 버튼 누르면 토글
+  if(_sentLogs[idx]){
+    _sentLogs[idx].status=newStatus;
+  } else {
+    _sentLogs[idx]={starred:false,status:newStatus};
+  }
+  await sb.from('sentence_logs').upsert({student_id:U.id,lesson_id:_currentLessonId,sentence_index:idx,starred:_sentLogs[idx]?.starred||false,status:newStatus},{onConflict:'student_id,lesson_id,sentence_index'});
+  renderSentList();
 }
 
 // ── sg_builder 자막 세그먼트 재생 ──
