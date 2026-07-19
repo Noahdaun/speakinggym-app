@@ -129,6 +129,10 @@ select:focus{border-color:var(--g);}
 /* ── REVIEW SESSION ── */
 #rs{display:none;position:fixed;inset:0;background:var(--bg);z-index:500;flex-direction:column;max-width:480px;margin:0 auto;}
 #rs.on{display:flex;}
+/* 태블릿/PC 화면에서는 좌우 여백 없이 꽉 채워서 보여줌 (수업 중 TV 송출·큰 화면 학습용) */
+@media (min-width:768px){
+  #rs{max-width:100%;}
+}
 .rs-top{background:#1E2D45;padding:12px var(--sp4);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
 .rs-back{display:flex;align-items:center;gap:8px;cursor:pointer;}
 .rs-back-ic{width:30px;height:30px;border-radius:var(--rs);background:rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;}
