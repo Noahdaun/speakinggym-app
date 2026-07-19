@@ -5463,10 +5463,11 @@ async function saveLesson(){
     tst('토픽이 등록됐어요!');
   }
 
-  // 반별 수업 날짜 저장
+  // 반별 수업 날짜 저장 (class_name은 필수 칸이라 항상 채워서 보냄 — 현재는 반 구분 없이 날짜만 씀)
   if(lessonId&&schedules.length){
     await sb.from('lesson_schedules').delete().eq('lesson_id',lessonId);
-    await sb.from('lesson_schedules').insert(schedules.map(s=>({...s,lesson_id:lessonId})));
+    const{error:schedErr}=await sb.from('lesson_schedules').insert(schedules.map(s=>({...s,lesson_id:lessonId,class_name:'전체'})));
+    if(schedErr)tst('수업 날짜 저장 실패: '+schedErr.message);
   }
 
   // 단어 일괄 추가
