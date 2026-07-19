@@ -1533,10 +1533,7 @@ function npOpenSettingsPop(){
     <div style="font-size:11px;color:var(--mu);font-weight:700;margin-bottom:6px;">배속</div>
     <div id="np-rate-btns" style="display:flex;gap:6px;margin-bottom:16px;">${npRateBtnsHtml()}</div>
     <div style="font-size:11px;color:var(--mu);font-weight:700;margin-bottom:6px;">글자 크기</div>
-    <div id="np-size-btns" style="display:flex;gap:6px;margin-bottom:16px;">${npSizeBtnsHtml()}</div>
-    <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);cursor:pointer;">
-      <input type="checkbox" id="np-loop-cb" onchange="npToggleLoop()" ${npState.loop?'checked':''}> 구간 반복
-    </label>
+    <div id="np-size-btns" style="display:flex;gap:6px;">${npSizeBtnsHtml()}</div>
   </div>`;
   document.body.appendChild(pop);
   pop.addEventListener('click',e=>{if(e.target===pop)npCloseSettingsPop();});
@@ -1553,6 +1550,7 @@ function npControlsHtml(){
       <button id="np-mode-btn" onclick="npToggleMode()" style="${NP_BTN_STYLE}">${npState.mode==='double'?'▶▶ 두줄':'▶ 한줄'}</button>
       <button id="np-hide-btn" onclick="npToggleHideEng()" style="${NP_BTN_STYLE}">🙈 영어가리기</button>
       <button id="np-tr-btn" onclick="npToggleKor()" style="${NP_BTN_STYLE}">번역</button>
+      <button id="np-loop-btn" onclick="npToggleLoop()" style="${NP_BTN_STYLE}${npState.loop?'background:var(--g);color:#fff;border-color:var(--g);':''}">🔁 구간반복</button>
       <button id="np-layout-btn" onclick="npToggleLayout()" style="${NP_BTN_STYLE}">${npLayout==='horiz'?'↕ 세로화면':'↔ 가로화면'}</button>
       <button id="np-settings-btn" onclick="npOpenSettingsPop()" style="${NP_BTN_STYLE}">⚙ 설정</button>
     </div>`;
@@ -1561,7 +1559,8 @@ function npControlsHtml(){
 // 가로/세로 배치는 DOM을 다시 만들지 않고 스타일만 바꿔서 전환 (영상 재생기 유지)
 // 세로 = 항상 폰 폭 고정, 가로 = 항상 화면 꽉 채움 (실제 창 크기와 무관하게 모드로만 결정)
 // 가로 모드에서도 상단바·하단버튼은 수업용으로 작게 고정 — 영상+자막 영역만 넓게 씀
-// 스크롤은 이 앱에 원래 있던 #rs-content 하나만 쓰고, 가로모드에서는 영상 칸(np-left)을 sticky로 고정해서 목록만 지나가게 함
+// 스크롤은 이 앱에 원래 있던 #rs-content 하나만 쓰고, 영상 칸(np-left)은 항상 sticky로 화면에 붙여둠 —
+// 세로는 위쪽에 고정(영상이 스크롤에 밀려 사라지던 문제 해결), 가로는 세로 방향 가운데에 고정
 function npApplyLayout(){
   const rsEl=document.getElementById('rs');
   const root=document.getElementById('np-root');
@@ -1580,11 +1579,18 @@ function npApplyLayout(){
   if(npLayout==='horiz'){
     root.style.flexDirection='row';
     root.style.alignItems='flex-start';
-    if(left){left.style.width='38%';left.style.flexShrink='0';left.style.position='sticky';left.style.top='0';}
+    if(left){
+      left.style.width='38%';left.style.flexShrink='0';
+      left.style.position='sticky';left.style.top='50%';left.style.transform='translateY(-50%)';
+    }
   } else {
     root.style.flexDirection='column';
     root.style.alignItems='';
-    if(left){left.style.width='100%';left.style.flexShrink='';left.style.position='';left.style.top='';}
+    if(left){
+      left.style.width='100%';left.style.flexShrink='';
+      left.style.position='sticky';left.style.top='0';left.style.transform='';
+      left.style.background='var(--bg)';left.style.zIndex='5';left.style.paddingBottom='4px';
+    }
   }
 }
 function npToggleLayout(){
@@ -1629,10 +1635,13 @@ function npRenderSubList(){
     </button>`;
   }).join('');
 }
-// 스크롤 컨테이너가 #rs-content 하나뿐이라 이제 scrollIntoView를 써도 바깥 화면이 엉뚱하게 튀지 않음
+// 스크롤 컨테이너가 #rs-content 하나뿐이라 scrollIntoView를 써도 바깥 화면이 엉뚱하게 튀지 않음.
+// 세로모드는 영상이 sticky로 위에 붙어있으므로, 그 높이만큼 scroll-margin-top을 줘서 영상에 가려지지 않게 함
 function npScrollToActive(i){
   const wrap=document.getElementById('np-sub-list');if(!wrap)return;
   const btn=wrap.querySelector(`[data-idx="${i}"]`);if(!btn)return;
+  const left=document.getElementById('np-left');
+  btn.style.scrollMarginTop=(npLayout==='vert'&&left?left.offsetHeight:0)+8+'px';
   btn.scrollIntoView({behavior:'smooth',block:npLayout==='horiz'?'center':'start'});
 }
 
@@ -1650,6 +1659,12 @@ function npToggleKor(){
 }
 function npToggleLoop(){
   npState.loop=!npState.loop;
+  const b=document.getElementById('np-loop-btn');
+  if(b){
+    b.style.background=npState.loop?'var(--g)':'var(--sf)';
+    b.style.color=npState.loop?'#fff':'var(--text)';
+    b.style.borderColor=npState.loop?'var(--g)':'var(--brd)';
+  }
 }
 function npToggleMode(){
   npState.mode=npState.mode==='double'?'single':'double';
