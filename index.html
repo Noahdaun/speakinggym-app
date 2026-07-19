@@ -129,10 +129,7 @@ select:focus{border-color:var(--g);}
 /* ── REVIEW SESSION ── */
 #rs{display:none;position:fixed;inset:0;background:var(--bg);z-index:500;flex-direction:column;max-width:480px;margin:0 auto;}
 #rs.on{display:flex;}
-/* 태블릿/PC 화면에서는 좌우 여백 없이 꽉 채워서 보여줌 (수업 중 TV 송출·큰 화면 학습용) */
-@media (min-width:768px){
-  #rs{max-width:100%;}
-}
+/* 세로/가로 모드에 따른 폭은 화면 크기가 아니라 npApplyLayout()이 직접 제어함 (세로=폰 폭 고정, 가로=꽉 채움) */
 .rs-top{background:#1E2D45;padding:12px var(--sp4);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
 .rs-back{display:flex;align-items:center;gap:8px;cursor:pointer;}
 .rs-back-ic{width:30px;height:30px;border-radius:var(--rs);background:rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;}
@@ -1467,7 +1464,7 @@ function getRoundLabel(round){
 // ── 네이티브 자막 재생 플레이어 (sg_builder 이식: 유튜브 IFrame API + 자막 클릭재생) ──
 let ytApiReady=false, ytApiLoading=false;
 let npPlayer=null;
-let npState={subs:[],playing:null,pausedIdx:null,timer:null,rate:1,loop:false,mode:'single',hideEng:false,showKor:false};
+let npState={subs:[],playing:null,pausedIdx:null,activeIdx:null,timer:null,rate:1,loop:false,mode:'single',hideEng:false,showKor:false};
 // 가로/세로 화면 전환 · 글자 크기는 npState와 달리 레슨을 넘어가도(npDestroy 이후에도) 유지 — 수업 중 TV 송출용 설정이라 계속 유지되는 게 편함
 let npLayout='vert'; // 'vert' | 'horiz'
 let npFontSize=16;
@@ -1502,7 +1499,9 @@ function npDestroy(){
   if(npState.timer){clearTimeout(npState.timer);npState.timer=null;}
   if(npPlayer&&npPlayer.destroy){try{npPlayer.destroy();}catch{}}
   npPlayer=null;
-  npState={subs:[],playing:null,pausedIdx:null,timer:null,rate:1,loop:false,mode:'single',hideEng:false,showKor:false};
+  npState={subs:[],playing:null,pausedIdx:null,activeIdx:null,timer:null,rate:1,loop:false,mode:'single',hideEng:false,showKor:false};
+  const rsEl=document.getElementById('rs');
+  if(rsEl)rsEl.style.maxWidth='480px'; // 네이티브 플레이어를 벗어나면 폰 폭 기본값으로 복귀
 }
 
 // renderNativePlayer/renderCfPlayer가 공유하는 컨트롤 버튼 줄 (영상 재생기 종류와 무관)
@@ -1530,15 +1529,18 @@ function npControlsHtml(){
 }
 
 // 가로/세로 배치는 DOM을 다시 만들지 않고 스타일만 바꿔서 전환 (영상 재생기 유지)
+// 세로 = 항상 폰 폭 고정, 가로 = 항상 화면 꽉 채움 (실제 창 크기와 무관하게 모드로만 결정)
 function npApplyLayout(){
+  const rsEl=document.getElementById('rs');
   const root=document.getElementById('np-root');
   const left=document.getElementById('np-left');
   const list=document.getElementById('np-sub-list');
+  if(rsEl)rsEl.style.maxWidth=npLayout==='horiz'?'none':'480px';
   if(!root)return;
   if(npLayout==='horiz'){
     root.style.flexDirection='row';
     if(left){left.style.width='38%';left.style.flexShrink='0';}
-    if(list){list.style.maxHeight='none';list.style.flex='1';}
+    if(list){list.style.maxHeight='calc(100vh - 260px)';list.style.flex='1';}
   } else {
     root.style.flexDirection='column';
     if(left){left.style.width='100%';left.style.flexShrink='';}
@@ -1577,11 +1579,19 @@ function renderNativePlayer(mountEl,videoId,subs){
 
 function npRenderSubList(){
   const wrap=document.getElementById('np-sub-list');if(!wrap)return;
-  wrap.innerHTML=npState.subs.map((s,i)=>`
-    <button onclick="npPlaySeg(${i})" style="text-align:left;padding:10px 12px;border-radius:10px;border:none;background:${npState.playing===i?'var(--blue-soft,#eff6ff)':'var(--sf)'};cursor:pointer;font-family:inherit;">
-      <div style="font-size:${npFontSize}px;font-weight:600;color:var(--text);">${npState.hideEng?'🙈':(s.text||'')}</div>
-      ${npState.showKor?`<div style="font-size:${Math.max(11,npFontSize-4)}px;color:var(--mu);margin-top:3px;">${s.kor||''}</div>`:''}
-    </button>`).join('');
+  wrap.innerHTML=npState.subs.map((s,i)=>{
+    const on=npState.activeIdx===i;
+    return `
+    <button data-idx="${i}" onclick="npPlaySeg(${i})" style="text-align:left;padding:10px 12px;border-radius:10px;cursor:pointer;font-family:inherit;background:${on?'var(--gl)':'var(--sf)'};border:1.5px solid ${on?'#1D9E75':'transparent'};">
+      <div style="font-size:${npFontSize}px;font-weight:600;color:${on?'var(--gd)':'var(--text)'};">${npState.hideEng?'🙈':(s.text||'')}</div>
+      ${npState.showKor?`<div style="font-size:${Math.max(11,npFontSize-4)}px;color:${on?'var(--gd)':'var(--mu)'};margin-top:3px;">${s.kor||''}</div>`:''}
+    </button>`;
+  }).join('');
+}
+function npScrollToActive(i){
+  const wrap=document.getElementById('np-sub-list');if(!wrap)return;
+  const btn=wrap.querySelector(`[data-idx="${i}"]`);if(!btn)return;
+  btn.scrollIntoView({behavior:'smooth',block:npLayout==='horiz'?'center':'start'});
 }
 
 function npToggleHideEng(){
@@ -1628,7 +1638,9 @@ function npStartSeg(i){
   const endSeg=npState.mode==='double'?(npState.subs[i+1]||s):s;
   npState.playing=i;
   npState.pausedIdx=null;
+  npState.activeIdx=i;
   npRenderSubList();
+  npScrollToActive(i);
   if(npState.timer){clearTimeout(npState.timer);npState.timer=null;}
   npPlayer.seekTo(s.start,true);
   npPlayer.setPlaybackRate(npState.rate);
