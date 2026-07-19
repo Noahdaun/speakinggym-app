@@ -4489,16 +4489,22 @@ async function rLsList(){
   les=data||[];
 }
 
-function renderLsRows(){
+async function renderLsRows(){
   const el=document.getElementById('lslist');if(!el)return;
   if(!les.length){el.innerHTML='<div class="empty">등록된 토픽이 없어요</div>';return;}
-  el.innerHTML=les.map(l=>`<div class="card" style="margin-bottom:8px;display:flex;align-items:center;gap:10px;">
+  const{data:schs}=await sb.from('lesson_schedules').select('lesson_id,lesson_date');
+  const dateMap={};(schs||[]).forEach(s=>{if(!dateMap[s.lesson_id])dateMap[s.lesson_id]=[];dateMap[s.lesson_id].push(s.lesson_date);});
+  el.innerHTML=les.map(l=>{
+    const dates=(dateMap[l.id]||[]).sort();
+    const dateLabel=dates.length?(dates.length===1?dates[0]:`${dates[0]} 외 ${dates.length-1}개`):'날짜 없음';
+    return`<div class="card" style="margin-bottom:8px;display:flex;align-items:center;gap:10px;">
     <div style="flex:1;min-width:0;">
       <div style="font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${l.title}</div>
-      <div style="font-size:11px;color:var(--mu);margin-top:2px;">${l.lesson_date||'날짜 없음'}</div>
+      <div style="font-size:11px;color:var(--mu);margin-top:2px;">${dateLabel}</div>
     </div>
     <button onclick="openLsEdit('${l.id}')" style="padding:5px 12px;border-radius:8px;background:var(--gl);color:var(--gd);border:1.5px solid #C0E8D8;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;flex-shrink:0;">수정</button>
-  </div>`).join('');
+  </div>`;
+  }).join('');
 }
 
 async function rAtCls(){
