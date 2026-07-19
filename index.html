@@ -239,6 +239,9 @@ function doUpdate(){
     <input class="inp" type="password" id="lp" placeholder="비밀번호" autocomplete="current-password">
     <button class="btn btn-p" onclick="doLogin()">로그인</button>
     <button class="btn btn-o" onclick="goSignup()">처음이에요 — 가입하기</button>
+    <div style="text-align:center;margin-top:10px;">
+      <span onclick="goForgotPw()" style="font-size:12px;color:var(--mu);cursor:pointer;text-decoration:underline;">비밀번호를 잊으셨나요?</span>
+    </div>
     <div id="lerr" class="err"></div>
   </div>
   <div class="lbx" id="subox" style="display:none;">
@@ -251,6 +254,21 @@ function doUpdate(){
     <button class="btn btn-p" onclick="doSignup()">가입하기</button>
     <button class="btn btn-o" style="margin-top:8px;" onclick="goLogin()">로그인으로 돌아가기</button>
     <div id="suerr" class="err"></div>
+  </div>
+  <div class="lbx" id="fpbox" style="display:none;">
+    <div class="logo-wrap"><h1>Speaking Gym</h1><p>비밀번호 재설정</p></div>
+    <div style="font-size:12px;color:var(--mu);margin-bottom:12px;line-height:1.6;">가입할 때 쓴 이메일을 입력하시면<br>비밀번호를 재설정할 수 있는 링크를 보내드려요</div>
+    <input class="inp" type="email" id="fpe" placeholder="이메일">
+    <button class="btn btn-p" onclick="doForgotPassword()">재설정 링크 보내기</button>
+    <button class="btn btn-o" style="margin-top:8px;" onclick="goLogin()">로그인으로 돌아가기</button>
+    <div id="fperr" class="err"></div>
+  </div>
+  <div class="lbx" id="rpbox" style="display:none;">
+    <div class="logo-wrap"><h1>Speaking Gym</h1><p>새 비밀번호 설정</p></div>
+    <div style="font-size:12px;color:var(--mu);margin-bottom:12px;">이메일로 받은 링크를 통해 들어오셨어요. 새 비밀번호를 입력해주세요.</div>
+    <input class="inp" type="password" id="rpw" placeholder="새 비밀번호 (6자 이상)">
+    <button class="btn btn-p" onclick="doResetPassword()">비밀번호 변경하기</button>
+    <div id="rperr" class="err"></div>
   </div>
 </div>
 
@@ -373,6 +391,19 @@ function doUpdate(){
       <div style="padding:0 14px;" id="quiz-card-wrap">
         <div class="empty" style="padding:60px 0;">레슨을 선택하면 퀴즈가 시작돼요</div>
       </div>
+    </div>
+
+    <!-- FREE STUDY -->
+    <div id="pfs" class="pg">
+      <div style="padding:14px 14px 0;">
+        <div style="font-size:22px;font-weight:800;letter-spacing:-.5px;margin-bottom:4px;">자유학습 📚</div>
+        <div style="font-size:12px;color:var(--mu);margin-bottom:14px;">순서/횟수 상관없이 자유롭게 복습해요</div>
+      </div>
+      <div class="tbb" style="margin:0 14px 12px;">
+        <button class="tbn on" id="fs-tab-off" onclick="fsTab('off')">오프라인 복습</button>
+        <button class="tbn" id="fs-tab-on" onclick="fsTab('on')">온라인 학습</button>
+      </div>
+      <div style="padding:0 14px;" id="fs-list"><div class="loading">로딩중...</div></div>
     </div>
 
     <!-- CERT -->
@@ -680,17 +711,17 @@ function doUpdate(){
 
       <!-- 레슨 -->
       <div id="ad-ls" style="display:none;">
-        <!-- sg_builder 내보내기 일괄 붙여넣기 -->
-        <div style="background:#F0FAF6;border-radius:13px;padding:13px;margin-bottom:14px;border:1.5px solid #C0E8D8;">
-          <div style="font-size:12px;font-weight:700;color:#085041;margin-bottom:5px;">📲 sg_builder 내보내기 붙여넣기</div>
-          <div style="font-size:11px;color:#0F6E56;margin-bottom:8px;">sg_builder에서 "앱으로 내보내기" → 전체 복사 후 여기에 붙여넣기</div>
-          <textarea id="sg-import" style="height:80px;font-family:monospace;font-size:11px;" placeholder="=== ① 5회차 암기용 자막 데이터 ===&#10;16.7|20.7|Hello|안녕하세요&#10;..."></textarea>
-          <button onclick="parseSGImport()" style="width:100%;padding:10px;border-radius:10px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:7px;">자동으로 채우기 ✨</button>
-        </div>
-
         <div style="font-size:13px;font-weight:600;margin-bottom:9px;" id="ls-form-title">새 토픽 등록</div>
         <input class="inp" type="text" id="lt" placeholder="토픽 제목 (예: KPop Demon Hunters)">
-        <input class="inp" type="url" id="lu" placeholder="GitHub URL">
+        <div style="display:flex;gap:7px;margin-bottom:8px;">
+          <button id="ls-type-youtube" onclick="lsSetVideoType('youtube')" style="flex:1;padding:9px;border-radius:9px;border:none;background:var(--g);color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">오프라인 (유튜브)</button>
+          <button id="ls-type-cloudflare" onclick="lsSetVideoType('cloudflare')" style="flex:1;padding:9px;border-radius:9px;border:1.5px solid var(--brd);background:var(--sf);color:var(--text);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">온라인 (Cloudflare)</button>
+        </div>
+        <input class="inp" type="text" id="lu" placeholder="유튜브 영상 URL (https://www.youtube.com/watch?v=...)" oninput="lsUpdatePreview()">
+        <div id="ls-yt-preview" style="display:none;margin-bottom:10px;border-radius:10px;overflow:hidden;aspect-ratio:16/9;background:#000;">
+          <iframe id="ls-yt-iframe" style="width:100%;height:100%;border:none;display:block;" allowfullscreen></iframe>
+        </div>
+        <div id="ls-cf-hint" style="display:none;font-size:11px;color:var(--mu);margin:-4px 0 10px;line-height:1.6;">Cloudflare Stream 대시보드에서 영상 업로드 후 영상 UID를 위 칸에 붙여넣으세요. (아직 Cloudflare 계정 연결 전이라 미리보기는 제공되지 않아요)</div>
         <div style="font-size:12px;font-weight:600;margin-bottom:4px;color:var(--text);">이 토픽을 들은 수업 날짜</div>
         <div style="font-size:11px;color:var(--mu);margin-bottom:7px;">날짜를 선택해서 추가하세요. 그 날 출석한 학생에게 이 토픽이 배정돼요.</div>
         <div style="display:flex;gap:7px;margin-bottom:8px;">
@@ -701,11 +732,35 @@ function doUpdate(){
 
         <div class="dv"></div>
 
-        <!-- 5회차 자막 -->
-        <div style="font-size:12px;font-weight:600;margin-bottom:4px;">🎬 5회차 암기용 자막 데이터 <span style="font-size:11px;font-weight:400;color:var(--mu);">(선택)</span></div>
-        <div style="font-size:11px;color:var(--mu);margin-bottom:7px;">sg_builder에서 파이프 형식으로 복사해서 붙여넣으세요</div>
-        <textarea id="ls-subtitles" placeholder="형식: 시작초|끝초|영어자막|한국어자막&#10;예:&#10;16.7|20.7|Good morning, Doobies|안녕하세요 여러분&#10;24.1|27.8|She lit up when she walked in|그녀가 들어오자 환해졌어" style="height:110px;font-family:monospace;font-size:11px;" oninput="previewSubtitles(this.value)"></textarea>
-        <div id="subtitle-preview" style="font-size:11px;color:var(--gm);margin-top:4px;margin-bottom:8px;"></div>
+        <!-- 자막 가져오기 + 표 편집 (sg_builder 이식 + SRT 자동인식) -->
+        <div style="font-size:12px;font-weight:600;margin-bottom:4px;">🎬 자막</div>
+        <div style="font-size:11px;color:var(--mu);margin-bottom:7px;">pipe 형식(시작초|끝초|영어|한글) 또는 SRT 파일 내용을 그대로 붙여넣으면 자동 인식돼요</div>
+        <textarea id="ls-import" placeholder="16.7|20.7|Good morning, Doobies|안녕하세요 여러분&#10;또는 SRT 내용 붙여넣기" style="height:90px;font-family:monospace;font-size:11px;"></textarea>
+        <button onclick="lsImportSubs()" style="width:100%;padding:9px;border-radius:9px;background:var(--sf);border:1.5px solid var(--brd);color:var(--text);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;margin-top:6px;margin-bottom:10px;">📥 자막 가져오기</button>
+
+        <div style="overflow-x:auto;margin-bottom:8px;">
+          <table style="width:100%;border-collapse:collapse;font-size:11px;">
+            <thead>
+              <tr style="background:var(--sf);">
+                <th style="padding:6px 4px;text-align:center;width:26px;">#</th>
+                <th style="padding:6px 4px;width:58px;">시작</th>
+                <th style="padding:6px 4px;width:58px;">끝</th>
+                <th style="padding:6px 4px;text-align:left;">영어</th>
+                <th style="padding:6px 4px;text-align:left;">한글</th>
+                <th style="padding:6px 4px;width:36px;"></th>
+              </tr>
+            </thead>
+            <tbody id="ls-sub-tbody"></tbody>
+          </table>
+        </div>
+        <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:8px;">
+          <button onclick="lsAddSubRow()" style="flex:1;padding:8px;border-radius:8px;border:1.5px dashed var(--brd);background:transparent;color:var(--mu);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">+ 줄 추가</button>
+          <button onclick="lsSortSubs()" style="padding:8px 12px;border-radius:8px;border:1.5px solid var(--brd);background:var(--sf);color:var(--text);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">시간순 정렬</button>
+          <button onclick="lsClearSubs()" style="padding:8px 12px;border-radius:8px;border:1.5px solid var(--rd);background:var(--rl);color:var(--rd);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">전체 삭제</button>
+        </div>
+        <div style="font-size:11px;color:var(--gm);margin-bottom:8px;"><span id="ls-sub-count">0</span>문장</div>
+
+        <button id="ls-auto-btn" onclick="lsAutoComplete()" style="width:100%;padding:12px;border-radius:10px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:14px;">🪄 자동 완성 (한글번역·빈칸퀴즈·단어 추천)</button>
 
         <!-- 핵심 표현 카드 (7회차) -->
         <div style="font-size:12px;font-weight:600;margin-bottom:4px;">💡 핵심 표현 카드 <span style="font-size:11px;font-weight:400;color:var(--mu);">(7회차 응용 시 표시, 선택)</span></div>
@@ -782,13 +837,14 @@ function doUpdate(){
 
         <!-- 등록현황 그리드 -->
         <div id="mg-grid-wrap">
+          <div id="mg-alerts"></div>
           <div class="pills" id="mg-cls-pills"></div>
           <div class="row" style="margin-bottom:8px;">
             <button onclick="mgShiftRange(-6)" style="padding:6px 12px;border-radius:8px;background:var(--sf);border:1.5px solid var(--brd);font-size:12px;cursor:pointer;font-family:inherit;">← 이전 6개월</button>
             <div id="mg-range-label" style="font-size:12px;font-weight:700;color:var(--mu);"></div>
             <button onclick="mgShiftRange(6)" style="padding:6px 12px;border-radius:8px;background:var(--sf);border:1.5px solid var(--brd);font-size:12px;cursor:pointer;font-family:inherit;">다음 6개월 →</button>
           </div>
-          <div style="font-size:11px;color:var(--mu);margin-bottom:8px;">이름을 누르면 과정 · 등록일 · 홀딩 · 메모를 수정할 수 있어요. 칸을 누르면 등록여부가 토글돼요.</div>
+          <div style="font-size:11px;color:var(--mu);margin-bottom:8px;">이름을 누르면 과정 · 등록일 · 홀딩 · 메모를 수정할 수 있어요. 빈 칸을 누르면 결제 입력창이 열리고, 등록된 칸을 누르면 등록이 해제돼요.</div>
           <div style="overflow-x:auto;border:1.5px solid var(--brd);border-radius:12px;" id="mg-grid-table"></div>
         </div>
 
@@ -837,6 +893,10 @@ function doUpdate(){
       <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="3" y="4" width="14" height="12" rx="2" stroke="#1D9E75" stroke-width="1.6"/><path d="M7 9h2.5M7 12h6" stroke="#1D9E75" stroke-width="1.6" stroke-linecap="round"/><circle cx="13.5" cy="9" r="1.5" stroke="#1D9E75" stroke-width="1.4"/></svg>
       <span>퀴즈</span>
     </button>
+    <button class="bni" onclick="gp('freestudy')">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M4 4a2 2 0 012-2h9v16H6a2 2 0 00-2 2V4z" stroke="#1D9E75" stroke-width="1.6" stroke-linejoin="round"/><path d="M15 2v16" stroke="#1D9E75" stroke-width="1.6"/></svg>
+      <span>자유학습</span>
+    </button>
   </nav>
 </div><!-- as -->
 
@@ -873,6 +933,8 @@ function doUpdate(){
 const SU='https://hrmiyejhhzptwjzbrzvv.supabase.co';
 const SK='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhybWl5ZWpoaHpwdHdqemJyenZ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYyODIxMzcsImV4cCI6MjA5MTg1ODEzN30.yL9kiPLI3LibWyEJitPliS4HbyWrGdGYh4YZ0lqjTZQ';
 const sb=supabase.createClient(SU,SK);
+// 이 시각 이전에 만들어진, 수업 날짜 미지정 레슨은 예전 규칙(전체 공개) 그대로 유지 — 기존 학생 접근 유지용
+const SCHEDULE_GATE_CUTOFF='2026-07-19T14:52:25.000Z';
 
 // ── UTILS ──
 function dispName(name, email){
@@ -899,12 +961,41 @@ let selSignupCls='';
 // ── AUTH ──
 function goSignup(){
   document.getElementById('lbox').style.display='none';
+  document.getElementById('fpbox').style.display='none';
   document.getElementById('subox').style.display='block';
   loadSignupClasses();
 }
 function goLogin(){
   document.getElementById('subox').style.display='none';
+  document.getElementById('fpbox').style.display='none';
   document.getElementById('lbox').style.display='block';
+}
+function goForgotPw(){
+  document.getElementById('lbox').style.display='none';
+  document.getElementById('subox').style.display='none';
+  document.getElementById('fpbox').style.display='block';
+}
+async function doForgotPassword(){
+  const e=document.getElementById('fpe').value.trim();
+  const er=document.getElementById('fperr');er.textContent='';er.style.color='';
+  if(!e){er.textContent='이메일을 입력해주세요';return;}
+  const redirectTo=location.href.split('#')[0].split('?')[0];
+  const{error}=await sb.auth.resetPasswordForEmail(e,{redirectTo});
+  if(error){er.textContent='요청 실패: '+error.message;return;}
+  er.style.color='var(--g)';
+  er.textContent='이메일을 보냈어요! 메일함(스팸함도 확인)에서 링크를 눌러주세요';
+}
+async function doResetPassword(){
+  const p=document.getElementById('rpw').value;
+  const er=document.getElementById('rperr');er.textContent='';er.style.color='';
+  if(!p||p.length<6){er.textContent='비밀번호는 6자 이상이어야 해요';return;}
+  const{error}=await sb.auth.updateUser({password:p});
+  if(error){er.textContent='변경 실패: '+error.message;return;}
+  er.style.color='var(--g)';er.textContent='변경됐어요! 다시 로그인해주세요';
+  setTimeout(async()=>{
+    await sb.auth.signOut();
+    location.href=location.href.split('#')[0].split('?')[0];
+  },1500);
 }
 async function loadSignupClasses(){
   const{data}=await sb.from('classes').select('name').order('name');
@@ -1289,8 +1380,9 @@ async function lRev(){
       }
     });
 
-  // 2) 수업 날짜가 지정되지 않은 기존 레슨: 1회차로 항상 표시 (완료 안 했으면)
-  myLessons.filter(l=>!l.hasSchedule)
+  // 2) 수업 날짜 미지정 레슨: 새 규칙 적용 기준시각(SCHEDULE_GATE_CUTOFF) 이전에 만들어진 레슨은
+  //    예전 학생들이 계속 볼 수 있던 대로 그대로 유지 (전체 공개). 그 이후 새로 만든 레슨부터만 비공개 규칙 적용.
+  myLessons.filter(l=>!l.hasSchedule&&l.created_at&&l.created_at<SCHEDULE_GATE_CUTOFF)
     .forEach(lesson=>{
       const doneRounds=new Set((logs||[]).filter(l=>l.lesson_id===lesson.id&&l.completed).map(l=>l.review_round));
       if(!doneRounds.has(1)){
@@ -1364,7 +1456,170 @@ function getRoundLabel(round){
   return {text:'표현 응용', color:'#085041', bg:'#E1F5EE', topBg:'#1E3A2F'};
 }
 
+// ── 네이티브 자막 재생 플레이어 (sg_builder 이식: 유튜브 IFrame API + 자막 클릭재생) ──
+let ytApiReady=false, ytApiLoading=false;
+let npPlayer=null;
+let npState={subs:[],playing:null,timer:null,rate:1,loop:false,hideEng:false,showKor:false};
+
+function npIsNativeLesson(lessonObj){
+  if(!lsYtId(lessonObj?.url))return false;
+  try{
+    const parsed=JSON.parse(lessonObj?.subtitles);
+    return Array.isArray(parsed)&&parsed.length>0;
+  }catch{return false;}
+}
+
+function npLoadYtApi(cb){
+  if(ytApiReady){cb();return;}
+  window._npCallbacks=window._npCallbacks||[];
+  window._npCallbacks.push(cb);
+  if(ytApiLoading)return;
+  ytApiLoading=true;
+  const prevCb=window.onYouTubeIframeAPIReady;
+  window.onYouTubeIframeAPIReady=function(){
+    ytApiReady=true;
+    if(typeof prevCb==='function'){try{prevCb();}catch{}}
+    (window._npCallbacks||[]).forEach(f=>{try{f();}catch{}});
+    window._npCallbacks=[];
+  };
+  const tag=document.createElement('script');
+  tag.src='https://www.youtube.com/iframe_api';
+  document.body.appendChild(tag);
+}
+
+function npDestroy(){
+  if(npState.timer){clearTimeout(npState.timer);npState.timer=null;}
+  if(npPlayer&&npPlayer.destroy){try{npPlayer.destroy();}catch{}}
+  npPlayer=null;
+  npState={subs:[],playing:null,timer:null,rate:1,loop:false,hideEng:false,showKor:false};
+}
+
+function renderNativePlayer(mountEl,videoId,subs){
+  npState.subs=subs;
+  mountEl.innerHTML=`
+    <div style="border-radius:12px;overflow:hidden;aspect-ratio:16/9;background:#000;margin-bottom:8px;">
+      <div id="np-yt-mount" style="width:100%;height:100%;"></div>
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px;">
+      <button id="np-hide-btn" onclick="npToggleHideEng()" style="padding:6px 12px;border-radius:8px;border:1.5px solid var(--brd);background:var(--sf);color:var(--text);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">🙈 영어가리기</button>
+      <button id="np-tr-btn" onclick="npToggleKor()" style="padding:6px 12px;border-radius:8px;border:1.5px solid var(--brd);background:var(--sf);color:var(--text);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">번역</button>
+      <button id="np-loop-btn" onclick="npToggleLoop()" style="padding:6px 12px;border-radius:8px;border:1.5px solid var(--brd);background:var(--sf);color:var(--text);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">🔁 구간반복</button>
+      <select id="np-rate-sel" onchange="npSetRate(this.value)" style="padding:6px 8px;border-radius:8px;border:1.5px solid var(--brd);background:var(--sf);color:var(--text);font-size:11px;font-family:inherit;">
+        <option value="0.75">0.75x</option>
+        <option value="1" selected>1x</option>
+        <option value="1.25">1.25x</option>
+        <option value="1.5">1.5x</option>
+      </select>
+    </div>
+    <div id="np-sub-list" style="display:flex;flex-direction:column;gap:6px;max-height:38vh;overflow-y:auto;"></div>`;
+  npRenderSubList();
+  npLoadYtApi(()=>{
+    npPlayer=new YT.Player('np-yt-mount',{videoId,playerVars:{playsinline:1,rel:0}});
+  });
+}
+
+function npRenderSubList(){
+  const wrap=document.getElementById('np-sub-list');if(!wrap)return;
+  wrap.innerHTML=npState.subs.map((s,i)=>`
+    <button onclick="npPlaySeg(${i})" style="text-align:left;padding:10px 12px;border-radius:10px;border:none;background:${npState.playing===i?'var(--blue-soft,#eff6ff)':'var(--sf)'};cursor:pointer;font-family:inherit;">
+      <div style="font-size:13px;font-weight:600;color:var(--text);">${npState.hideEng?'🙈':(s.text||'')}</div>
+      ${npState.showKor?`<div style="font-size:11px;color:var(--mu);margin-top:3px;">${s.kor||''}</div>`:''}
+    </button>`).join('');
+}
+
+function npToggleHideEng(){
+  npState.hideEng=!npState.hideEng;
+  const b=document.getElementById('np-hide-btn');
+  if(b)b.textContent=npState.hideEng?'👁 영어보기':'🙈 영어가리기';
+  npRenderSubList();
+}
+function npToggleKor(){
+  npState.showKor=!npState.showKor;
+  const b=document.getElementById('np-tr-btn');
+  if(b){b.textContent=npState.showKor?'번역 ✓':'번역';b.style.background=npState.showKor?'var(--g)':'var(--sf)';b.style.color=npState.showKor?'#fff':'var(--text)';}
+  npRenderSubList();
+}
+function npToggleLoop(){
+  npState.loop=!npState.loop;
+  const b=document.getElementById('np-loop-btn');
+  if(b){b.style.background=npState.loop?'var(--g)':'var(--sf)';b.style.color=npState.loop?'#fff':'var(--text)';}
+}
+function npSetRate(v){
+  npState.rate=+v;
+  if(npPlayer?.setPlaybackRate)npPlayer.setPlaybackRate(+v);
+}
+function npPlaySeg(i){
+  if(!npPlayer||!npPlayer.seekTo)return;
+  const s=npState.subs[i];if(!s)return;
+  npState.playing=i;
+  npRenderSubList();
+  if(npState.timer){clearTimeout(npState.timer);npState.timer=null;}
+  npPlayer.seekTo(s.start,true);
+  npPlayer.setPlaybackRate(npState.rate);
+  npPlayer.playVideo();
+  const dur=Math.max(0.3,(s.end-s.start))*1000/npState.rate;
+  npState.timer=setTimeout(()=>{
+    npPlayer.pauseVideo();
+    if(npState.loop)npPlaySeg(i);
+    else{npState.playing=null;npRenderSubList();}
+  },dur);
+}
+
+// ── Cloudflare Stream 재생기 (온라인 학습용) ──
+// npPlayer/npState/npPlaySeg/npToggle*/npRenderSubList는 백엔드에 상관없이 재사용된다.
+// npPlayer는 {seekTo,setPlaybackRate,playVideo,pauseVideo,destroy} 형태의 얇은 어댑터면 무엇이든 들어갈 수 있다.
+let cfSdkReady=false, cfSdkLoading=false;
+function cfLoadSdk(cb){
+  if(cfSdkReady){cb();return;}
+  window._cfCallbacks=window._cfCallbacks||[];
+  window._cfCallbacks.push(cb);
+  if(cfSdkLoading)return;
+  cfSdkLoading=true;
+  const tag=document.createElement('script');
+  tag.src='https://embed.cloudflarestream.com/embed/sdk.latest.js';
+  tag.onload=()=>{
+    cfSdkReady=true;
+    (window._cfCallbacks||[]).forEach(f=>{try{f();}catch{}});
+    window._cfCallbacks=[];
+  };
+  tag.onerror=()=>{tst('영상을 불러올 수 없어요 (Cloudflare 연결이 아직 안 됐어요)');};
+  document.body.appendChild(tag);
+}
+
+function renderCfPlayer(mountEl,cfVideoId,subs){
+  npState.subs=subs;
+  mountEl.innerHTML=`
+    <div style="border-radius:12px;overflow:hidden;aspect-ratio:16/9;background:#000;margin-bottom:8px;">
+      <stream id="np-cf-mount" src="${cfVideoId}" controls style="width:100%;height:100%;"></stream>
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px;">
+      <button id="np-hide-btn" onclick="npToggleHideEng()" style="padding:6px 12px;border-radius:8px;border:1.5px solid var(--brd);background:var(--sf);color:var(--text);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">🙈 영어가리기</button>
+      <button id="np-tr-btn" onclick="npToggleKor()" style="padding:6px 12px;border-radius:8px;border:1.5px solid var(--brd);background:var(--sf);color:var(--text);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">번역</button>
+      <button id="np-loop-btn" onclick="npToggleLoop()" style="padding:6px 12px;border-radius:8px;border:1.5px solid var(--brd);background:var(--sf);color:var(--text);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">🔁 구간반복</button>
+      <select id="np-rate-sel" onchange="npSetRate(this.value)" style="padding:6px 8px;border-radius:8px;border:1.5px solid var(--brd);background:var(--sf);color:var(--text);font-size:11px;font-family:inherit;">
+        <option value="0.75">0.75x</option>
+        <option value="1" selected>1x</option>
+        <option value="1.25">1.25x</option>
+        <option value="1.5">1.5x</option>
+      </select>
+    </div>
+    <div id="np-sub-list" style="display:flex;flex-direction:column;gap:6px;max-height:38vh;overflow-y:auto;"></div>`;
+  npRenderSubList();
+  cfLoadSdk(()=>{
+    const el=document.getElementById('np-cf-mount');
+    if(!el)return;
+    npPlayer={
+      seekTo(sec){el.currentTime=sec;},
+      setPlaybackRate(n){el.playbackRate=n;},
+      playVideo(){try{el.play?.()?.catch?.(()=>{});}catch{}},
+      pauseVideo(){try{el.pause?.();}catch{}},
+      destroy(){el.remove();}
+    };
+  });
+}
+
 async function oSes(lid,title,url,round){
+  npDestroy();
   ses={lid,title,url,round,startedAt:Date.now()};
   sesStartTime=Date.now();
   const lbl=getRoundLabel(round);
@@ -1380,12 +1635,20 @@ async function oSes(lid,title,url,round){
   const type=getRoundType(round);
 
   if(type==='follow'){
-    // 1·2회차 — iframe + 5회 체크
-    document.getElementById('rs-content').innerHTML=`
-      <div style="position:relative;">
-        <iframe src="${url}" style="width:100%;height:calc(100vh - 220px);border:none;display:block;" allowfullscreen></iframe>
-        <div style="position:absolute;bottom:8px;right:8px;display:flex;gap:4px;" id="rs-overlay-btns"></div>
-      </div>`;
+    // 1·2·3회차 — 자체 재생기(자막 클릭재생) 우선, 구형식 레슨은 기존 iframe 폴백
+    const vid=lsYtId(url);
+    let subsArr=[];
+    if(npIsNativeLesson(lessonObj)){try{subsArr=JSON.parse(lessonObj.subtitles);}catch{subsArr=[];}}
+    if(vid&&subsArr.length){
+      document.getElementById('rs-content').innerHTML='<div id="np-mount"></div>';
+      renderNativePlayer(document.getElementById('np-mount'),vid,subsArr);
+    } else {
+      document.getElementById('rs-content').innerHTML=`
+        <div style="position:relative;">
+          <iframe src="${url}" style="width:100%;height:calc(100vh - 220px);border:none;display:block;" allowfullscreen></iframe>
+          <div style="position:absolute;bottom:8px;right:8px;display:flex;gap:4px;" id="rs-overlay-btns"></div>
+        </div>`;
+    }
     renderBotFollow(lg?.count||0);
 
   } else if(type==='memorize'){
@@ -1393,12 +1656,23 @@ async function oSes(lid,title,url,round){
     const lessonSubs=lessonObj?.subtitles;
     let hasSubs=false;
     if(lessonSubs){try{hasSubs=JSON.parse(lessonSubs).filter(s=>s.kor).length>0;}catch{}}
-    if(hasSubs){
+    const vid=lsYtId(url);
+    npDestroy();
+    if(hasSubs&&vid){
+      document.getElementById('rs-content').innerHTML=`
+        <div style="border-radius:10px;overflow:hidden;aspect-ratio:16/9;max-height:150px;background:#000;margin-bottom:8px;">
+          <div id="np-yt-mount" style="width:100%;height:100%;"></div>
+        </div>
+        <div id="mem-flash-area"></div>`;
+      npLoadYtApi(()=>{npPlayer=new YT.Player('np-yt-mount',{videoId:vid,playerVars:{playsinline:1,rel:0}});});
+      renderBotMemorize(lessonObj, sub||null);
+    } else if(hasSubs){
       document.getElementById('rs-content').innerHTML=`
         <div style="background:rgba(0,0,0,.3);border-radius:9px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;">
           <div style="font-size:12px;font-weight:700;color:#fff;">📖 내용 암기</div>
           <div style="font-size:11px;color:rgba(255,255,255,.6);">${title}</div>
-        </div>`;
+        </div>
+        <div id="mem-flash-area"></div>`;
       renderBotMemorize(lessonObj, sub||null);
     } else {
       // 자막 없으면 영상 그대로 + 하단에 안내
@@ -1473,78 +1747,161 @@ async function tapRSC(n){
   }
 }
 
-// ── 3회차: 내용 암기 ──
-function parseSGImport(){
-  const raw=document.getElementById('sg-import')?.value?.trim();
-  if(!raw){tst('내용을 붙여넣어주세요');return;}
+// ── 레슨 자막 표 편집기 (sg_builder 이식 + SRT 자동인식) ──
+let lsSubs=[];
+let lsBlanks={};
+let lsVideoType='youtube'; // 'youtube' | 'cloudflare'
+const LESSON_AI_ENDPOINT=''; // Supabase Edge Function 배포 후 URL을 여기에 채워넣기
 
-  // 섹션 파싱
-  const sections={};
-  let curKey=null, curLines=[];
-  raw.split('\n').forEach(line=>{
-    const m=line.match(/^===\s*[①②③④]?\s*(.+?)\s*===$/);
-    if(m){
-      if(curKey)sections[curKey]=curLines.join('\n').trim();
-      curKey=m[1];curLines=[];
-    } else if(curKey){
-      curLines.push(line);
-    }
-  });
-  if(curKey)sections[curKey]=curLines.join('\n').trim();
+// 온라인(Cloudflare) 레슨은 lessons.url을 'cf:<영상UID>' 형태로 저장해서 DB 스키마 변경 없이 구분한다
+function cfId(url){
+  if(!url||!url.startsWith('cf:'))return null;
+  return url.slice(3)||null;
+}
 
-  let filled=0;
-
-  // 자막 → ls-subtitles
-  const subKey=Object.keys(sections).find(k=>k.includes('자막'));
-  if(subKey&&document.getElementById('ls-subtitles')){
-    document.getElementById('ls-subtitles').value=sections[subKey];
-    previewSubtitles(sections[subKey]);
-    filled++;
-  }
-
-  // 핵심 표현 → ls-expressions
-  const expKey=Object.keys(sections).find(k=>k.includes('핵심 표현')||k.includes('표현 카드'));
-  if(expKey&&document.getElementById('ls-expressions')){
-    document.getElementById('ls-expressions').value=sections[expKey];
-    filled++;
-  }
-
-  // 응용 가이드 → ls-guide
-  const guideKey=Object.keys(sections).find(k=>k.includes('가이드'));
-  if(guideKey&&document.getElementById('ls-guide')){
-    document.getElementById('ls-guide').value=sections[guideKey];
-    filled++;
-  }
-
-  // 단어 → ls-vocab
-  const vocabKey=Object.keys(sections).find(k=>k.includes('단어'));
-  if(vocabKey&&document.getElementById('ls-vocab')){
-    document.getElementById('ls-vocab').value=sections[vocabKey];
-    const lines=sections[vocabKey].split('\n').filter(l=>l.trim()).length;
-    const pv=document.getElementById('ls-vocab-preview');
-    if(pv)pv.textContent=`✅ ${lines}개 단어 — 저장 시 자동 추가`;
-    filled++;
-  }
-
-  // 빈칸 퀴즈 → ls-blanks (hidden input에 저장)
-  const blanksKey=Object.keys(sections).find(k=>k.includes('빈칸'));
-  if(blanksKey){
-    let blanksEl=document.getElementById('ls-blanks');
-    if(!blanksEl){
-      blanksEl=document.createElement('input');
-      blanksEl.type='hidden';blanksEl.id='ls-blanks';
-      document.getElementById('sg-import').parentNode.appendChild(blanksEl);
-    }
-    blanksEl.value=sections[blanksKey];
-    filled++;
-  }
-
-  if(filled>0){
-    tst(`✨ ${filled}개 항목 자동 채워졌어요!`);
-    document.getElementById('sg-import').value='';
+function lsSetVideoType(type){
+  lsVideoType=type;
+  const yBtn=document.getElementById('ls-type-youtube');
+  const cBtn=document.getElementById('ls-type-cloudflare');
+  const style=(btn,on)=>{if(!btn)return;btn.style.background=on?'var(--g)':'var(--sf)';btn.style.color=on?'#fff':'var(--text)';btn.style.border=on?'none':'1.5px solid var(--brd)';};
+  style(yBtn,type==='youtube');style(cBtn,type==='cloudflare');
+  const luEl=document.getElementById('lu');
+  const ytPreview=document.getElementById('ls-yt-preview');
+  const cfHint=document.getElementById('ls-cf-hint');
+  if(type==='cloudflare'){
+    if(luEl)luEl.placeholder='Cloudflare 영상 UID';
+    if(ytPreview)ytPreview.style.display='none';
+    if(cfHint)cfHint.style.display='block';
   } else {
-    tst('형식을 확인해주세요');
+    if(luEl)luEl.placeholder='유튜브 영상 URL (https://www.youtube.com/watch?v=...)';
+    if(cfHint)cfHint.style.display='none';
+    lsUpdatePreview();
   }
+}
+
+function lsYtId(url){
+  if(!url)return null;
+  const m=url.match(/(?:v=|youtu\.be\/|embed\/)([A-Za-z0-9_-]{11})/);
+  return m?m[1]:null;
+}
+
+function lsUpdatePreview(){
+  if(lsVideoType==='cloudflare')return;
+  const url=document.getElementById('lu')?.value?.trim();
+  const wrap=document.getElementById('ls-yt-preview');
+  const iframe=document.getElementById('ls-yt-iframe');
+  if(!wrap||!iframe)return;
+  const vid=lsYtId(url);
+  if(vid){iframe.src='https://www.youtube.com/embed/'+vid;wrap.style.display='block';}
+  else{wrap.style.display='none';iframe.src='';}
+}
+
+function lsSrtTimeToSec(t){
+  const m=t.trim().match(/(\d+):(\d+):(\d+)[.,](\d+)/);
+  if(!m)return 0;
+  return(+m[1])*3600+(+m[2])*60+(+m[3])+(+m[4])/1000;
+}
+
+function lsParseSrt(text){
+  const blocks=text.replace(/\r/g,'').split(/\n\s*\n/);
+  const out=[];
+  blocks.forEach(block=>{
+    const lines=block.split('\n').filter(l=>l.trim());
+    const timeLine=lines.find(l=>l.includes('-->'));
+    if(!timeLine)return;
+    const[a,b]=timeLine.split('-->');
+    const start=lsSrtTimeToSec(a);
+    const end=lsSrtTimeToSec(b);
+    const text=lines.slice(lines.indexOf(timeLine)+1).join(' ').trim();
+    if(text)out.push({start,end,text,kor:''});
+  });
+  return out;
+}
+
+function lsParsePipe(text){
+  return text.split('\n').filter(l=>l.trim()).map(line=>{
+    const parts=line.split('|');
+    if(parts.length<3)return null;
+    const start=parseFloat(parts[0].trim());
+    const end=parseFloat(parts[1].trim());
+    const t=parts[2].trim();
+    const kor=(parts[3]||'').trim();
+    if(isNaN(start)||isNaN(end)||!t)return null;
+    return{start,end,text:t,kor};
+  }).filter(Boolean);
+}
+
+function lsImportSubs(){
+  const raw=document.getElementById('ls-import')?.value?.trim();
+  if(!raw){tst('자막을 붙여넣어주세요');return;}
+  const parsed=raw.includes('-->')?lsParseSrt(raw):lsParsePipe(raw);
+  if(!parsed.length){tst('형식을 인식하지 못했어요');return;}
+  lsSubs=parsed;
+  lsRenderSubTable();
+  document.getElementById('ls-import').value='';
+  tst(`${parsed.length}문장을 가져왔어요 ✓`);
+}
+
+function lsRenderSubTable(){
+  const tbody=document.getElementById('ls-sub-tbody');if(!tbody)return;
+  tbody.innerHTML=lsSubs.map((s,i)=>`
+    <tr>
+      <td style="text-align:center;color:var(--mu);font-size:11px;">${i+1}</td>
+      <td><input type="number" value="${s.start}" step="0.1" onchange="lsSubs[${i}].start=+this.value" style="width:56px;border:1px solid var(--brd);border-radius:4px;padding:3px 4px;font-size:11px;"></td>
+      <td><input type="number" value="${s.end}" step="0.1" onchange="lsSubs[${i}].end=+this.value" style="width:56px;border:1px solid var(--brd);border-radius:4px;padding:3px 4px;font-size:11px;"></td>
+      <td><input type="text" value="${(s.text||'').replace(/"/g,'&quot;')}" onchange="lsSubs[${i}].text=this.value" style="width:100%;border:1px solid var(--brd);border-radius:4px;padding:3px 6px;font-size:11px;"></td>
+      <td><input type="text" value="${(s.kor||'').replace(/"/g,'&quot;')}" onchange="lsSubs[${i}].kor=this.value" style="width:100%;border:1px solid var(--brd);border-radius:4px;padding:3px 6px;font-size:11px;"></td>
+      <td><button onclick="lsSubs.splice(${i},1);lsRenderSubTable();" style="background:var(--rl);color:var(--rd);border:none;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:10px;">삭제</button></td>
+    </tr>`).join('');
+  const cnt=document.getElementById('ls-sub-count');
+  if(cnt)cnt.textContent=lsSubs.length;
+}
+
+function lsAddSubRow(){
+  const last=lsSubs[lsSubs.length-1];
+  lsSubs.push({start:last?last.end:0,end:last?last.end+3:3,text:'',kor:''});
+  lsRenderSubTable();
+}
+
+function lsSortSubs(){
+  lsSubs.sort((a,b)=>a.start-b.start);
+  lsRenderSubTable();
+}
+
+function lsClearSubs(){
+  if(lsSubs.length&&!confirm('자막을 전부 지울까요?'))return;
+  lsSubs=[];lsBlanks={};
+  lsRenderSubTable();
+}
+
+async function lsAutoComplete(){
+  if(!lsSubs.length){tst('먼저 자막을 가져와주세요');return;}
+  if(!LESSON_AI_ENDPOINT){tst('자동완성 기능이 아직 연결되지 않았어요');return;}
+  const btn=document.getElementById('ls-auto-btn');
+  if(btn){btn.textContent='⏳ 생성중...';btn.disabled=true;}
+  try{
+    const{data:sess}=await sb.auth.getSession();
+    const resp=await fetch(LESSON_AI_ENDPOINT,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+(sess?.session?.access_token||'')},
+      body:JSON.stringify({subs:lsSubs})
+    });
+    if(!resp.ok)throw new Error('서버 오류 ('+resp.status+')');
+    const data=await resp.json();
+    if(Array.isArray(data.subs))lsSubs=data.subs;
+    if(data.blanks)lsBlanks=data.blanks;
+    if(Array.isArray(data.key_expressions)&&document.getElementById('ls-expressions')){
+      document.getElementById('ls-expressions').value=data.key_expressions.map(e=>e.english+','+e.korean).join('\n');
+    }
+    if(Array.isArray(data.vocab)&&document.getElementById('ls-vocab')){
+      document.getElementById('ls-vocab').value=data.vocab.map(v=>v.english+','+v.korean).join('\n');
+    }
+    lsRenderSubTable();
+    tst('✨ 자동완성 완료!');
+  }catch(e){
+    tst('자동완성 실패: '+e.message);
+  }
+  if(btn){btn.textContent='🪄 자동 완성 (한글번역·빈칸퀴즈·단어 추천)';btn.disabled=false;}
 }
 
 function lvAllToggle(cb){
@@ -1570,12 +1927,6 @@ function getLsVocabTargets(){
     sts.filter(s=>s.class_name===cb.value).forEach(s=>ids.add(s.id));
   });
   return [...ids];
-}
-
-function previewSubtitles(val){
-  const el=document.getElementById('subtitle-preview');if(!el)return;
-  const lines=val.split('\n').filter(l=>l.trim()&&l.includes('|'));
-  el.textContent=lines.length?`✅ ${lines.length}문장 인식됨 — 5회차 카드 자동 생성`:'';
 }
 
 // ── 5회차: 자막 기반 플래시카드 암기 ──
@@ -1624,7 +1975,7 @@ function retryMemorize(){
 
 function renderMemCard(){
   const mc=window._memCards;if(!mc)return;
-  const content=document.getElementById('rs-content');
+  const content=document.getElementById('mem-flash-area')||document.getElementById('rs-content');
   const bot=document.getElementById('rs-bot');
 
   if(mc.idx>=mc.total){
@@ -1732,6 +2083,10 @@ function answerMemCard(known){
 
 async function finishMemorize(score){
   if(!ses)return;
+  if(ses.free){
+    tst(score>=75?'암기 완료! 💪 (자유학습은 기록되지 않아요)':`${score}%`);
+    return;
+  }
   const now=new Date().toISOString();
   const passed=score>=75;
   const subData={student_id:U.id,lesson_id:ses.lid,review_round:ses.round,hw_type:'memorize',content:`${score}%`,score,completed:passed,submitted_at:now};
@@ -1998,7 +2353,7 @@ function autoNextReview(){
   if(next){setTimeout(()=>{tst(`다음: ${next.lesson.title}`);oSes(next.lesson.id,next.lesson.title,next.lesson.url,next.round);},800);}
 }
 
-function cses(){document.getElementById('rs').classList.remove('on');ses=null;}
+function cses(){npDestroy();document.getElementById('rs').classList.remove('on');ses=null;}
 
 
 
@@ -3439,23 +3794,24 @@ async function saveAllAtt(d, cls){
   lAdm();
 }
 
-// ── sg_builder 자막 세그먼트 재생 ──
-function playMemSeg(idx){
-  const seg=window._segs?.[idx];if(!seg)return;
-  const iframe=document.querySelector('#rs-content iframe');if(!iframe)return;
-  try{
-    iframe.contentWindow.postMessage({action:'seekTo',seconds:seg.start,allowSeekAhead:true},'*');
-  }catch(e){}
+// ── 5회차 플래시카드 "구간 열기" — 네이티브 플레이어로 해당 구간만 재생 ──
+function playMemSeg(start,end){
+  if(!npPlayer||!npPlayer.seekTo){tst('영상을 불러오는 중이에요, 잠시 후 다시 눌러주세요');return;}
+  if(npState.timer){clearTimeout(npState.timer);npState.timer=null;}
+  npPlayer.seekTo(start,true);
+  npPlayer.playVideo();
+  npState.timer=setTimeout(()=>{npPlayer.pauseVideo();},Math.max(0.3,end-start)*1000);
 }
 
 
 // ── 관리자 탭 전환 ──
 function adTab(t,b){
   ['st','cl','ls','at','vo','ct','mg'].forEach(x=>{const el=document.getElementById(`ad-${x}`);if(el)el.style.display=x===t?'block':'none';});
+  const clDiv=document.getElementById('ad-cls');if(clDiv)clDiv.style.display=t==='cl'?'block':'none';
   document.querySelectorAll('#pad>.tbb .tbn').forEach(x=>x.classList.remove('on'));
   if(b)b.classList.add('on');
-  if(t==='cl'){const clDiv=document.getElementById('ad-cls');if(clDiv)clDiv.style.display='block';rClsList();}
-  if(t==='ls'){rLsList();renderLsRows();lsVocabRenderTgt();renderLsDateTags();}
+  if(t==='cl'){rClsList();}
+  if(t==='ls'){rLsList();renderLsRows();lsVocabRenderTgt();renderLsDateTags();lsRenderSubTable();}
   if(t==='at'){
     document.getElementById('atd').value=new Date().toISOString().slice(0,10);
     rAtCls();
@@ -3561,10 +3917,41 @@ function mgSetCls(c){mgCls=c;mgHoldFilter=false;mgRenderClsPills();renderMgGrid(
 function mgToggleHold(){mgHoldFilter=!mgHoldFilter;if(mgHoldFilter)mgCls='all';mgRenderClsPills();renderMgGrid();}
 function mgShiftRange(delta){mgStartYM=ymAdd(mgStartYM,delta);renderMgGrid();}
 
+// 이번 달 미등록 / 다음 달 미등록(만료임박) 학생 알림
+async function renderMgAlerts(){
+  const el=document.getElementById('mg-alerts');if(!el)return;
+  const baseStu=sts.filter(s=>s.class_name);
+  if(!baseStu.length){el.innerHTML='';return;}
+  const ids=baseStu.map(s=>s.id);
+  const now=new Date();
+  const curYM=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const nextYM=ymAdd(curYM,1);
+  const{data:enr}=await sb.from('enrollments').select('student_id,year_month,enrolled').in('student_id',ids).in('year_month',[curYM,nextYM]);
+  const emap={};(enr||[]).forEach(e=>{emap[`${e.student_id}_${e.year_month}`]=e.enrolled;});
+  const unregistered=baseStu.filter(s=>emap[`${s.id}_${curYM}`]!==true);
+  const expiringSoon=baseStu.filter(s=>emap[`${s.id}_${curYM}`]===true&&emap[`${s.id}_${nextYM}`]!==true);
+  if(!unregistered.length&&!expiringSoon.length){el.innerHTML='';return;}
+  el.innerHTML=`
+    ${unregistered.length?`<div class="card" style="margin-bottom:10px;border:1.5px solid #FCA5A5;background:#FEF2F2;">
+      <div style="font-size:12px;font-weight:700;color:#B91C1C;margin-bottom:8px;">⚠️ 이번 달(${ymLabel(curYM)}) 미등록 · ${unregistered.length}명</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;">
+        ${unregistered.map(s=>`<span onclick="openQuickPay('${s.id}','${curYM}')" style="font-size:12px;padding:5px 10px;border-radius:99px;background:#fff;border:1px solid #FCA5A5;color:#B91C1C;cursor:pointer;font-weight:600;">${dispName(s.name,s.email)}</span>`).join('')}
+      </div>
+    </div>`:''}
+    ${expiringSoon.length?`<div class="card" style="margin-bottom:10px;border:1.5px solid #FDE68A;background:#FFFBEB;">
+      <div style="font-size:12px;font-weight:700;color:#92400E;margin-bottom:8px;">⏰ ${ymLabel(nextYM)} 등록 아직 안 됨(재등록 안내 필요) · ${expiringSoon.length}명</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;">
+        ${expiringSoon.map(s=>`<span onclick="openQuickPay('${s.id}','${nextYM}')" style="font-size:12px;padding:5px 10px;border-radius:99px;background:#fff;border:1px solid #FDE68A;color:#92400E;cursor:pointer;font-weight:600;">${dispName(s.name,s.email)}</span>`).join('')}
+      </div>
+    </div>`:''}
+  `;
+}
+
 async function renderMgGrid(){
   const wrap=document.getElementById('mg-grid-table');
   if(!wrap)return;
   wrap.innerHTML='<div class="loading">로딩중...</div>';
+  renderMgAlerts();
   let baseStu=mgCls==='all'?sts.filter(s=>s.class_name):sts.filter(s=>s.class_name===mgCls);
   // 홀딩 필터 적용
   let filtStu=baseStu;
@@ -3598,7 +3985,7 @@ const{data:enr}=await sb.from('enrollments').select('student_id,year_month,enrol
       <td onclick="openMgEdit('${s.id}')" style="position:sticky;left:0;background:${rowBg};z-index:1;padding:8px 10px;font-weight:600;cursor:pointer;color:var(--gd);white-space:nowrap;border-bottom:1px solid var(--brd);">${dispName(s.name,s.email)}${holdingIds&&holdingIds.has(s.id)?'<span style="font-size:9px;margin-left:4px;padding:2px 5px;border-radius:99px;background:#FEF3C7;color:#92400E;font-weight:700;">홀딩</span>':''}</td>
       ${months.map(m=>{
         const on=emap[`${s.id}_${m}`]===true;
-        return `<td onclick="toggleEnroll('${s.id}','${m}')" style="text-align:center;padding:8px 3px;cursor:pointer;background:${rowBg};border-bottom:1px solid var(--brd);">
+        return `<td onclick="onGridCellClick('${s.id}','${m}')" style="text-align:center;padding:8px 3px;cursor:pointer;background:${rowBg};border-bottom:1px solid var(--brd);">
           <span style="display:inline-flex;width:20px;height:20px;border-radius:6px;align-items:center;justify-content:center;background:${on?'var(--g)':'transparent'};border:${on?'none':'1.5px solid var(--brd)'};color:#fff;font-size:11px;font-weight:700;">${on?'✓':''}</span>
         </td>`;
       }).join('')}
@@ -3608,11 +3995,86 @@ const{data:enr}=await sb.from('enrollments').select('student_id,year_month,enrol
   wrap.innerHTML=h;
 }
 
-async function toggleEnroll(sid,ym){
+// 등록현황 칸 클릭 — 빈 칸이면 결제 입력창, 이미 등록된 칸이면 해제
+async function onGridCellClick(sid,ym){
   const{data:ex}=await sb.from('enrollments').select('id,enrolled').eq('student_id',sid).eq('year_month',ym).maybeSingle();
-  const newVal=ex?!ex.enrolled:true;
-  if(ex)await sb.from('enrollments').update({enrolled:newVal}).eq('id',ex.id);
-  else await sb.from('enrollments').insert({student_id:sid,year_month:ym,enrolled:newVal});
+  if(ex?.enrolled){
+    if(!confirm('등록을 해제할까요? (결제 기록은 그대로 남아요)'))return;
+    await sb.from('enrollments').update({enrolled:false}).eq('id',ex.id);
+    renderMgGrid();
+  } else {
+    openQuickPay(sid,ym);
+  }
+}
+
+// 결제 1건이 커버하는 연월 목록 계산
+function computePaymentMonths(pay_date,months){
+  const startYM=pay_date.slice(0,7);
+  const out=[];
+  for(let i=0;i<months;i++)out.push(ymAdd(startYM,i));
+  return out;
+}
+
+// 결제 저장 + 그만큼 등록현황 자동 반영 (결제·매출 탭 폼과 퀵페이 팝업이 공용으로 사용)
+async function recordPayment(sid,amount,pay_date,months,memo){
+  if(!sid){tst('학생을 선택해주세요');return false;}
+  if(!amount||amount<=0){tst('금액을 입력해주세요');return false;}
+  if(!pay_date){tst('결제일을 입력해주세요');return false;}
+  const{error}=await sb.from('payments').insert({student_id:sid,amount,pay_date,months,memo:memo||null});
+  if(error){tst('저장 실패: '+error.message);return false;}
+  for(const ym of computePaymentMonths(pay_date,months)){
+    const{data:ex}=await sb.from('enrollments').select('id').eq('student_id',sid).eq('year_month',ym).maybeSingle();
+    if(ex)await sb.from('enrollments').update({enrolled:true}).eq('id',ex.id);
+    else await sb.from('enrollments').insert({student_id:sid,year_month:ym,enrolled:true});
+  }
+  tst(`결제 저장 완료! ${months}개월 등록처리 됐어요`);
+  return true;
+}
+
+function openQuickPay(sid,ym){
+  const stu=sts.find(s=>s.id===sid);if(!stu)return;
+  const pop=document.createElement('div');
+  pop.id='mg-quickpay-pop';
+  pop.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9000;display:flex;align-items:flex-end;justify-content:center;';
+  pop.innerHTML=`<div style="background:var(--bg);border-radius:20px 20px 0 0;width:100%;max-width:480px;padding:16px 14px 30px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <div style="font-size:16px;font-weight:800;">${dispName(stu.name,stu.email)} · ${ymLabel(ym)} 등록</div>
+      <div onclick="document.getElementById('mg-quickpay-pop').remove()" style="width:28px;height:28px;border-radius:8px;background:var(--sf);display:flex;align-items:center;justify-content:center;cursor:pointer;">
+        <svg width="12" height="12" viewBox="0 0 12 12"><line x1="1" y1="1" x2="11" y2="11" stroke="#888" stroke-width="1.8"/><line x1="11" y1="1" x2="1" y2="11" stroke="#888" stroke-width="1.8"/></svg>
+      </div>
+    </div>
+    <input class="inp" type="number" id="qp-amount" placeholder="결제 금액">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+      <div><div style="font-size:11px;color:var(--mu);margin-bottom:4px;">결제일</div><input class="inp" type="date" id="qp-date" value="${ym}-01" style="margin-bottom:0;"></div>
+      <div><div style="font-size:11px;color:var(--mu);margin-bottom:4px;">등록 개월수</div><input class="inp" type="number" id="qp-months" value="1" min="1" style="margin-bottom:0;"></div>
+    </div>
+    <input class="inp" type="text" id="qp-memo" placeholder="메모 (선택)">
+    <button class="btn btn-p" onclick="submitQuickPay('${sid}')">결제 저장</button>
+    <div style="text-align:center;margin-top:10px;">
+      <span onclick="quickEnrollNoPayment('${sid}','${ym}')" style="font-size:12px;color:var(--mu);cursor:pointer;text-decoration:underline;">결제 없이 이 달만 등록 처리</span>
+    </div>
+  </div>`;
+  document.body.appendChild(pop);
+  pop.addEventListener('click',e=>{if(e.target===pop)pop.remove();});
+}
+
+async function submitQuickPay(sid){
+  const amount=parseInt(document.getElementById('qp-amount')?.value);
+  const pay_date=document.getElementById('qp-date')?.value;
+  const months=parseInt(document.getElementById('qp-months')?.value)||1;
+  const memo=document.getElementById('qp-memo')?.value?.trim()||null;
+  const ok=await recordPayment(sid,amount,pay_date,months,memo);
+  if(!ok)return;
+  document.getElementById('mg-quickpay-pop')?.remove();
+  loadMgPayHistory();renderRevenueSummary();renderMgGrid();
+}
+
+async function quickEnrollNoPayment(sid,ym){
+  const{data:ex}=await sb.from('enrollments').select('id').eq('student_id',sid).eq('year_month',ym).maybeSingle();
+  if(ex)await sb.from('enrollments').update({enrolled:true}).eq('id',ex.id);
+  else await sb.from('enrollments').insert({student_id:sid,year_month:ym,enrolled:true});
+  document.getElementById('mg-quickpay-pop')?.remove();
+  tst('결제 없이 등록 처리됐어요');
   renderMgGrid();
 }
 
@@ -3668,20 +4130,8 @@ async function submitPayment(){
   const pay_date=document.getElementById('mg-pay-date')?.value;
   const months=parseInt(document.getElementById('mg-pay-months')?.value)||1;
   const memo=document.getElementById('mg-pay-memo')?.value?.trim()||null;
-  if(!sid){tst('학생을 선택해주세요');return;}
-  if(!amount||amount<=0){tst('금액을 입력해주세요');return;}
-  if(!pay_date){tst('결제일을 입력해주세요');return;}
-  const{error}=await sb.from('payments').insert({student_id:sid,amount,pay_date,months,memo});
-  if(error){tst('저장 실패: '+error.message);return;}
-  // 등록 개월수만큼 enrollments 자동 채우기
-  const startYM=pay_date.slice(0,7);
-  for(let i=0;i<months;i++){
-    const ym=ymAdd(startYM,i);
-    const{data:ex}=await sb.from('enrollments').select('id').eq('student_id',sid).eq('year_month',ym).maybeSingle();
-    if(ex)await sb.from('enrollments').update({enrolled:true}).eq('id',ex.id);
-    else await sb.from('enrollments').insert({student_id:sid,year_month:ym,enrolled:true});
-  }
-  tst(`결제 저장 완료! ${months}개월 등록처리 됐어요`);
+  const ok=await recordPayment(sid,amount,pay_date,months,memo);
+  if(!ok)return;
   document.getElementById('mg-pay-amount').value='';
   document.getElementById('mg-pay-memo').value='';
   loadMgPayHistory();
@@ -3710,11 +4160,24 @@ async function loadMgPayHistory(){
 }
 
 async function deletePayment(pid){
-  if(!confirm('이 결제 기록을 삭제할까요?'))return;
+  if(!confirm('이 결제 기록을 삭제할까요? 다른 결제로 커버되지 않는 달은 등록도 함께 해제돼요'))return;
+  const{data:pay}=await sb.from('payments').select('*').eq('id',pid).maybeSingle();
   await sb.from('payments').delete().eq('id',pid);
+  if(pay){
+    const coveredYms=computePaymentMonths(pay.pay_date,pay.months||1);
+    const{data:remaining}=await sb.from('payments').select('pay_date,months').eq('student_id',pay.student_id);
+    const stillCovered=new Set();
+    (remaining||[]).forEach(p=>{computePaymentMonths(p.pay_date,p.months||1).forEach(ym=>stillCovered.add(ym));});
+    for(const ym of coveredYms){
+      if(stillCovered.has(ym))continue;
+      const{data:ex}=await sb.from('enrollments').select('id').eq('student_id',pay.student_id).eq('year_month',ym).maybeSingle();
+      if(ex)await sb.from('enrollments').update({enrolled:false}).eq('id',ex.id);
+    }
+  }
   tst('삭제됐어요');
   loadMgPayHistory();
   renderRevenueSummary();
+  renderMgGrid();
 }
 
 let _revMode='thisMonth'; // 현재 선택된 수입 모드
@@ -3815,6 +4278,16 @@ async function renderRevenueSummary(mode){
 
 
 // ── INIT ──
+sb.auth.onAuthStateChange((event)=>{
+  if(event==='PASSWORD_RECOVERY'){
+    document.getElementById('ls').classList.add('on');
+    document.getElementById('as').classList.remove('on');
+    document.getElementById('lbox').style.display='none';
+    document.getElementById('subox').style.display='none';
+    document.getElementById('fpbox').style.display='none';
+    document.getElementById('rpbox').style.display='block';
+  }
+});
 (async()=>{
   const{data:{session:s}}=await sb.auth.getSession();
   if(s?.user)await initApp(s.user);
@@ -3829,10 +4302,10 @@ async function renderRevenueSummary(mode){
 function gp(n){
   document.querySelectorAll('.pg').forEach(p=>p.classList.remove('on'));
   document.querySelectorAll('.bni').forEach(b=>b.classList.remove('on'));
-  const ids={home:'ph',vocab:'pv',review:'pr',record:'prc',rank:'prk',cert:'pct',admin:'pad',online:'pol',quiz:'pqz'};
+  const ids={home:'ph',vocab:'pv',review:'pr',record:'prc',rank:'prk',cert:'pct',admin:'pad',online:'pol',quiz:'pqz',freestudy:'pfs'};
   const pg=document.getElementById(ids[n]);if(pg)pg.classList.add('on');
   // 네비 버튼은 home,record,rank,cert,admin 순서 (vocab/review는 네비에 없음, 홈에서 진입)
-  const navOrd=['home','record','rank','cert','quiz','admin','online'];
+  const navOrd=['home','record','rank','cert','quiz','freestudy','admin','online'];
   const idx=navOrd.indexOf(n);
   const btns=document.querySelectorAll('.bni');if(idx>=0&&btns[idx])btns[idx].classList.add('on');
   if(n==='vocab'){if(!loaded.vocab){loaded.vocab=true;startVocab();}else{renderVHead();renderFC();}}
@@ -3843,9 +4316,130 @@ function gp(n){
   if(n==='cert'){lCert();}
   if(n==='online'){lOnline();}
   if(n==='quiz'){lQuiz();}
+  if(n==='freestudy'){fsTab('off');}
   if(n==='admin'){
     if(!classes.length)loadClasses().then(()=>loadStudents().then(()=>{lAdm();adTab('st',document.querySelector('#pad>.tbb .tbn'));}));
     else{lAdm();adTab('st',document.querySelector('#pad>.tbb .tbn'));}
+  }
+}
+
+// ── 자유학습 서브탭 (오프라인 복습 / 온라인 학습) ──
+function fsTab(t){
+  document.getElementById('fs-tab-off')?.classList.toggle('on',t==='off');
+  document.getElementById('fs-tab-on')?.classList.toggle('on',t==='on');
+  if(t==='off')lFreeStudy();
+  else lOnlineStudy();
+}
+
+// 온라인 학습 — 오프라인/온라인 구분 없이 이번 달 등록(결제)된 학생이면 전체 온라인 레슨을 자유롭게 시청
+async function lOnlineStudy(){
+  const el=document.getElementById('fs-list');
+  if(el)el.innerHTML='<div class="loading">로딩중...</div>';
+  const now=new Date();
+  const curYM=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const{data:enr}=await sb.from('enrollments').select('enrolled').eq('student_id',U.id).eq('year_month',curYM).maybeSingle();
+  if(!enr?.enrolled){
+    if(el)el.innerHTML='<div class="empty" style="padding:60px 0;">이번 달 등록이 확인되지 않아요<br><span style="font-size:11px;color:var(--mu);">원장님께 문의해주세요</span></div>';
+    return;
+  }
+  const{data:lss}=await sb.from('lessons').select('*').order('created_at',{ascending:false});
+  les=lss||les;
+  renderOnlineStudyList(les.filter(l=>cfId(l.url)));
+}
+
+function renderOnlineStudyList(lessons){
+  const el=document.getElementById('fs-list');if(!el)return;
+  if(!lessons.length){el.innerHTML='<div class="empty" style="padding:60px 0;">아직 등록된 온라인 수업이 없어요</div>';return;}
+  el.innerHTML=lessons.map(l=>`
+    <button onclick="openFreeStudy('${l.id}')" style="width:100%;text-align:left;padding:14px 16px;border-radius:13px;background:var(--card,#fff);border:1.5px solid var(--brd);margin-bottom:8px;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:space-between;">
+      <span style="font-size:14px;font-weight:600;color:var(--text);">${l.title}</span>
+      <span style="font-size:11px;color:var(--mu);">시청하기 →</span>
+    </button>`).join('');
+}
+
+// ── 자유학습 (내가 배운 토픽을 순서/횟수 상관없이 복습, 기록 안 남음) ──
+async function lFreeStudy(){
+  const el=document.getElementById('fs-list');
+  if(el)el.innerHTML='<div class="loading">로딩중...</div>';
+  const[{data:lss},{data:schs},{data:at}]=await Promise.all([
+    sb.from('lessons').select('*').order('created_at',{ascending:false}),
+    sb.from('lesson_schedules').select('*'),
+    sb.from('attendance').select('lesson_date').eq('student_id',U.id).eq('status','present')
+  ]);
+  les=lss||les;
+  const myAttendDates=new Set((at||[]).map(a=>a.lesson_date));
+  const schMap={};(schs||[]).forEach(s=>{if(!schMap[s.lesson_id])schMap[s.lesson_id]=[];schMap[s.lesson_id].push(s.lesson_date);});
+  const myLessons=les.filter(l=>{
+    const dates=schMap[l.id]||[];
+    if(!dates.length)return l.created_at&&l.created_at<SCHEDULE_GATE_CUTOFF; // 기준시각 이전 레슨만 예전처럼 전체 공개 유지
+    return dates.some(d=>myAttendDates.has(d));
+  });
+  renderFreeStudyList(myLessons);
+}
+
+function renderFreeStudyList(lessons){
+  const el=document.getElementById('fs-list');if(!el)return;
+  if(!lessons.length){el.innerHTML='<div class="empty" style="padding:60px 0;">아직 배운 토픽이 없어요</div>';return;}
+  el.innerHTML=lessons.map(l=>`
+    <button onclick="openFreeStudy('${l.id}')" style="width:100%;text-align:left;padding:14px 16px;border-radius:13px;background:var(--card,#fff);border:1.5px solid var(--brd);margin-bottom:8px;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:space-between;">
+      <span style="font-size:14px;font-weight:600;color:var(--text);">${l.title}</span>
+      <span style="font-size:11px;color:var(--mu);">자유학습 →</span>
+    </button>`).join('');
+}
+
+function openFreeStudy(lid){
+  const l=les.find(x=>x.id===lid);if(!l)return;
+  npDestroy();
+  ses={lid,title:l.title,url:l.url,round:'free',free:true,startedAt:Date.now()};
+  document.getElementById('rs-title').textContent=l.title;
+  document.getElementById('rs-badge').textContent='자유학습';
+  document.getElementById('rs-badge').style.background='#E1F5EE';
+  document.getElementById('rs-badge').style.color='#1D9E75';
+  document.getElementById('rs-top').style.background='#1E2D45';
+  let subs=[];
+  try{const p=JSON.parse(l.subtitles);subs=Array.isArray(p)?p:[];}catch{}
+  const ytVid=lsYtId(l.url);
+  const cfVid=cfId(l.url);
+  window._fsVid=ytVid||cfVid;
+  window._fsVideoType=ytVid?'youtube':(cfVid?'cloudflare':null);
+  window._fsSubs=subs;
+  window._fsLesson=l;
+  const hasKor=subs.filter(s=>s.kor).length>0;
+  document.getElementById('rs-content').innerHTML=`
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button id="fs-mode-listen" onclick="fsSetMode('listen')" style="flex:1;padding:10px;border-radius:10px;border:none;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">🎧 듣기</button>
+      <button id="fs-mode-mem" onclick="fsSetMode('mem')" style="flex:1;padding:10px;border-radius:10px;border:1.5px solid var(--brd);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;" ${hasKor?'':'disabled'}>📖 암기카드</button>
+    </div>
+    <div id="fs-body"></div>`;
+  document.getElementById('rs-bot').innerHTML='';
+  fsSetMode(window._fsVid&&subs.length?'listen':'mem');
+  document.getElementById('rs').classList.add('on');
+}
+
+function fsSetMode(mode){
+  const listenBtn=document.getElementById('fs-mode-listen');
+  const memBtn=document.getElementById('fs-mode-mem');
+  const style=(btn,on)=>{if(!btn)return;btn.style.background=on?'var(--g)':'var(--sf)';btn.style.color=on?'#fff':'var(--text)';};
+  style(listenBtn,mode==='listen');style(memBtn,mode==='mem');
+  npDestroy();
+  const body=document.getElementById('fs-body');if(!body)return;
+  document.getElementById('rs-bot').innerHTML='';
+  if(mode==='listen'){
+    if(window._fsVid&&window._fsSubs.length){
+      body.innerHTML='<div id="np-mount"></div>';
+      if(window._fsVideoType==='cloudflare'){
+        renderCfPlayer(document.getElementById('np-mount'),window._fsVid,window._fsSubs);
+      } else {
+        renderNativePlayer(document.getElementById('np-mount'),window._fsVid,window._fsSubs);
+      }
+    } else {
+      body.innerHTML=`<div style="position:relative;"><iframe src="${window._fsLesson.url}" style="width:100%;height:calc(100vh - 300px);border:none;display:block;" allowfullscreen></iframe></div>`;
+    }
+  } else {
+    const subs=window._fsSubs.filter(s=>s.kor);
+    body.innerHTML='<div id="mem-flash-area"></div>';
+    window._memCards={subs,idx:0,known:0,unknown:[],total:subs.length};
+    renderMemCard();
   }
 }
 
@@ -4066,13 +4660,9 @@ function startQuiz(lesson){
     else{pill.style.background='var(--sf)';pill.style.color='var(--text)';pill.style.borderColor='var(--brd)';}
   });
 
-  // 자막 파싱
+  // 자막 파싱 (JSON 배열 형식: [{start,end,text,kor}])
   try{
-    _quizSubs=lesson.subtitles.split('
-').map(l=>{
-      const p=l.split('|');
-      return p.length>=3?{start:+p[0],end:+p[1],text:p[2],kor:p[3]||''}:null;
-    }).filter(Boolean);
+    _quizSubs=JSON.parse(lesson.subtitles)||[];
   }catch{_quizSubs=[];}
 
   // 빈칸 데이터 파싱
@@ -4811,11 +5401,12 @@ async function delCls(cls){
 // ── 레슨 관리 ──
 async function saveLesson(){
   const title=document.getElementById('lt')?.value?.trim();
-  const url=document.getElementById('lu')?.value?.trim();
-  if(!title||!url){tst('제목과 영상 URL을 입력해주세요');return;}
+  const rawUrl=document.getElementById('lu')?.value?.trim();
+  if(!title||!rawUrl){tst(lsVideoType==='cloudflare'?'제목과 Cloudflare 영상 UID를 입력해주세요':'제목과 영상 URL을 입력해주세요');return;}
+  const url=lsVideoType==='cloudflare'?('cf:'+rawUrl.replace(/^cf:/,'')):rawUrl;
 
   // 자막, 핵심표현, 가이드
-  const subtitles=document.getElementById('ls-subtitles')?.value?.trim()||null;
+  const subtitles=lsSubs.length?JSON.stringify(lsSubs):null;
   const expRaw=document.getElementById('ls-expressions')?.value?.trim()||'';
   let key_expressions=null;
   if(expRaw){
@@ -4826,9 +5417,7 @@ async function saveLesson(){
   }
   const guide=document.getElementById('ls-guide')?.value?.trim()||null;
   // 빈칸 퀴즈 데이터
-  const blanksRaw=document.getElementById('ls-blanks')?.value?.trim()||null;
-  let blanks=null;
-  if(blanksRaw){try{blanks=blanksRaw;}catch(e){}}
+  const blanks=Object.keys(lsBlanks).length?JSON.stringify(lsBlanks):null;
 
   // 수업 날짜 수집 (lsDates 배열 사용)
   const schedules=lsDates.map(d=>({lesson_date:d}));
@@ -4872,7 +5461,10 @@ async function saveLesson(){
     }
   }
 
-  ['lt','lu','ls-subtitles','ls-expressions','ls-guide','ls-vocab'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ['lt','lu','ls-expressions','ls-guide','ls-vocab'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  lsSubs=[];lsBlanks={};lsRenderSubTable();
+  lsSetVideoType('youtube');
+  const pv=document.getElementById('ls-yt-preview');if(pv)pv.style.display='none';
   lsDates=[];renderLsDateTags();
   await rLsList();renderLsRows();
 }
@@ -4903,15 +5495,29 @@ function getLvTgtIds(){
   const allCb=document.getElementById('lv-all');
   if(allCb?.checked)return sts.map(s=>s.id);
   const ids=[];
-  document.querySelectorAll('.lv-cls:checked').forEach(cb=>{sts.filter(s=>s.class_name===cb.value).forEach(s=>ids.push(s.id));});
+  document.querySelectorAll('.lv-cls-cb:checked').forEach(cb=>{sts.filter(s=>s.class_name===cb.value).forEach(s=>ids.push(s.id));});
   return [...new Set(ids)];
 }
 
 async function openLsEdit(lid){
   const l=les.find(x=>x.id===lid);if(!l)return;
   document.getElementById('lt').value=l.title||'';
-  document.getElementById('lu').value=l.url||'';
-  if(document.getElementById('ls-subtitles'))document.getElementById('ls-subtitles').value=l.subtitles||'';
+  const cfid=cfId(l.url);
+  lsSetVideoType(cfid?'cloudflare':'youtube');
+  document.getElementById('lu').value=cfid||l.url||'';
+  lsUpdatePreview();
+  lsSubs=[];
+  if(l.subtitles){
+    try{
+      const parsed=JSON.parse(l.subtitles);
+      lsSubs=Array.isArray(parsed)?parsed:[];
+    }catch{
+      lsSubs=lsParsePipe(l.subtitles); // 구형식(pipe 텍스트)으로 저장된 레슨도 표에서 편집 가능하게 변환
+    }
+  }
+  lsRenderSubTable();
+  lsBlanks={};
+  if(l.blanks){try{lsBlanks=JSON.parse(l.blanks)||{};}catch{}}
   if(document.getElementById('ls-guide'))document.getElementById('ls-guide').value=l.guide||'';
   if(document.getElementById('ls-expressions')&&l.key_expressions){
     try{const exps=JSON.parse(l.key_expressions);document.getElementById('ls-expressions').value=exps.map(e=>e.english+(e.korean?','+e.korean:'')).join('\n');}catch{}
@@ -4930,7 +5536,10 @@ async function openLsEdit(lid){
 }
 
 function cancelLsEdit(){
-  ['lt','lu','ls-subtitles','ls-expressions','ls-guide'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ['lt','lu','ls-expressions','ls-guide'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  lsSubs=[];lsBlanks={};lsRenderSubTable();
+  lsSetVideoType('youtube');
+  const pv=document.getElementById('ls-yt-preview');if(pv)pv.style.display='none';
   lsDates=[];renderLsDateTags();
   const titleEl=document.getElementById('ls-form-title');
   if(titleEl){titleEl.textContent='새 토픽 등록';delete titleEl.dataset.editId;}
