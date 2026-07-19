@@ -1463,7 +1463,10 @@ function getRoundLabel(round){
 // ── 네이티브 자막 재생 플레이어 (sg_builder 이식: 유튜브 IFrame API + 자막 클릭재생) ──
 let ytApiReady=false, ytApiLoading=false;
 let npPlayer=null;
-let npState={subs:[],playing:null,timer:null,rate:1,loop:false,hideEng:false,showKor:false};
+let npState={subs:[],playing:null,pausedIdx:null,timer:null,rate:1,loop:false,mode:'single',hideEng:false,showKor:false};
+// 가로/세로 화면 전환 · 글자 크기는 npState와 달리 레슨을 넘어가도(npDestroy 이후에도) 유지 — 수업 중 TV 송출용 설정이라 계속 유지되는 게 편함
+let npLayout='vert'; // 'vert' | 'horiz'
+let npFontSize=16;
 
 function npIsNativeLesson(lessonObj){
   if(!lsYtId(lessonObj?.url))return false;
@@ -1495,28 +1498,74 @@ function npDestroy(){
   if(npState.timer){clearTimeout(npState.timer);npState.timer=null;}
   if(npPlayer&&npPlayer.destroy){try{npPlayer.destroy();}catch{}}
   npPlayer=null;
-  npState={subs:[],playing:null,timer:null,rate:1,loop:false,hideEng:false,showKor:false};
+  npState={subs:[],playing:null,pausedIdx:null,timer:null,rate:1,loop:false,mode:'single',hideEng:false,showKor:false};
+}
+
+// renderNativePlayer/renderCfPlayer가 공유하는 컨트롤 버튼 줄 (영상 재생기 종류와 무관)
+function npControlsHtml(){
+  return `
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px;">
+      <button id="np-mode-btn" onclick="npToggleMode()" style="padding:6px 12px;border-radius:8px;border:1.5px solid var(--brd);background:var(--sf);color:var(--text);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">${npState.mode==='double'?'▶▶ 두줄재생':'▶ 한줄재생'}</button>
+      <button id="np-hide-btn" onclick="npToggleHideEng()" style="padding:6px 12px;border-radius:8px;border:1.5px solid var(--brd);background:var(--sf);color:var(--text);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">🙈 영어가리기</button>
+      <button id="np-tr-btn" onclick="npToggleKor()" style="padding:6px 12px;border-radius:8px;border:1.5px solid var(--brd);background:var(--sf);color:var(--text);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">번역</button>
+      <button id="np-loop-btn" onclick="npToggleLoop()" style="padding:6px 12px;border-radius:8px;border:1.5px solid var(--brd);background:var(--sf);color:var(--text);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">🔁 구간반복</button>
+      <select id="np-rate-sel" onchange="npSetRate(this.value)" style="padding:6px 8px;border-radius:8px;border:1.5px solid var(--brd);background:var(--sf);color:var(--text);font-size:11px;font-family:inherit;">
+        <option value="0.75" ${npState.rate===0.75?'selected':''}>0.75x</option>
+        <option value="1" ${npState.rate===1?'selected':''}>1x</option>
+        <option value="1.25" ${npState.rate===1.25?'selected':''}>1.25x</option>
+        <option value="1.5" ${npState.rate===1.5?'selected':''}>1.5x</option>
+      </select>
+      <button id="np-layout-btn" onclick="npToggleLayout()" style="padding:6px 12px;border-radius:8px;border:1.5px solid var(--brd);background:var(--sf);color:var(--text);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">${npLayout==='horiz'?'↕ 세로화면':'↔ 가로화면 (수업용)'}</button>
+      <select id="np-font-sel" onchange="npSetFontSize(this.value)" style="padding:6px 8px;border-radius:8px;border:1.5px solid var(--brd);background:var(--sf);color:var(--text);font-size:11px;font-family:inherit;">
+        <option value="14" ${npFontSize===14?'selected':''}>가 작게</option>
+        <option value="16" ${npFontSize===16?'selected':''}>가 보통</option>
+        <option value="20" ${npFontSize===20?'selected':''}>가 크게</option>
+        <option value="26" ${npFontSize===26?'selected':''}>가 아주크게</option>
+      </select>
+    </div>`;
+}
+
+// 가로/세로 배치는 DOM을 다시 만들지 않고 스타일만 바꿔서 전환 (영상 재생기 유지)
+function npApplyLayout(){
+  const root=document.getElementById('np-root');
+  const left=document.getElementById('np-left');
+  const list=document.getElementById('np-sub-list');
+  if(!root)return;
+  if(npLayout==='horiz'){
+    root.style.flexDirection='row';
+    if(left){left.style.width='38%';left.style.flexShrink='0';}
+    if(list){list.style.maxHeight='none';list.style.flex='1';}
+  } else {
+    root.style.flexDirection='column';
+    if(left){left.style.width='100%';left.style.flexShrink='';}
+    if(list){list.style.maxHeight='38vh';list.style.flex='';}
+  }
+}
+function npToggleLayout(){
+  npLayout=npLayout==='horiz'?'vert':'horiz';
+  npApplyLayout();
+  const b=document.getElementById('np-layout-btn');
+  if(b)b.textContent=npLayout==='horiz'?'↕ 세로화면':'↔ 가로화면 (수업용)';
+}
+function npSetFontSize(v){
+  npFontSize=+v;
+  npRenderSubList();
 }
 
 function renderNativePlayer(mountEl,videoId,subs){
   npState.subs=subs;
   mountEl.innerHTML=`
-    <div style="border-radius:12px;overflow:hidden;aspect-ratio:16/9;background:#000;margin-bottom:8px;">
-      <div id="np-yt-mount" style="width:100%;height:100%;"></div>
-    </div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px;">
-      <button id="np-hide-btn" onclick="npToggleHideEng()" style="padding:6px 12px;border-radius:8px;border:1.5px solid var(--brd);background:var(--sf);color:var(--text);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">🙈 영어가리기</button>
-      <button id="np-tr-btn" onclick="npToggleKor()" style="padding:6px 12px;border-radius:8px;border:1.5px solid var(--brd);background:var(--sf);color:var(--text);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">번역</button>
-      <button id="np-loop-btn" onclick="npToggleLoop()" style="padding:6px 12px;border-radius:8px;border:1.5px solid var(--brd);background:var(--sf);color:var(--text);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">🔁 구간반복</button>
-      <select id="np-rate-sel" onchange="npSetRate(this.value)" style="padding:6px 8px;border-radius:8px;border:1.5px solid var(--brd);background:var(--sf);color:var(--text);font-size:11px;font-family:inherit;">
-        <option value="0.75">0.75x</option>
-        <option value="1" selected>1x</option>
-        <option value="1.25">1.25x</option>
-        <option value="1.5">1.5x</option>
-      </select>
-    </div>
-    <div id="np-sub-list" style="display:flex;flex-direction:column;gap:6px;max-height:38vh;overflow-y:auto;"></div>`;
+    <div id="np-root" style="display:flex;flex-direction:column;gap:10px;">
+      <div id="np-left">
+        <div style="border-radius:12px;overflow:hidden;aspect-ratio:16/9;background:#000;margin-bottom:8px;">
+          <div id="np-yt-mount" style="width:100%;height:100%;"></div>
+        </div>
+        ${npControlsHtml()}
+      </div>
+      <div id="np-sub-list" style="display:flex;flex-direction:column;gap:6px;max-height:38vh;overflow-y:auto;"></div>
+    </div>`;
   npRenderSubList();
+  npApplyLayout();
   npLoadYtApi(()=>{
     npPlayer=new YT.Player('np-yt-mount',{videoId,playerVars:{playsinline:1,rel:0}});
   });
@@ -1526,8 +1575,8 @@ function npRenderSubList(){
   const wrap=document.getElementById('np-sub-list');if(!wrap)return;
   wrap.innerHTML=npState.subs.map((s,i)=>`
     <button onclick="npPlaySeg(${i})" style="text-align:left;padding:10px 12px;border-radius:10px;border:none;background:${npState.playing===i?'var(--blue-soft,#eff6ff)':'var(--sf)'};cursor:pointer;font-family:inherit;">
-      <div style="font-size:13px;font-weight:600;color:var(--text);">${npState.hideEng?'🙈':(s.text||'')}</div>
-      ${npState.showKor?`<div style="font-size:11px;color:var(--mu);margin-top:3px;">${s.kor||''}</div>`:''}
+      <div style="font-size:${npFontSize}px;font-weight:600;color:var(--text);">${npState.hideEng?'🙈':(s.text||'')}</div>
+      ${npState.showKor?`<div style="font-size:${Math.max(11,npFontSize-4)}px;color:var(--mu);margin-top:3px;">${s.kor||''}</div>`:''}
     </button>`).join('');
 }
 
@@ -1548,23 +1597,42 @@ function npToggleLoop(){
   const b=document.getElementById('np-loop-btn');
   if(b){b.style.background=npState.loop?'var(--g)':'var(--sf)';b.style.color=npState.loop?'#fff':'var(--text)';}
 }
+function npToggleMode(){
+  npState.mode=npState.mode==='double'?'single':'double';
+  const b=document.getElementById('np-mode-btn');
+  if(b)b.textContent=npState.mode==='double'?'▶▶ 두줄재생':'▶ 한줄재생';
+}
 function npSetRate(v){
   npState.rate=+v;
   if(npPlayer?.setPlaybackRate)npPlayer.setPlaybackRate(+v);
 }
+// 클릭한 줄이 지금 재생중이면 정지, 아니면 그 줄부터 재생 (한줄/두줄 모드에 따라 재생 구간이 달라짐)
 function npPlaySeg(i){
   if(!npPlayer||!npPlayer.seekTo)return;
+  if(npState.playing===i){
+    npPlayer.pauseVideo();
+    if(npState.timer){clearTimeout(npState.timer);npState.timer=null;}
+    npState.playing=null;
+    npState.pausedIdx=i;
+    npRenderSubList();
+    return;
+  }
+  npStartSeg(i);
+}
+function npStartSeg(i){
   const s=npState.subs[i];if(!s)return;
+  const endSeg=npState.mode==='double'?(npState.subs[i+1]||s):s;
   npState.playing=i;
+  npState.pausedIdx=null;
   npRenderSubList();
   if(npState.timer){clearTimeout(npState.timer);npState.timer=null;}
   npPlayer.seekTo(s.start,true);
   npPlayer.setPlaybackRate(npState.rate);
   npPlayer.playVideo();
-  const dur=Math.max(0.3,(s.end-s.start))*1000/npState.rate;
+  const dur=Math.max(0.3,(endSeg.end-s.start))*1000/npState.rate;
   npState.timer=setTimeout(()=>{
     npPlayer.pauseVideo();
-    if(npState.loop)npPlaySeg(i);
+    if(npState.loop)npStartSeg(i);
     else{npState.playing=null;npRenderSubList();}
   },dur);
 }
@@ -1593,22 +1661,17 @@ function cfLoadSdk(cb){
 function renderCfPlayer(mountEl,cfVideoId,subs){
   npState.subs=subs;
   mountEl.innerHTML=`
-    <div style="border-radius:12px;overflow:hidden;aspect-ratio:16/9;background:#000;margin-bottom:8px;">
-      <stream id="np-cf-mount" src="${cfVideoId}" controls style="width:100%;height:100%;"></stream>
-    </div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px;">
-      <button id="np-hide-btn" onclick="npToggleHideEng()" style="padding:6px 12px;border-radius:8px;border:1.5px solid var(--brd);background:var(--sf);color:var(--text);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">🙈 영어가리기</button>
-      <button id="np-tr-btn" onclick="npToggleKor()" style="padding:6px 12px;border-radius:8px;border:1.5px solid var(--brd);background:var(--sf);color:var(--text);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">번역</button>
-      <button id="np-loop-btn" onclick="npToggleLoop()" style="padding:6px 12px;border-radius:8px;border:1.5px solid var(--brd);background:var(--sf);color:var(--text);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">🔁 구간반복</button>
-      <select id="np-rate-sel" onchange="npSetRate(this.value)" style="padding:6px 8px;border-radius:8px;border:1.5px solid var(--brd);background:var(--sf);color:var(--text);font-size:11px;font-family:inherit;">
-        <option value="0.75">0.75x</option>
-        <option value="1" selected>1x</option>
-        <option value="1.25">1.25x</option>
-        <option value="1.5">1.5x</option>
-      </select>
-    </div>
-    <div id="np-sub-list" style="display:flex;flex-direction:column;gap:6px;max-height:38vh;overflow-y:auto;"></div>`;
+    <div id="np-root" style="display:flex;flex-direction:column;gap:10px;">
+      <div id="np-left">
+        <div style="border-radius:12px;overflow:hidden;aspect-ratio:16/9;background:#000;margin-bottom:8px;">
+          <stream id="np-cf-mount" src="${cfVideoId}" controls style="width:100%;height:100%;"></stream>
+        </div>
+        ${npControlsHtml()}
+      </div>
+      <div id="np-sub-list" style="display:flex;flex-direction:column;gap:6px;max-height:38vh;overflow-y:auto;"></div>
+    </div>`;
   npRenderSubList();
+  npApplyLayout();
   cfLoadSdk(()=>{
     const el=document.getElementById('np-cf-mount');
     if(!el)return;
