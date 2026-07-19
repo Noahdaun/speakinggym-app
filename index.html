@@ -760,7 +760,11 @@ function doUpdate(){
         </div>
         <div style="font-size:11px;color:var(--gm);margin-bottom:8px;"><span id="ls-sub-count">0</span>문장</div>
 
-        <button id="ls-auto-btn" onclick="lsAutoComplete()" style="width:100%;padding:12px;border-radius:10px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:14px;">🪄 자동 완성 (한글번역·빈칸퀴즈·단어 추천)</button>
+        <button id="ls-auto-btn" onclick="lsAutoComplete()" style="width:100%;padding:12px;border-radius:10px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:10px;">🪄 자동 완성 (한글번역·빈칸퀴즈·단어 추천)</button>
+
+        <div style="font-size:11px;color:var(--mu);margin-bottom:4px;">또는 Claude에게 받은 빈칸퀴즈 JSON을 여기에 붙여넣기</div>
+        <textarea id="ls-blanks-paste" placeholder='{"0":[2],"3":[1,4]}' style="height:50px;font-family:monospace;font-size:11px;"></textarea>
+        <button onclick="lsApplyBlanksPaste()" style="width:100%;padding:9px;border-radius:9px;background:var(--sf);border:1.5px solid var(--brd);color:var(--text);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;margin-top:6px;margin-bottom:14px;">빈칸퀴즈 JSON 적용</button>
 
         <!-- 핵심 표현 카드 (7회차) -->
         <div style="font-size:12px;font-weight:600;margin-bottom:4px;">💡 핵심 표현 카드 <span style="font-size:11px;font-weight:400;color:var(--mu);">(7회차 응용 시 표시, 선택)</span></div>
@@ -1902,6 +1906,19 @@ async function lsAutoComplete(){
     tst('자동완성 실패: '+e.message);
   }
   if(btn){btn.textContent='🪄 자동 완성 (한글번역·빈칸퀴즈·단어 추천)';btn.disabled=false;}
+}
+
+function lsApplyBlanksPaste(){
+  const raw=document.getElementById('ls-blanks-paste')?.value?.trim();
+  if(!raw){tst('붙여넣을 내용이 없어요');return;}
+  try{
+    const parsed=JSON.parse(raw);
+    lsBlanks=parsed||{};
+    document.getElementById('ls-blanks-paste').value='';
+    tst('빈칸퀴즈 적용됐어요 ✓');
+  }catch(e){
+    tst('JSON 형식이 아니에요. 확인해주세요');
+  }
 }
 
 function lvAllToggle(cb){
@@ -5461,7 +5478,7 @@ async function saveLesson(){
     }
   }
 
-  ['lt','lu','ls-expressions','ls-guide','ls-vocab'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ['lt','lu','ls-expressions','ls-guide','ls-vocab','ls-blanks-paste'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   lsSubs=[];lsBlanks={};lsRenderSubTable();
   lsSetVideoType('youtube');
   const pv=document.getElementById('ls-yt-preview');if(pv)pv.style.display='none';
@@ -5536,7 +5553,7 @@ async function openLsEdit(lid){
 }
 
 function cancelLsEdit(){
-  ['lt','lu','ls-expressions','ls-guide'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ['lt','lu','ls-expressions','ls-guide','ls-blanks-paste'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   lsSubs=[];lsBlanks={};lsRenderSubTable();
   lsSetVideoType('youtube');
   const pv=document.getElementById('ls-yt-preview');if(pv)pv.style.display='none';
