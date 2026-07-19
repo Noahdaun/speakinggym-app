@@ -1504,28 +1504,45 @@ function npDestroy(){
   if(rsEl)rsEl.style.maxWidth='480px'; // 네이티브 플레이어를 벗어나면 폰 폭 기본값으로 복귀
   ['rs-top','rs-bot'].forEach(id=>{
     const el=document.getElementById(id);
-    if(el){el.style.maxWidth='';el.style.margin='';}
+    if(el){el.style.width='';el.style.maxWidth='';el.style.marginLeft='';el.style.marginRight='';el.style.boxSizing='';}
   });
+  document.getElementById('np-settings-modal')?.remove();
 }
 
 // 버튼 하나짜리 공통 스타일 (한 줄에 최대한 많이 들어가도록 작게)
 const NP_BTN_STYLE='padding:5px 9px;border-radius:7px;border:1.5px solid var(--brd);background:var(--sf);color:var(--text);font-size:10.5px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;';
 
-// "⚙ 설정" 버튼+팝업 마크업 — npControlsHtml()과 npRefreshSettingsPop()이 공유 (배속/글자크기 고를 때마다 다시 그려도 항상 이 함수 하나만 고치면 됨)
-function npSettingsPopHtml(open){
-  const rateBtns=[0.75,1,1.25,1.5].map(r=>`<button onclick="npSetRate(${r})" style="flex:1;padding:5px 0;border-radius:6px;border:1.5px solid ${npState.rate===r?'#1D9E75':'var(--brd)'};background:${npState.rate===r?'var(--gl)':'var(--sf)'};color:${npState.rate===r?'var(--gd)':'var(--text)'};font-size:10.5px;font-weight:600;cursor:pointer;font-family:inherit;">${r}x</button>`).join('');
-  const sizeBtns=[[14,'작게'],[16,'보통'],[20,'크게'],[26,'아주크게']].map(([sz,lbl])=>`<button onclick="npSetFontSize(${sz})" style="flex:1;padding:5px 2px;border-radius:6px;border:1.5px solid ${npFontSize===sz?'#1D9E75':'var(--brd)'};background:${npFontSize===sz?'var(--gl)':'var(--sf)'};color:${npFontSize===sz?'var(--gd)':'var(--text)'};font-size:10px;font-weight:600;cursor:pointer;font-family:inherit;">${lbl}</button>`).join('');
-  return `
-    <button id="np-settings-btn" onclick="npToggleSettingsPop(event)" style="${NP_BTN_STYLE}">⚙ 설정</button>
-    <div id="np-settings-pop" style="display:${open?'block':'none'};position:absolute;top:calc(100% + 6px);right:0;background:var(--card,#fff);border:1px solid var(--brd);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.18);padding:10px;z-index:80;min-width:190px;">
-      <div style="font-size:10px;color:var(--mu);font-weight:700;margin-bottom:5px;">배속</div>
-      <div style="display:flex;gap:4px;margin-bottom:10px;">${rateBtns}</div>
-      <div style="font-size:10px;color:var(--mu);font-weight:700;margin-bottom:5px;">글자 크기</div>
-      <div style="display:flex;gap:4px;margin-bottom:10px;">${sizeBtns}</div>
-      <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text);cursor:pointer;">
-        <input type="checkbox" id="np-loop-cb" onchange="npToggleLoop()" ${npState.loop?'checked':''}> 구간 반복
-      </label>
-    </div>`;
+// "⚙ 설정" 팝업 — 다른 곳에 이미 쓰던 방식과 동일하게 화면 전체 위에 뜨는 독립적인 바텀시트로 구현.
+// (전에는 컨트롤 줄 안에 작은 팝업을 끼워넣었는데, 그 줄이 스크롤 영역 안에 있어서 팝업이 잘리거나 안 보이는 문제가 있었음)
+function npRateBtnsHtml(){
+  return [0.75,1,1.25,1.5].map(r=>`<button onclick="npSetRate(${r})" style="flex:1;padding:9px 0;border-radius:9px;border:1.5px solid ${npState.rate===r?'#1D9E75':'var(--brd)'};background:${npState.rate===r?'var(--gl)':'var(--sf)'};color:${npState.rate===r?'var(--gd)':'var(--text)'};font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">${r}x</button>`).join('');
+}
+function npSizeBtnsHtml(){
+  return [[14,'작게'],[16,'보통'],[20,'크게'],[26,'아주크게']].map(([sz,lbl])=>`<button onclick="npSetFontSize(${sz})" style="flex:1;padding:9px 2px;border-radius:9px;border:1.5px solid ${npFontSize===sz?'#1D9E75':'var(--brd)'};background:${npFontSize===sz?'var(--gl)':'var(--sf)'};color:${npFontSize===sz?'var(--gd)':'var(--text)'};font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">${lbl}</button>`).join('');
+}
+function npOpenSettingsPop(){
+  npCloseSettingsPop();
+  const pop=document.createElement('div');
+  pop.id='np-settings-modal';
+  pop.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9500;display:flex;align-items:flex-end;justify-content:center;';
+  pop.innerHTML=`<div style="background:var(--card,#fff);border-radius:16px 16px 0 0;width:100%;max-width:420px;padding:16px 16px 26px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <div style="font-size:14px;font-weight:700;color:var(--text);">재생 설정</div>
+      <div onclick="npCloseSettingsPop()" style="width:26px;height:26px;border-radius:8px;background:var(--sf);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:14px;">✕</div>
+    </div>
+    <div style="font-size:11px;color:var(--mu);font-weight:700;margin-bottom:6px;">배속</div>
+    <div id="np-rate-btns" style="display:flex;gap:6px;margin-bottom:16px;">${npRateBtnsHtml()}</div>
+    <div style="font-size:11px;color:var(--mu);font-weight:700;margin-bottom:6px;">글자 크기</div>
+    <div id="np-size-btns" style="display:flex;gap:6px;margin-bottom:16px;">${npSizeBtnsHtml()}</div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);cursor:pointer;">
+      <input type="checkbox" id="np-loop-cb" onchange="npToggleLoop()" ${npState.loop?'checked':''}> 구간 반복
+    </label>
+  </div>`;
+  document.body.appendChild(pop);
+  pop.addEventListener('click',e=>{if(e.target===pop)npCloseSettingsPop();});
+}
+function npCloseSettingsPop(){
+  document.getElementById('np-settings-modal')?.remove();
 }
 
 // renderNativePlayer/renderCfPlayer가 공유하는 컨트롤 버튼 줄 (영상 재생기 종류와 무관) — 한 줄에 들어가도록 단순화
@@ -1537,55 +1554,37 @@ function npControlsHtml(){
       <button id="np-hide-btn" onclick="npToggleHideEng()" style="${NP_BTN_STYLE}">🙈 영어가리기</button>
       <button id="np-tr-btn" onclick="npToggleKor()" style="${NP_BTN_STYLE}">번역</button>
       <button id="np-layout-btn" onclick="npToggleLayout()" style="${NP_BTN_STYLE}">${npLayout==='horiz'?'↕ 세로화면':'↔ 가로화면'}</button>
-      <div id="np-settings-wrap" style="position:relative;">${npSettingsPopHtml(false)}</div>
+      <button id="np-settings-btn" onclick="npOpenSettingsPop()" style="${NP_BTN_STYLE}">⚙ 설정</button>
     </div>`;
-}
-
-function npToggleSettingsPop(e){
-  if(e)e.stopPropagation();
-  const pop=document.getElementById('np-settings-pop');if(!pop)return;
-  const willOpen=pop.style.display!=='block';
-  pop.style.display=willOpen?'block':'none';
-  if(willOpen)setTimeout(()=>document.addEventListener('click',npCloseSettingsPopOnce,{once:true}),0);
-}
-function npCloseSettingsPopOnce(){
-  const pop=document.getElementById('np-settings-pop');
-  if(pop)pop.style.display='none';
-}
-function npRefreshSettingsPop(){
-  // 배속/글자크기 버튼의 선택 표시만 다시 그림 (열려 있던 상태는 유지)
-  const wasOpen=document.getElementById('np-settings-pop')?.style.display==='block';
-  const wrap=document.getElementById('np-settings-wrap');
-  if(wrap)wrap.innerHTML=npSettingsPopHtml(wasOpen);
 }
 
 // 가로/세로 배치는 DOM을 다시 만들지 않고 스타일만 바꿔서 전환 (영상 재생기 유지)
 // 세로 = 항상 폰 폭 고정, 가로 = 항상 화면 꽉 채움 (실제 창 크기와 무관하게 모드로만 결정)
 // 가로 모드에서도 상단바·하단버튼은 수업용으로 작게 고정 — 영상+자막 영역만 넓게 씀
+// 스크롤은 이 앱에 원래 있던 #rs-content 하나만 쓰고, 가로모드에서는 영상 칸(np-left)을 sticky로 고정해서 목록만 지나가게 함
 function npApplyLayout(){
   const rsEl=document.getElementById('rs');
-  const rsTop=document.getElementById('rs-top');
-  const rsBot=document.getElementById('rs-bot');
   const root=document.getElementById('np-root');
   const left=document.getElementById('np-left');
-  const list=document.getElementById('np-sub-list');
   if(rsEl)rsEl.style.maxWidth=npLayout==='horiz'?'none':'480px';
-  if(npLayout==='horiz'){
-    if(rsTop){rsTop.style.maxWidth='640px';rsTop.style.margin='0 auto';}
-    if(rsBot){rsBot.style.maxWidth='640px';rsBot.style.margin='0 auto';}
-  } else {
-    if(rsTop){rsTop.style.maxWidth='';rsTop.style.margin='';}
-    if(rsBot){rsBot.style.maxWidth='';rsBot.style.margin='';}
-  }
+  [document.getElementById('rs-top'),document.getElementById('rs-bot')].forEach(el=>{
+    if(!el)return;
+    if(npLayout==='horiz'){
+      el.style.width='100%';el.style.maxWidth='640px';
+      el.style.marginLeft='auto';el.style.marginRight='auto';el.style.boxSizing='border-box';
+    } else {
+      el.style.width='';el.style.maxWidth='';el.style.marginLeft='';el.style.marginRight='';el.style.boxSizing='';
+    }
+  });
   if(!root)return;
   if(npLayout==='horiz'){
     root.style.flexDirection='row';
-    if(left){left.style.width='38%';left.style.flexShrink='0';}
-    if(list){list.style.maxHeight='calc(100vh - 260px)';list.style.flex='1';}
+    root.style.alignItems='flex-start';
+    if(left){left.style.width='38%';left.style.flexShrink='0';left.style.position='sticky';left.style.top='0';}
   } else {
     root.style.flexDirection='column';
-    if(left){left.style.width='100%';left.style.flexShrink='';}
-    if(list){list.style.maxHeight='38vh';list.style.flex='';}
+    root.style.alignItems='';
+    if(left){left.style.width='100%';left.style.flexShrink='';left.style.position='';left.style.top='';}
   }
 }
 function npToggleLayout(){
@@ -1597,7 +1596,7 @@ function npToggleLayout(){
 function npSetFontSize(v){
   npFontSize=+v;
   npRenderSubList();
-  npRefreshSettingsPop();
+  const el=document.getElementById('np-size-btns');if(el)el.innerHTML=npSizeBtnsHtml();
 }
 
 function renderNativePlayer(mountEl,videoId,subs){
@@ -1610,7 +1609,7 @@ function renderNativePlayer(mountEl,videoId,subs){
         </div>
         ${npControlsHtml()}
       </div>
-      <div id="np-sub-list" style="display:flex;flex-direction:column;gap:6px;max-height:38vh;overflow-y:auto;"></div>
+      <div id="np-sub-list" style="display:flex;flex-direction:column;gap:6px;"></div>
     </div>`;
   npRenderSubList();
   npApplyLayout();
@@ -1630,15 +1629,11 @@ function npRenderSubList(){
     </button>`;
   }).join('');
 }
-// scrollIntoView는 바깥 페이지까지 같이 스크롤시켜서 영상이 화면 밖으로 밀려나는 문제가 있었음 —
-// 대신 목록 자기 자신(#np-sub-list)의 스크롤만 직접 움직여서 바깥 화면은 절대 안 움직이게 함
+// 스크롤 컨테이너가 #rs-content 하나뿐이라 이제 scrollIntoView를 써도 바깥 화면이 엉뚱하게 튀지 않음
 function npScrollToActive(i){
   const wrap=document.getElementById('np-sub-list');if(!wrap)return;
   const btn=wrap.querySelector(`[data-idx="${i}"]`);if(!btn)return;
-  const target=npLayout==='horiz'
-    ? btn.offsetTop-(wrap.clientHeight/2)+(btn.clientHeight/2) // 가로: 목록 세로 가운데
-    : btn.offsetTop-8; // 세로: 목록 맨 위
-  wrap.scrollTo({top:Math.max(0,target),behavior:'smooth'});
+  btn.scrollIntoView({behavior:'smooth',block:npLayout==='horiz'?'center':'start'});
 }
 
 function npToggleHideEng(){
@@ -1664,7 +1659,7 @@ function npToggleMode(){
 function npSetRate(v){
   npState.rate=+v;
   if(npPlayer?.setPlaybackRate)npPlayer.setPlaybackRate(+v);
-  npRefreshSettingsPop();
+  const el=document.getElementById('np-rate-btns');if(el)el.innerHTML=npRateBtnsHtml();
 }
 // 클릭한 줄이 지금 재생중이면 정지, 아니면 그 줄부터 재생 (한줄/두줄 모드에 따라 재생 구간이 달라짐)
 function npPlaySeg(i){
@@ -1730,7 +1725,7 @@ function renderCfPlayer(mountEl,cfVideoId,subs){
         </div>
         ${npControlsHtml()}
       </div>
-      <div id="np-sub-list" style="display:flex;flex-direction:column;gap:6px;max-height:38vh;overflow-y:auto;"></div>
+      <div id="np-sub-list" style="display:flex;flex-direction:column;gap:6px;"></div>
     </div>`;
   npRenderSubList();
   npApplyLayout();
