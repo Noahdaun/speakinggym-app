@@ -277,7 +277,13 @@ function doUpdate(){
 <div id="as" class="scr">
   <div class="topbar">
     <div class="topbar-title" id="ptit">홈</div>
-    <div class="av" id="uav" onclick="doLogout()">?</div>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <div id="msgBtn" onclick="onMsgBtnClick()" style="position:relative;width:36px;height:36px;border-radius:50%;background:var(--sf);border:1.5px solid var(--brd);display:flex;align-items:center;justify-content:center;font-size:15px;cursor:pointer;">
+        💬
+        <div id="msgBtnDot" style="display:none;position:absolute;top:-2px;right:-2px;width:11px;height:11px;border-radius:50%;background:var(--rd);border:2px solid var(--bg);"></div>
+      </div>
+      <div class="av" id="uav" onclick="doLogout()">?</div>
+    </div>
   </div>
   <div class="pages">
 
@@ -1071,6 +1077,7 @@ async function initApp(u){
     loadMyNotices();
     checkCallBookingBanner();
   }
+  refreshMsgBadge();
 }
 
 // ── CALENDAR ──
@@ -2751,12 +2758,12 @@ function renderMissingAlert(doneSet, cls='all'){
   alertDiv.innerHTML=`<div style="background:#FFF8F0;border-radius:11px;padding:11px 13px;border:1.5px solid #FAC775;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;">
       <div style="font-size:12px;font-weight:700;color:var(--amd);">⚠️ 미완료 학생 ${missing.length}명</div>
-      <div onclick="openNotify(null)" style="font-size:11px;color:#854F0B;background:var(--aml);padding:4px 10px;border-radius:8px;cursor:pointer;font-weight:600;">전체 알림</div>
+      <div onclick='openBroadcastBoxCustom(${JSON.stringify(missing.map(s=>s.id))},"미완료 학생 전체")' style="font-size:11px;color:#854F0B;background:var(--aml);padding:4px 10px;border-radius:8px;cursor:pointer;font-weight:600;">전체 알림</div>
     </div>
     <div style="display:flex;gap:5px;flex-wrap:wrap;">
       ${missing.map(s=>`<div style="background:#fff;border-radius:99px;padding:4px 11px;font-size:11px;border:1px solid #FAC775;display:flex;align-items:center;gap:5px;">
         ${dispName(s.name,s.email)}
-        <div onclick="openNotify('${s.id}')" style="font-size:10px;color:#854F0B;background:var(--aml);padding:1px 7px;border-radius:99px;cursor:pointer;font-weight:600;">알림</div>
+        <div onclick="openMsgThread('${s.id}','${dispName(s.name,s.email).replace(/'/g,"\\'")}')" style="font-size:10px;color:#854F0B;background:var(--aml);padding:1px 7px;border-radius:99px;cursor:pointer;font-weight:600;">알림</div>
       </div>`).join('')}
     </div>
   </div>`;
@@ -2861,12 +2868,12 @@ function sAdCls(cls,btn){
         alertDiv.innerHTML=`<div style="background:#FFF8F0;border-radius:11px;padding:11px 13px;border:1.5px solid #FAC775;">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;">
             <div style="font-size:12px;font-weight:700;color:var(--amd);">⚠️ 미완료 학생 ${missing.length}명</div>
-            <div onclick="openNotify(null)" style="font-size:11px;color:#854F0B;background:var(--aml);padding:4px 10px;border-radius:8px;cursor:pointer;font-weight:600;">전체 알림</div>
+            <div onclick='openBroadcastBoxCustom(${JSON.stringify(missing.map(s=>s.id))},"미완료 학생 전체")' style="font-size:11px;color:#854F0B;background:var(--aml);padding:4px 10px;border-radius:8px;cursor:pointer;font-weight:600;">전체 알림</div>
           </div>
           <div style="display:flex;gap:5px;flex-wrap:wrap;">
             ${missing.map(s=>`<div style="background:#fff;border-radius:99px;padding:4px 11px;font-size:11px;border:1px solid #FAC775;display:flex;align-items:center;gap:5px;">
               ${dispName(s.name,s.email)}
-              <div onclick="openNotify('${s.id}')" style="font-size:10px;color:#854F0B;background:var(--aml);padding:1px 7px;border-radius:99px;cursor:pointer;font-weight:600;">알림</div>
+              <div onclick="openMsgThread('${s.id}','${dispName(s.name,s.email).replace(/'/g,"\\'")}')" style="font-size:10px;color:#854F0B;background:var(--aml);padding:1px 7px;border-radius:99px;cursor:pointer;font-weight:600;">알림</div>
             </div>`).join('')}
           </div>
         </div>`;
@@ -3475,34 +3482,165 @@ async function delStudent(sid,name,e){
   lAdm();
 }
 
-// ── 알림 ──
-function openNotify(sid){
-  const pop=document.createElement('div');
-  pop.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9000;display:flex;align-items:flex-end;justify-content:center;';
-  pop.innerHTML=`<div style="background:var(--bg);border-radius:20px 20px 0 0;width:100%;max-width:480px;padding:16px 14px 30px;">
-    <div style="font-size:15px;font-weight:800;margin-bottom:14px;">메시지 보내기</div>
-    <textarea id="notify-msg" class="inp" placeholder="메시지 입력..." style="height:80px;margin-bottom:12px;"></textarea>
-    <button onclick="sendNotify('${sid}',document.getElementById('notify-msg').value)" style="width:100%;padding:13px;border-radius:12px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;">보내기</button>
-    <button onclick="this.closest('div[style*=fixed]').remove()" style="width:100%;margin-top:8px;padding:11px;border-radius:12px;background:var(--sf);border:1.5px solid var(--brd);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">취소</button>
-  </div>`;
-  document.body.appendChild(pop);
-  pop.addEventListener('click',e=>{if(e.target===pop)pop.remove();});
+// ── 메시지 (학생 ↔ 관리자, 1:1 비공개 대화) ──
+function escMsg(s){
+  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function onMsgBtnClick(){
+  if(P?.role==='admin')openAdminMsgCenter();
+  else openMsgThread(U.id,'');
 }
 
 function renderSDNotify(stuList){
   const el=document.querySelector('.sd-notify-wrap');if(!el)return;
   const stu=stuList[0];if(!stu)return;
   el.innerHTML=`<div style="padding:8px 0;">
-    <button onclick="openNotify('${stu.id}')" style="width:100%;padding:11px;border-radius:11px;background:var(--gl);color:var(--gd);border:1.5px solid #C0E8D8;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">💬 ${dispName(stu.name,stu.email)}님에게 메시지 보내기</button>
+    <button onclick="openMsgThread('${stu.id}','${dispName(stu.name,stu.email).replace(/'/g,"\\'")}')" style="width:100%;padding:11px;border-radius:11px;background:var(--gl);color:var(--gd);border:1.5px solid #C0E8D8;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">💬 ${dispName(stu.name,stu.email)}님에게 메시지 보내기</button>
   </div>`;
 }
 
-async function sendNotify(targetStudentId,msg){
-  if(!msg?.trim()){tst('메시지를 입력해주세요');return;}
-  const{error}=await sb.from('messages').insert({sender_id:U.id,target_student_id:targetStudentId||null,content:msg.trim(),read:false});
+// 관리자용 — 학생 검색/선택 + 반 전체(공지) 발송 진입점
+function openAdminMsgCenter(){
+  document.getElementById('msg-center-modal')?.remove();
+  const pop=document.createElement('div');
+  pop.id='msg-center-modal';
+  pop.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9200;display:flex;align-items:flex-end;justify-content:center;';
+  pop.innerHTML=`<div style="background:var(--bg);border-radius:20px 20px 0 0;width:100%;max-width:480px;max-height:82vh;overflow-y:auto;padding:16px 14px 26px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <div style="font-size:16px;font-weight:800;">메시지</div>
+      <div onclick="document.getElementById('msg-center-modal')?.remove()" style="width:28px;height:28px;border-radius:8px;background:var(--sf);display:flex;align-items:center;justify-content:center;cursor:pointer;">✕</div>
+    </div>
+    <input class="inp" type="text" id="msg-center-search" placeholder="학생 이름 검색..." oninput="filterMsgCenterList(this.value)">
+    <div style="font-size:12px;font-weight:700;color:var(--mu);margin:10px 0 6px;">반 전체 · 공지 보내기</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;">
+      <button onclick="openBroadcastBox('all','전체 학생')" style="padding:7px 12px;border-radius:99px;background:var(--gl);color:var(--gd);border:1.5px solid #C0E8D8;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">전체 학생</button>
+      ${classes.map(c=>`<button onclick="openBroadcastBox('${c}','${c}')" style="padding:7px 12px;border-radius:99px;background:var(--sf);border:1.5px solid var(--brd);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">${c}</button>`).join('')}
+    </div>
+    <div style="font-size:12px;font-weight:700;color:var(--mu);margin-bottom:6px;">개별 학생 (답장 가능)</div>
+    <div id="msg-center-list"></div>
+  </div>`;
+  document.body.appendChild(pop);
+  pop.addEventListener('click',e=>{if(e.target===pop)pop.remove();});
+  renderMsgCenterList(sts);
+}
+function renderMsgCenterList(list){
+  const el=document.getElementById('msg-center-list');if(!el)return;
+  if(!list.length){el.innerHTML='<div class="empty">학생이 없어요</div>';return;}
+  el.innerHTML=list.map(s=>`
+    <button onclick="document.getElementById('msg-center-modal')?.remove();openMsgThread('${s.id}','${dispName(s.name,s.email).replace(/'/g,"\\'")}')" style="width:100%;text-align:left;padding:11px 12px;border-radius:11px;background:var(--card,#fff);border:1px solid var(--brd);margin-bottom:6px;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:space-between;">
+      <span style="font-size:13px;font-weight:600;color:var(--text);">${dispName(s.name,s.email)}</span>
+      <span style="font-size:11px;color:var(--mu);">${s.class_name||''}</span>
+    </button>`).join('');
+}
+function filterMsgCenterList(q){
+  q=(q||'').trim().toLowerCase();
+  renderMsgCenterList(!q?sts:sts.filter(s=>dispName(s.name,s.email).toLowerCase().includes(q)));
+}
+
+// 반 전체/전체 학생에게 공지처럼 한 번에 보내기 (학생별로 개별 메시지를 만들어서 각자 1:1함에 들어가게 함)
+function openBroadcastBox(target,label){
+  document.getElementById('msg-center-modal')?.remove();
+  const pop=document.createElement('div');
+  pop.id='broadcast-modal';
+  pop.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9200;display:flex;align-items:flex-end;justify-content:center;';
+  pop.innerHTML=`<div style="background:var(--bg);border-radius:20px 20px 0 0;width:100%;max-width:480px;padding:16px 14px 28px;">
+    <div style="font-size:15px;font-weight:800;margin-bottom:4px;">${label}에게 메시지 보내기</div>
+    <div style="font-size:11px;color:var(--mu);margin-bottom:12px;">각 학생의 메시지함에 개별적으로 전달돼요</div>
+    <textarea id="broadcast-msg" class="inp" placeholder="메시지 입력..." style="height:90px;margin-bottom:12px;"></textarea>
+    <button onclick="sendBroadcast('${target}')" style="width:100%;padding:13px;border-radius:12px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;">보내기</button>
+    <button onclick="document.getElementById('broadcast-modal')?.remove()" style="width:100%;margin-top:8px;padding:11px;border-radius:12px;background:var(--sf);border:1.5px solid var(--brd);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">취소</button>
+  </div>`;
+  document.body.appendChild(pop);
+  pop.addEventListener('click',e=>{if(e.target===pop)pop.remove();});
+}
+let _msgCustomTargetIds=null;
+// missing-alert 등에서 특정 학생 id 목록에게만 보낼 때 사용
+function openBroadcastBoxCustom(ids,label){
+  _msgCustomTargetIds=ids;
+  openBroadcastBox('custom',label);
+}
+async function sendBroadcast(target){
+  const msg=document.getElementById('broadcast-msg')?.value?.trim();
+  if(!msg){tst('메시지를 입력해주세요');return;}
+  const targets=target==='all'?sts
+    :target==='custom'?sts.filter(s=>_msgCustomTargetIds?.includes(s.id))
+    :sts.filter(s=>s.class_name===target);
+  if(!targets.length){tst('대상 학생이 없어요');return;}
+  const rows=targets.map(s=>({sender_id:U.id,target_student_id:s.id,content:msg,read:false}));
+  const{error}=await sb.from('messages').insert(rows);
   if(error){tst('전송 실패: '+error.message);return;}
-  document.querySelector('div[style*="position:fixed"][style*="9000"]')?.remove();
-  tst('메시지를 보냈어요!');
+  document.getElementById('broadcast-modal')?.remove();
+  tst(`${targets.length}명에게 보냈어요!`);
+}
+
+// 1:1 대화창 — 학생 자신이 열면 본인 스레드, 관리자가 열면 골라둔 학생의 스레드 (둘 다 이 함수 하나 재사용)
+function openMsgThread(targetStudentId,otherName){
+  document.getElementById('msg-thread-modal')?.remove();
+  const pop=document.createElement('div');
+  pop.id='msg-thread-modal';
+  pop.style.cssText='position:fixed;inset:0;background:var(--bg);z-index:9300;display:flex;flex-direction:column;';
+  pop.innerHTML=`
+    <div style="background:#1E2D45;color:#fff;padding:14px 16px;display:flex;align-items:center;gap:12px;flex-shrink:0;">
+      <div onclick="closeMsgThread()" style="cursor:pointer;font-size:18px;line-height:1;">←</div>
+      <div style="font-size:15px;font-weight:700;">${P?.role==='admin'?otherName:'원장님께 메시지'}</div>
+    </div>
+    <div id="msg-thread-list" style="flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px;"><div class="loading">로딩중...</div></div>
+    <div style="flex-shrink:0;display:flex;gap:8px;padding:10px 12px;border-top:1px solid var(--brd);background:var(--card,#fff);">
+      <input class="inp" type="text" id="msg-thread-input" placeholder="메시지 입력..." style="margin-bottom:0;flex:1;" onkeydown="if(event.key==='Enter')sendMsgThread('${targetStudentId}')">
+      <button onclick="sendMsgThread('${targetStudentId}')" style="padding:0 18px;border-radius:10px;background:var(--g);color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">전송</button>
+    </div>`;
+  document.body.appendChild(pop);
+  loadMsgThread(targetStudentId);
+}
+function closeMsgThread(){
+  document.getElementById('msg-thread-modal')?.remove();
+  refreshMsgBadge();
+}
+async function loadMsgThread(targetStudentId){
+  const{data}=await sb.from('messages').select('*')
+    .or(`target_student_id.eq.${targetStudentId},and(target_student_id.is.null,target_class_id.is.null)`)
+    .order('created_at',{ascending:true});
+  const wrap=document.getElementById('msg-thread-list');if(!wrap)return;
+  const msgs=data||[];
+  if(!msgs.length){
+    wrap.innerHTML='<div class="empty" style="margin:auto;">아직 메시지가 없어요</div>';
+  } else {
+    wrap.innerHTML=msgs.map(m=>{
+      const mine=m.sender_id===U.id;
+      return `<div style="align-self:${mine?'flex-end':'flex-start'};max-width:78%;">
+        <div style="background:${mine?'var(--g)':'var(--sf)'};color:${mine?'#fff':'var(--text)'};padding:10px 13px;border-radius:14px;${mine?'border-bottom-right-radius:4px;':'border-bottom-left-radius:4px;'}font-size:13px;line-height:1.5;word-break:break-word;white-space:pre-wrap;">${escMsg(m.content)}</div>
+        <div style="font-size:10px;color:var(--mu);margin-top:3px;text-align:${mine?'right':'left'};">${new Date(m.created_at).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}</div>
+      </div>`;
+    }).join('');
+    wrap.scrollTop=wrap.scrollHeight;
+  }
+  const unreadIds=msgs.filter(m=>m.sender_id!==U.id&&!m.read).map(m=>m.id);
+  if(unreadIds.length){await sb.from('messages').update({read:true}).in('id',unreadIds);refreshMsgBadge();}
+}
+async function sendMsgThread(targetStudentId){
+  const input=document.getElementById('msg-thread-input');
+  const content=input?.value?.trim();
+  if(!content)return;
+  const{error}=await sb.from('messages').insert({sender_id:U.id,target_student_id:targetStudentId,content,read:false});
+  if(error){tst('전송 실패: '+error.message);return;}
+  input.value='';
+  await loadMsgThread(targetStudentId);
+}
+
+// 상단 💬 버튼에 안 읽은 메시지 있으면 빨간 점 표시
+async function refreshMsgBadge(){
+  if(!U)return;
+  let count=0;
+  if(P?.role==='admin'){
+    const{count:c}=await sb.from('messages').select('id',{count:'exact',head:true}).eq('read',false).neq('sender_id',U.id);
+    count=c||0;
+  } else {
+    const{count:c}=await sb.from('messages').select('id',{count:'exact',head:true}).eq('read',false).neq('sender_id',U.id)
+      .or(`target_student_id.eq.${U.id},and(target_student_id.is.null,target_class_id.is.null)`);
+    count=c||0;
+  }
+  const dot=document.getElementById('msgBtnDot');
+  if(dot)dot.style.display=count>0?'block':'none';
 }
 
 // ── 학생: 알림 로드 및 표시 ──
@@ -3687,25 +3825,22 @@ async function cancelBooking(bookingId){
 async function loadMyNotices(){
   if(P?.role==='admin')return;
   try{
-    const{data,error}=await sb.from('messages').select('*').or(`target_student_id.eq.${U.id},and(target_student_id.is.null,target_class_id.is.null)`).order('created_at',{ascending:false}).limit(5);
+    const{data,error}=await sb.from('messages').select('*').eq('read',false).neq('sender_id',U.id)
+      .or(`target_student_id.eq.${U.id},and(target_student_id.is.null,target_class_id.is.null)`)
+      .order('created_at',{ascending:false}).limit(5);
     if(error){console.warn('알림 로드 실패',error);return;}
-    const unread=(data||[]).filter(m=>!m.read);
+    const unread=data||[];
     const wrap=document.getElementById('home-notice');if(!wrap)return;
     if(!unread.length){wrap.innerHTML='';return;}
     wrap.innerHTML=unread.map(m=>`
-      <div style="background:linear-gradient(135deg,#FFF4E0,#FFE8C2);border:1.5px solid #FAC775;border-radius:13px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:flex-start;gap:10px;cursor:pointer;" onclick="markNoticeRead('${m.id}')">
+      <div style="background:linear-gradient(135deg,#FFF4E0,#FFE8C2);border:1.5px solid #FAC775;border-radius:13px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:flex-start;gap:10px;cursor:pointer;" onclick="openMsgThread(U.id,'')">
         <div style="font-size:18px;flex-shrink:0;">💬</div>
         <div style="flex:1;min-width:0;">
-          <div style="font-size:13px;font-weight:600;color:#854F0B;word-break:break-all;">${m.content}</div>
+          <div style="font-size:13px;font-weight:600;color:#854F0B;word-break:break-all;">${escMsg(m.content)}</div>
           <div style="font-size:10px;color:#A87B33;margin-top:3px;">${new Date(m.created_at).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})} · 탭하여 확인</div>
         </div>
       </div>`).join('');
   }catch(e){console.warn('알림 로드 실패',e);}
-}
-
-async function markNoticeRead(mid){
-  await sb.from('messages').update({read:true}).eq('id',mid);
-  loadMyNotices();
 }
 
 // ── 리뷰 새로고침 ──
