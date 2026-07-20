@@ -291,6 +291,14 @@ function doUpdate(){
     <div id="ph" class="pg on">
       <!-- XP 바 -->
       <div id="xp-bar-wrap"></div>
+      <!-- 푸시 알림 켜기 배너 -->
+      <div id="push-banner" onclick="enablePushNotifications()" style="display:none;align-items:center;gap:10px;background:linear-gradient(135deg,#EEF2FF,#E0E7FF);border:1.5px solid #C7D2FE;border-radius:13px;padding:11px 14px;margin-bottom:10px;cursor:pointer;">
+        <div style="font-size:18px;">🔔</div>
+        <div style="flex:1;">
+          <div style="font-size:12.5px;font-weight:700;color:#3730A3;">알림을 켜두면 메시지를 바로 받을 수 있어요</div>
+          <div style="font-size:11px;color:#4338CA;margin-top:1px;">탭해서 알림 켜기</div>
+        </div>
+      </div>
       <!-- 알림 -->
       <div id="home-notice"></div>
       <!-- 오늘 체크리스트 -->
@@ -942,6 +950,55 @@ const sb=supabase.createClient(SU,SK);
 // 이 시각 이전에 만들어진, 수업 날짜 미지정 레슨은 예전 규칙(전체 공개) 그대로 유지 — 기존 학생 접근 유지용
 const SCHEDULE_GATE_CUTOFF='2026-07-19T14:52:25.000Z';
 
+// ── 푸시 알림 (Web Push) ──
+const VAPID_PUBLIC_KEY='BJE3HgXlhVQ6bYbg94Nemv2vtP8NGecr6b6bJ8Wz2kadYd1EXkvwM9FnygNA8W8aBnaz0RIQfdWTlprmdXDWveY';
+const PUSH_ENDPOINT='https://hrmiyejhhzptwjzbrzvv.supabase.co/functions/v1/smooth-endpoint';
+
+function urlBase64ToUint8Array(base64String){
+  const padding='='.repeat((4-base64String.length%4)%4);
+  const base64=(base64String+padding).replace(/-/g,'+').replace(/_/g,'/');
+  const raw=atob(base64);
+  const arr=new Uint8Array(raw.length);
+  for(let i=0;i<raw.length;i++)arr[i]=raw.charCodeAt(i);
+  return arr;
+}
+
+async function enablePushNotifications(){
+  if(!('serviceWorker' in navigator)||!('PushManager' in window)){tst('이 브라우저는 푸시 알림을 지원하지 않아요');return;}
+  try{
+    const perm=await Notification.requestPermission();
+    if(perm!=='granted'){tst('알림 권한이 거부됐어요');updatePushBanner();return;}
+    const reg=await navigator.serviceWorker.ready;
+    let sub=await reg.pushManager.getSubscription();
+    if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:urlBase64ToUint8Array(VAPID_PUBLIC_KEY)});
+    const j=sub.toJSON();
+    const{data:existing}=await sb.from('push_subscriptions').select('id').eq('endpoint',j.endpoint).maybeSingle();
+    if(existing)await sb.from('push_subscriptions').update({user_id:U.id,p256dh:j.keys.p256dh,auth:j.keys.auth}).eq('id',existing.id);
+    else await sb.from('push_subscriptions').insert({user_id:U.id,endpoint:j.endpoint,p256dh:j.keys.p256dh,auth:j.keys.auth});
+    tst('알림이 켜졌어요! 🔔');
+    updatePushBanner();
+  }catch(e){
+    console.warn('푸시 구독 실패',e);
+    tst('알림 설정에 실패했어요');
+  }
+}
+
+function updatePushBanner(){
+  const el=document.getElementById('push-banner');if(!el)return;
+  if(!('Notification' in window)||Notification.permission==='granted'){el.style.display='none';}
+  else{el.style.display='flex';}
+}
+
+// 메시지 등 이벤트가 생겼을 때 대상 사용자(들)에게 푸시 발송 요청 (배포 전이면 조용히 무시)
+async function triggerPush(userIds,title,body){
+  if(!PUSH_ENDPOINT||!userIds?.length)return;
+  for(const uid of userIds){
+    try{
+      await fetch(PUSH_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid,title,body})});
+    }catch(e){console.warn('푸시 전송 실패',e);}
+  }
+}
+
 // ── UTILS ──
 function dispName(name, email){
   if(name&&name.trim())return name.trim();
@@ -1078,6 +1135,7 @@ async function initApp(u){
     checkCallBookingBanner();
   }
   refreshMsgBadge();
+  updatePushBanner();
 }
 
 // ── CALENDAR ──
@@ -3599,6 +3657,7 @@ async function sendBroadcast(target){
   if(error){tst('전송 실패: '+error.message);return;}
   document.getElementById('broadcast-modal')?.remove();
   tst(`${targets.length}명에게 보냈어요!`);
+  triggerPush(targets.map(s=>s.id),'Speaking Gym 공지',msg);
 }
 
 // 1:1 대화창 — 학생 자신이 열면 본인 스레드, 관리자가 열면 골라둔 학생의 스레드 (둘 다 이 함수 하나 재사용)
@@ -3653,6 +3712,12 @@ async function sendMsgThread(targetStudentId){
   if(error){tst('전송 실패: '+error.message);return;}
   input.value='';
   await loadMsgThread(targetStudentId);
+  if(P?.role==='admin'){
+    triggerPush([targetStudentId],'원장님 메시지',content);
+  } else {
+    const{data:admins}=await sb.from('profiles').select('id').eq('role','admin');
+    triggerPush((admins||[]).map(a=>a.id),dispName(P?.name,U.email)+'님의 메시지',content);
+  }
 }
 
 // 상단 💬 버튼에 안 읽은 메시지 있으면 빨간 점 표시
