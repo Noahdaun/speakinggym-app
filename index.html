@@ -994,7 +994,8 @@ async function triggerPush(userIds,title,body){
   if(!PUSH_ENDPOINT||!userIds?.length)return;
   for(const uid of userIds){
     try{
-      await fetch(PUSH_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid,title,body})});
+      const r=await fetch(PUSH_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json','apikey':SK,'Authorization':'Bearer '+SK},body:JSON.stringify({user_id:uid,title,body})});
+      if(!r.ok)console.warn('푸시 전송 실패',r.status,await r.text());
     }catch(e){console.warn('푸시 전송 실패',e);}
   }
 }
