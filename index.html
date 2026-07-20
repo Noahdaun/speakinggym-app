@@ -3899,14 +3899,15 @@ async function saveAllAtt(d, cls){
   const checked=filtered.filter(s=>document.getElementById(`att-${s.id}`)?.checked);
   const unchecked=filtered.filter(s=>!document.getElementById(`att-${s.id}`)?.checked);
 
-  // 체크된 학생 출석 insert
+  // 체크된 학생 출석 insert — 이미 출석되어 있던 학생도 "출석 저장"을 누르면 단어는 항상 다시 확인해서 채움
+  // (이미 가진 단어는 seedVocabForAttendance 안에서 중복 체크하니 매번 불러도 안전함)
   for(const s of checked){
     try{
       const{data:ex}=await sb.from('attendance').select('id').eq('student_id',s.id).eq('lesson_date',d).maybeSingle();
       if(!ex){
         await sb.from('attendance').insert({student_id:s.id,lesson_date:d,status:'present'});
-        await seedVocabForAttendance(s.id,d); // 새로 출석 처리된 경우에만 — 그 날짜에 걸린 레슨의 단어를 자동 추가
       }
+      await seedVocabForAttendance(s.id,d);
     }catch(e){console.warn('출석 저장 오류',e);}
   }
   // 체크 해제된 학생 출석 삭제
