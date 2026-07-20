@@ -778,13 +778,8 @@ function doUpdate(){
 
         <!-- 단어 일괄 추가 -->
         <div class="dv"></div>
-        <div style="font-size:12px;font-weight:600;margin-bottom:4px;">📚 단어 일괄 추가 <span style="font-size:11px;font-weight:400;color:var(--mu);">(최대 30개 — 저장 시 자동 추가)</span></div>
-        <div style="font-size:11px;color:var(--mu);margin-bottom:7px;">영어,한국어 형식으로 줄마다 — 대상 반을 선택하세요</div>
-        <div id="ls-vocab-tgt" style="background:var(--sf);border-radius:10px;padding:9px 11px;margin-bottom:7px;border:1.5px solid var(--brd);display:flex;flex-wrap:wrap;gap:7px;">
-          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;">
-            <input type="checkbox" id="lv-all" onchange="lvAllToggle(this)" style="accent-color:var(--g);">전체
-          </label>
-        </div>
+        <div style="font-size:12px;font-weight:600;margin-bottom:4px;">📚 단어 목록</div>
+        <div style="font-size:11px;color:var(--mu);margin-bottom:7px;">영어,한국어 형식으로 줄마다 입력하세요. 대상을 따로 고르지 않아도, 이 토픽의 수업 날짜에 출석한 학생에게 자동으로 추가돼요.</div>
         <textarea id="ls-vocab" placeholder="ask out,데이트 신청하다&#10;come with me,나랑 같이 가다&#10;it's on me,내가 살게" style="height:120px;"></textarea>
         <div id="ls-vocab-preview" style="font-size:11px;color:var(--gm);margin-top:4px;margin-bottom:4px;"></div>
 
@@ -2054,31 +2049,6 @@ function lsApplyBlanksPaste(){
   }catch(e){
     tst('JSON 형식이 아니에요. 확인해주세요');
   }
-}
-
-function lvAllToggle(cb){
-  document.querySelectorAll('.lv-cls-cb').forEach(el=>el.checked=cb.checked);
-}
-
-function lsVocabRenderTgt(){
-  const wrap=document.getElementById('ls-vocab-tgt');if(!wrap)return;
-  const clsItems=classes.map(c=>`
-    <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px;">
-      <input type="checkbox" class="lv-cls-cb" value="${c}" style="accent-color:var(--g);">${c}
-    </label>`).join('');
-  // 전체 체크박스 뒤에 반별 추가
-  const allLabel=wrap.querySelector('label');
-  if(allLabel)allLabel.insertAdjacentHTML('afterend', clsItems);
-}
-
-function getLsVocabTargets(){
-  const allCb=document.getElementById('lv-all');
-  if(allCb?.checked)return sts.map(s=>s.id);
-  const ids=new Set();
-  document.querySelectorAll('.lv-cls-cb:checked').forEach(cb=>{
-    sts.filter(s=>s.class_name===cb.value).forEach(s=>ids.add(s.id));
-  });
-  return [...ids];
 }
 
 // ── 5회차: 자막 기반 플래시카드 암기 ──
@@ -3935,6 +3905,7 @@ async function saveAllAtt(d, cls){
       const{data:ex}=await sb.from('attendance').select('id').eq('student_id',s.id).eq('lesson_date',d).maybeSingle();
       if(!ex){
         await sb.from('attendance').insert({student_id:s.id,lesson_date:d,status:'present'});
+        await seedVocabForAttendance(s.id,d); // 새로 출석 처리된 경우에만 — 그 날짜에 걸린 레슨의 단어를 자동 추가
       }
     }catch(e){console.warn('출석 저장 오류',e);}
   }
@@ -3944,6 +3915,26 @@ async function saveAllAtt(d, cls){
   }
   tst(`출석 저장 완료! ✅ ${checked.length}명 출석`);
   lAdm();
+}
+
+// 출석한 날짜에 걸린 레슨들의 단어 목록(lessons.vocab)을 그 학생에게 추가 (이미 있는 단어는 중복 추가 안 함)
+async function seedVocabForAttendance(studentId,date){
+  const{data:schs}=await sb.from('lesson_schedules').select('lesson_id').eq('lesson_date',date);
+  const lessonIds=[...new Set((schs||[]).map(s=>s.lesson_id))];
+  if(!lessonIds.length)return;
+  const{data:lsData}=await sb.from('lessons').select('id,vocab').in('id',lessonIds);
+  const today=new Date().toISOString().slice(0,10);
+  for(const l of (lsData||[])){
+    if(!l.vocab)continue;
+    let words=[];
+    try{words=JSON.parse(l.vocab)||[];}catch{continue;}
+    for(const w of words){
+      if(!w.english||!w.korean)continue;
+      const{data:ex}=await sb.from('vocab_cards').select('id').eq('student_id',studentId).eq('english',w.english).maybeSingle();
+      if(ex)continue;
+      await sb.from('vocab_cards').insert({student_id:studentId,english:w.english,korean:w.korean,box_level:1,next_review:today});
+    }
+  }
 }
 
 // ── 5회차 플래시카드 "구간 열기" — 네이티브 플레이어로 해당 구간만 재생 ──
@@ -3963,7 +3954,7 @@ function adTab(t,b){
   document.querySelectorAll('#pad>.tbb .tbn').forEach(x=>x.classList.remove('on'));
   if(b)b.classList.add('on');
   if(t==='cl'){rClsList();}
-  if(t==='ls'){rLsList();renderLsRows();lsVocabRenderTgt();renderLsDateTags();lsRenderSubTable();}
+  if(t==='ls'){rLsList();renderLsRows();renderLsDateTags();lsRenderSubTable();}
   if(t==='at'){
     document.getElementById('atd').value=new Date().toISOString().slice(0,10);
     rAtCls();
@@ -5576,6 +5567,15 @@ async function saveLesson(){
   const guide=document.getElementById('ls-guide')?.value?.trim()||null;
   // 빈칸 퀴즈 데이터
   const blanks=Object.keys(lsBlanks).length?JSON.stringify(lsBlanks):null;
+  // 단어 목록 — 즉시 뿌리지 않고 레슨에 저장해둠. 학생이 이 레슨의 수업 날짜에 출석하는 순간 자동으로 그 학생에게 추가됨 (saveAllAtt 참고)
+  const vocabRaw=document.getElementById('ls-vocab')?.value?.trim()||'';
+  let vocab=null;
+  if(vocabRaw){
+    const words=vocabRaw.split('\n').filter(l=>l.trim()).map(l=>{
+      const p=l.split(',');return p.length>=2?{english:p[0].trim(),korean:p.slice(1).join(',').trim()}:null;
+    }).filter(Boolean);
+    if(words.length)vocab=JSON.stringify(words);
+  }
 
   // 수업 날짜 수집 (lsDates 배열 사용)
   const schedules=lsDates.map(d=>({lesson_date:d}));
@@ -5585,14 +5585,14 @@ async function saveLesson(){
 
   let lessonId;
   if(isEdit&&editId){
-    await sb.from('lessons').update({title,url,subtitles,key_expressions,guide,blanks}).eq('id',editId);
+    await sb.from('lessons').update({title,url,subtitles,key_expressions,guide,blanks,vocab}).eq('id',editId);
     lessonId=editId;
     tst('수정됐어요!');
     document.getElementById('ls-form-title').textContent='새 토픽 등록';
     delete document.getElementById('ls-form-title').dataset.editId;
     document.getElementById('ls-form-btns').innerHTML='<button class="btn btn-p" onclick="saveLesson()">토픽 등록</button>';
   } else {
-    const{data:newLesson,error}=await sb.from('lessons').insert({title,url,subtitles,key_expressions,guide,blanks}).select().single();
+    const{data:newLesson,error}=await sb.from('lessons').insert({title,url,subtitles,key_expressions,guide,blanks,vocab}).select().single();
     if(error){tst('등록 실패: '+error.message);return;}
     lessonId=newLesson.id;
     tst('토픽이 등록됐어요!');
@@ -5603,21 +5603,6 @@ async function saveLesson(){
     await sb.from('lesson_schedules').delete().eq('lesson_id',lessonId);
     const{error:schedErr}=await sb.from('lesson_schedules').insert(schedules.map(s=>({...s,lesson_id:lessonId,class_name:'전체'})));
     if(schedErr)tst('수업 날짜 저장 실패: '+schedErr.message);
-  }
-
-  // 단어 일괄 추가
-  const vocabRaw=document.getElementById('ls-vocab')?.value?.trim();
-  if(vocabRaw&&lessonId){
-    const today=new Date().toISOString().slice(0,10);
-    const targets=getLvTgtIds();
-    if(targets.length){
-      const rows=[];
-      vocabRaw.split('\n').forEach(line=>{
-        const[eng,...rest]=line.split(',');const kor=rest.join(',').trim();
-        if(eng?.trim()&&kor)targets.forEach(sid=>rows.push({student_id:sid,english:eng.trim(),korean:kor,box_level:1,next_review:today}));
-      });
-      if(rows.length)await sb.from('vocab_cards').insert(rows);
-    }
   }
 
   ['lt','lu','ls-expressions','ls-guide','ls-vocab','ls-blanks-paste'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
@@ -5650,14 +5635,6 @@ function renderLsDateTags(){
   </div>`).join('');
 }
 
-function getLvTgtIds(){
-  const allCb=document.getElementById('lv-all');
-  if(allCb?.checked)return sts.map(s=>s.id);
-  const ids=[];
-  document.querySelectorAll('.lv-cls-cb:checked').forEach(cb=>{sts.filter(s=>s.class_name===cb.value).forEach(s=>ids.push(s.id));});
-  return [...new Set(ids)];
-}
-
 async function openLsEdit(lid){
   const l=les.find(x=>x.id===lid);if(!l)return;
   document.getElementById('lt').value=l.title||'';
@@ -5680,6 +5657,10 @@ async function openLsEdit(lid){
   if(document.getElementById('ls-guide'))document.getElementById('ls-guide').value=l.guide||'';
   if(document.getElementById('ls-expressions')&&l.key_expressions){
     try{const exps=JSON.parse(l.key_expressions);document.getElementById('ls-expressions').value=exps.map(e=>e.english+(e.korean?','+e.korean:'')).join('\n');}catch{}
+  }
+  if(document.getElementById('ls-vocab')){
+    document.getElementById('ls-vocab').value='';
+    if(l.vocab){try{const words=JSON.parse(l.vocab);document.getElementById('ls-vocab').value=words.map(w=>w.english+(w.korean?','+w.korean:'')).join('\n');}catch{}}
   }
   // 기존 수업 날짜 로드
   const{data:schs}=await sb.from('lesson_schedules').select('lesson_date').eq('lesson_id',lid);
