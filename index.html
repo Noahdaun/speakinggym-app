@@ -4695,6 +4695,31 @@ function gp(n){
   }
 }
 
+// ── 안드로이드 뒤로가기 버튼: 앱 종료 대신 화면 내에서 이동 ──
+// 열려있는 팝업(설정창, 메시지창, 결제창 등)을 먼저 닫고, 없으면 홈 화면으로 이동.
+// 홈 화면에서 뒤로가기를 누르면 그때만 실제로 앱이 꺼짐(정상 동작).
+function _closeTopOverlay(){
+  const rs=document.getElementById('rs');
+  if(rs&&rs.classList.contains('on')){cses();return true;}
+  const sdp=document.getElementById('sdp');
+  if(sdp&&sdp.classList.contains('on')){closeSD();return true;}
+  const kids=Array.from(document.body.children);
+  for(let i=kids.length-1;i>=0;i--){
+    const el=kids[i];
+    if(el.tagName==='SCRIPT'||el.id==='rs'||el.id==='sdp')continue;
+    const cs=getComputedStyle(el);
+    if(cs.position==='fixed'&&cs.display!=='none'){el.remove();return true;}
+  }
+  return false;
+}
+history.pushState({sg:1},'');
+window.addEventListener('popstate',function(){
+  if(_closeTopOverlay()){history.pushState({sg:1},'');return;}
+  const curPage=document.querySelector('.pg.on')?.id;
+  if(curPage&&curPage!=='ph'){gp('home');history.pushState({sg:1},'');return;}
+  // 홈 화면 + 열린 팝업 없음: 여기서는 다시 pushState 하지 않아 실제 종료를 허용
+});
+
 // ── 자유학습 서브탭 (오프라인 복습 / 온라인 학습) ──
 function fsTab(t){
   document.getElementById('fs-tab-off')?.classList.toggle('on',t==='off');

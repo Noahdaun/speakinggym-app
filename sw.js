@@ -1,4 +1,4 @@
-const VERSION = "sg-v52";
+const VERSION = "sg-v54";
 const CACHE = `speakinggym-${VERSION}`;
 const ASSETS = [
   '/speakinggym-app/',
@@ -50,4 +50,32 @@ self.addEventListener('fetch', e => {
 // 업데이트 감지 — 새 버전 있으면 클라이언트에 알림
 self.addEventListener('message', e => {
   if (e.data === 'SKIP_WAITING') self.skipWaiting();
+});
+
+// 푸시 알림 수신 — 서버(send-push 함수)가 보낸 메시지를 실제 알림으로 표시
+self.addEventListener('push', e => {
+  let data = { title: 'Speaking Gym', body: '' };
+  try { data = e.data.json(); } catch { if (e.data) data.body = e.data.text(); }
+  e.waitUntil(
+    self.registration.showNotification(data.title || 'Speaking Gym', {
+      body: data.body || '',
+      icon: '/speakinggym-app/icon-192.png',
+      badge: '/speakinggym-app/icon-192.png',
+      data: { url: data.url || '/speakinggym-app/' },
+    })
+  );
+});
+
+// 알림 클릭 — 이미 열려있는 탭이 있으면 포커스, 없으면 새로 열기
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  const url = e.notification.data?.url || '/speakinggym-app/';
+  e.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(windowClients => {
+      for (const client of windowClients) {
+        if (client.url.includes('/speakinggym-app/') && 'focus' in client) return client.focus();
+      }
+      if (clients.openWindow) return clients.openWindow(url);
+    })
+  );
 });
