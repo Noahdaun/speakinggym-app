@@ -3510,18 +3510,46 @@ function openAdminMsgCenter(){
       <div style="font-size:16px;font-weight:800;">메시지</div>
       <div onclick="document.getElementById('msg-center-modal')?.remove()" style="width:28px;height:28px;border-radius:8px;background:var(--sf);display:flex;align-items:center;justify-content:center;cursor:pointer;">✕</div>
     </div>
+    <div style="font-size:12px;font-weight:700;color:var(--mu);margin-bottom:6px;">받은 메시지</div>
+    <div id="msg-inbox-list" style="margin-bottom:16px;"><div class="loading">로딩중...</div></div>
+    <div class="dv"></div>
     <input class="inp" type="text" id="msg-center-search" placeholder="학생 이름 검색..." oninput="filterMsgCenterList(this.value)">
     <div style="font-size:12px;font-weight:700;color:var(--mu);margin:10px 0 6px;">반 전체 · 공지 보내기</div>
     <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;">
       <button onclick="openBroadcastBox('all','전체 학생')" style="padding:7px 12px;border-radius:99px;background:var(--gl);color:var(--gd);border:1.5px solid #C0E8D8;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">전체 학생</button>
       ${classes.map(c=>`<button onclick="openBroadcastBox('${c}','${c}')" style="padding:7px 12px;border-radius:99px;background:var(--sf);border:1.5px solid var(--brd);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">${c}</button>`).join('')}
     </div>
-    <div style="font-size:12px;font-weight:700;color:var(--mu);margin-bottom:6px;">개별 학생 (답장 가능)</div>
+    <div style="font-size:12px;font-weight:700;color:var(--mu);margin-bottom:6px;">개별 학생 (새 대화 시작)</div>
     <div id="msg-center-list"></div>
   </div>`;
   document.body.appendChild(pop);
   pop.addEventListener('click',e=>{if(e.target===pop)pop.remove();});
   renderMsgCenterList(sts);
+  renderAdminInbox();
+}
+
+// 학생들이 보낸 메시지를 최신순으로 모아서 보여줌 (안 읽은 건 강조 표시) — 관리자가 한눈에 누구한테 왔는지 확인하는 용도
+async function renderAdminInbox(){
+  const el=document.getElementById('msg-inbox-list');if(!el)return;
+  const{data}=await sb.from('messages').select('*').neq('sender_id',U.id).not('target_student_id','is',null).order('created_at',{ascending:false});
+  const bySid={};
+  (data||[]).forEach(m=>{
+    if(!bySid[m.target_student_id])bySid[m.target_student_id]={last:m,unread:0};
+    if(!m.read)bySid[m.target_student_id].unread++;
+  });
+  const entries=Object.entries(bySid).sort((a,b)=>new Date(b[1].last.created_at)-new Date(a[1].last.created_at));
+  if(!entries.length){el.innerHTML='<div class="empty" style="padding:16px 0;">받은 메시지가 없어요</div>';return;}
+  el.innerHTML=entries.map(([sid,info])=>{
+    const stu=sts.find(s=>s.id===sid);
+    const name=stu?dispName(stu.name,stu.email):'(알 수 없음)';
+    return `<button onclick="document.getElementById('msg-center-modal')?.remove();openMsgThread('${sid}','${name.replace(/'/g,"\\'")}')" style="width:100%;text-align:left;padding:11px 12px;border-radius:11px;background:${info.unread?'var(--gl)':'var(--card,#fff)'};border:1.5px solid ${info.unread?'#1D9E75':'var(--brd)'};margin-bottom:6px;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:10px;">
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:6px;">${name}${info.unread?`<span style="background:var(--rd);color:#fff;font-size:10px;font-weight:700;padding:1px 7px;border-radius:99px;">${info.unread}</span>`:''}</div>
+        <div style="font-size:11px;color:var(--mu);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px;">${escMsg(info.last.content)}</div>
+      </div>
+      <div style="font-size:10px;color:var(--mu);flex-shrink:0;white-space:nowrap;">${new Date(info.last.created_at).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}</div>
+    </button>`;
+  }).join('');
 }
 function renderMsgCenterList(list){
   const el=document.getElementById('msg-center-list');if(!el)return;
