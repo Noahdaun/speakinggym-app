@@ -762,6 +762,8 @@ function doUpdate(){
                 <th style="padding:6px 4px;width:58px;">끝</th>
                 <th style="padding:6px 4px;text-align:left;">영어</th>
                 <th style="padding:6px 4px;text-align:left;">한글</th>
+                <th style="padding:6px 4px;width:32px;">온라인</th>
+                <th style="padding:6px 4px;width:28px;"></th>
                 <th style="padding:6px 4px;width:36px;"></th>
               </tr>
             </thead>
@@ -1525,7 +1527,7 @@ function getRoundLabel(round){
 // ── 네이티브 자막 재생 플레이어 (sg_builder 이식: 유튜브 IFrame API + 자막 클릭재생) ──
 let ytApiReady=false, ytApiLoading=false;
 let npPlayer=null;
-let npState={subs:[],playing:null,pausedIdx:null,activeIdx:null,timer:null,rate:1,loop:false,mode:'single',hideEng:false,showKor:false};
+let npState={subs:[],playing:null,pausedIdx:null,activeIdx:null,timer:null,rate:1,loop:false,mode:'single',hideEng:false,showKor:false,pronMode:false};
 // 가로/세로 화면 전환 · 글자 크기는 npState와 달리 레슨을 넘어가도(npDestroy 이후에도) 유지 — 수업 중 TV 송출용 설정이라 계속 유지되는 게 편함
 let npLayout='vert'; // 'vert' | 'horiz'
 let npFontSize=16;
@@ -1689,6 +1691,15 @@ function npRenderSubList(){
   const wrap=document.getElementById('np-sub-list');if(!wrap)return;
   wrap.innerHTML=npState.subs.map((s,i)=>{
     const on=npState.activeIdx===i;
+    if(npState.pronMode){
+      const stressSet=new Set(s.stress||[]);
+      const marked=(s.text||'').split(' ').map((w,wi)=>stressSet.has(wi)?`<span style="text-decoration:underline;font-weight:800;">${w}</span>`:w).join(' ');
+      return `
+      <button data-idx="${i}" onclick="npPlaySeg(${i})" style="text-align:left;padding:10px 12px;border-radius:10px;cursor:pointer;font-family:inherit;background:${on?'var(--gl)':'var(--sf)'};border:1.5px solid ${on?'#1D9E75':'transparent'};">
+        <div style="font-size:${npFontSize}px;font-weight:600;color:${on?'var(--gd)':'var(--text)'};">${marked}</div>
+        ${s.ipa?`<div style="font-size:${Math.max(11,npFontSize-4)}px;color:${on?'var(--gd)':'var(--mu)'};font-family:monospace;margin-top:3px;">${s.ipa}</div>`:''}
+      </button>`;
+    }
     return `
     <button data-idx="${i}" onclick="npPlaySeg(${i})" style="text-align:left;padding:10px 12px;border-radius:10px;cursor:pointer;font-family:inherit;background:${on?'var(--gl)':'var(--sf)'};border:1.5px solid ${on?'#1D9E75':'transparent'};">
       <div style="font-size:${npFontSize}px;font-weight:600;color:${on?'var(--gd)':'var(--text)'};">${npState.hideEng?'🙈':(s.text||'')}</div>
@@ -2051,10 +2062,62 @@ function lsRenderSubTable(){
       <td><input type="number" value="${s.end}" step="0.1" onchange="lsSubs[${i}].end=+this.value" style="width:56px;border:1px solid var(--brd);border-radius:4px;padding:3px 4px;font-size:11px;"></td>
       <td><input type="text" value="${(s.text||'').replace(/"/g,'&quot;')}" onchange="lsSubs[${i}].text=this.value" style="width:100%;border:1px solid var(--brd);border-radius:4px;padding:3px 6px;font-size:11px;"></td>
       <td><input type="text" value="${(s.kor||'').replace(/"/g,'&quot;')}" onchange="lsSubs[${i}].kor=this.value" style="width:100%;border:1px solid var(--brd);border-radius:4px;padding:3px 6px;font-size:11px;"></td>
+      <td style="text-align:center;"><input type="checkbox" ${s.sel?'checked':''} onchange="lsSubs[${i}].sel=this.checked;lsRenderSubTable();" title="온라인용 선택"></td>
+      <td style="text-align:center;"><button onclick="lsOpenLineEditor(${i})" style="background:${s.sel?'var(--gl)':'var(--sf)'};color:${s.sel?'var(--gd)':'var(--mu)'};border:none;border-radius:4px;padding:3px 6px;cursor:pointer;font-size:11px;" ${s.sel?'':'disabled'} title="발음·아웃풋 편집">🎯</button></td>
       <td><button onclick="lsSubs.splice(${i},1);lsRenderSubTable();" style="background:var(--rl);color:var(--rd);border:none;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:10px;">삭제</button></td>
     </tr>`).join('');
   const cnt=document.getElementById('ls-sub-count');
   if(cnt)cnt.textContent=lsSubs.length;
+}
+
+// ── 온라인용 문장 편집: 강세 표시(단어 클릭 토글) · 발음기호 · 아웃풋 패턴 예문 3개 ──
+function lsOpenLineEditor(i){
+  const s=lsSubs[i];if(!s)return;
+  lsCloseLineEditor();
+  s.stress=s.stress||[];
+  s.patterns=s.patterns||[{en:'',kor:''},{en:'',kor:''},{en:'',kor:''}];
+  while(s.patterns.length<3)s.patterns.push({en:'',kor:''});
+  const pop=document.createElement('div');
+  pop.id='ls-line-editor';
+  pop.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9200;display:flex;align-items:flex-end;justify-content:center;';
+  const words=(s.text||'').split(' ');
+  pop.innerHTML=`<div style="background:var(--card,#fff);border-radius:16px 16px 0 0;width:100%;max-width:480px;max-height:85vh;overflow-y:auto;padding:16px 16px 26px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <div style="font-size:14px;font-weight:700;color:var(--text);">문장 ${i+1} 편집</div>
+      <div onclick="lsCloseLineEditor()" style="width:26px;height:26px;border-radius:8px;background:var(--sf);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:14px;">✕</div>
+    </div>
+    <div style="font-size:11px;color:var(--mu);font-weight:700;margin-bottom:6px;">강세 — 단어를 눌러서 표시</div>
+    <div id="ls-le-stress" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;">
+      ${words.map((w,wi)=>`<span onclick="lsToggleStressWord(${i},${wi})" style="padding:5px 9px;border-radius:7px;cursor:pointer;font-size:13px;font-weight:${s.stress.includes(wi)?'800':'500'};text-decoration:${s.stress.includes(wi)?'underline':'none'};background:${s.stress.includes(wi)?'var(--gl)':'var(--sf)'};color:${s.stress.includes(wi)?'var(--gd)':'var(--text)'};border:1.5px solid ${s.stress.includes(wi)?'#1D9E75':'var(--brd)'};">${w}</span>`).join('')}
+    </div>
+    <div style="font-size:11px;color:var(--mu);font-weight:700;margin-bottom:6px;">발음기호 (선택)</div>
+    <input class="inp" type="text" id="ls-le-ipa" value="${(s.ipa||'').replace(/"/g,'&quot;')}" placeholder="/juː noʊ ˈwɛn ɪn ˈroʊm raɪt/" style="font-family:monospace;">
+    <div style="font-size:11px;color:var(--mu);font-weight:700;margin:10px 0 6px;">아웃풋 패턴 예문 3개 (영어,한국어)</div>
+    ${[0,1,2].map(pi=>`<input class="inp" type="text" id="ls-le-p${pi}" value="${((s.patterns[pi].en||'')+(s.patterns[pi].kor?','+s.patterns[pi].kor:'')).replace(/"/g,'&quot;')}" placeholder="You know when in doubt, ask.,모를 땐 물어봐." style="margin-bottom:6px;">`).join('')}
+    <button onclick="lsSaveLineEditor(${i})" style="width:100%;padding:12px;border-radius:10px;background:var(--g);color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:8px;">저장</button>
+  </div>`;
+  document.body.appendChild(pop);
+  pop.addEventListener('click',e=>{if(e.target===pop)lsCloseLineEditor();});
+}
+function lsCloseLineEditor(){document.getElementById('ls-line-editor')?.remove();}
+function lsToggleStressWord(i,wi){
+  const s=lsSubs[i];if(!s)return;
+  s.stress=s.stress||[];
+  const idx=s.stress.indexOf(wi);
+  if(idx>=0)s.stress.splice(idx,1);else s.stress.push(wi);
+  lsOpenLineEditor(i);
+}
+function lsSaveLineEditor(i){
+  const s=lsSubs[i];if(!s)return;
+  s.ipa=document.getElementById('ls-le-ipa')?.value?.trim()||'';
+  s.patterns=[0,1,2].map(pi=>{
+    const raw=document.getElementById('ls-le-p'+pi)?.value?.trim()||'';
+    const idx=raw.indexOf(',');
+    if(idx<0)return{en:raw,kor:''};
+    return{en:raw.slice(0,idx).trim(),kor:raw.slice(idx+1).trim()};
+  });
+  lsCloseLineEditor();
+  tst('저장됐어요 ✓');
 }
 
 function lsAddSubRow(){
@@ -4803,42 +4866,76 @@ function openFreeStudy(lid){
   window._fsSubs=subs;
   window._fsLesson=l;
   const hasKor=subs.filter(s=>s.kor).length>0;
-  document.getElementById('rs-content').innerHTML=`
+  const hasOnlineSel=subs.some(s=>s.sel);
+  const tabsHtml=hasOnlineSel?`
+    <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;">
+      <button id="fs-mode-all" onclick="fsSetMode('all')" style="flex:1;min-width:70px;padding:9px 4px;border-radius:10px;border:none;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;">전체</button>
+      <button id="fs-mode-sel" onclick="fsSetMode('sel')" style="flex:1;min-width:70px;padding:9px 4px;border-radius:10px;border:1.5px solid var(--brd);font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;">온라인용</button>
+      <button id="fs-mode-pron" onclick="fsSetMode('pron')" style="flex:1;min-width:70px;padding:9px 4px;border-radius:10px;border:1.5px solid var(--brd);font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;">발음</button>
+      <button id="fs-mode-output" onclick="fsSetMode('output')" style="flex:1;min-width:70px;padding:9px 4px;border-radius:10px;border:1.5px solid var(--brd);font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;">아웃풋</button>
+    </div>`:`
     <div style="display:flex;gap:8px;margin-bottom:10px;">
       <button id="fs-mode-listen" onclick="fsSetMode('listen')" style="flex:1;padding:10px;border-radius:10px;border:none;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">🎧 듣기</button>
       <button id="fs-mode-mem" onclick="fsSetMode('mem')" style="flex:1;padding:10px;border-radius:10px;border:1.5px solid var(--brd);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;" ${hasKor?'':'disabled'}>📖 암기카드</button>
-    </div>
-    <div id="fs-body"></div>`;
+    </div>`;
+  document.getElementById('rs-content').innerHTML=tabsHtml+'<div id="fs-body"></div>';
   document.getElementById('rs-bot').innerHTML='';
-  fsSetMode(window._fsVid&&subs.length?'listen':'mem');
+  fsSetMode(hasOnlineSel?'sel':(window._fsVid&&subs.length?'listen':'mem'));
   document.getElementById('rs').classList.add('on');
 }
 
 function fsSetMode(mode){
-  const listenBtn=document.getElementById('fs-mode-listen');
-  const memBtn=document.getElementById('fs-mode-mem');
+  const btnIds={listen:'fs-mode-listen',mem:'fs-mode-mem',all:'fs-mode-all',sel:'fs-mode-sel',pron:'fs-mode-pron',output:'fs-mode-output'};
   const style=(btn,on)=>{if(!btn)return;btn.style.background=on?'var(--g)':'var(--sf)';btn.style.color=on?'#fff':'var(--text)';};
-  style(listenBtn,mode==='listen');style(memBtn,mode==='mem');
+  Object.entries(btnIds).forEach(([m,id])=>style(document.getElementById(id),m===mode));
   npDestroy();
   const body=document.getElementById('fs-body');if(!body)return;
   document.getElementById('rs-bot').innerHTML='';
-  if(mode==='listen'){
-    if(window._fsVid&&window._fsSubs.length){
+  if(mode==='listen'||mode==='all'||mode==='sel'||mode==='pron'){
+    const subs=mode==='sel'||mode==='pron'?window._fsSubs.filter(s=>s.sel):window._fsSubs;
+    if(window._fsVid&&subs.length){
       body.innerHTML='<div id="np-mount"></div>';
+      npState.pronMode=mode==='pron';
       if(window._fsVideoType==='cloudflare'){
-        renderCfPlayer(document.getElementById('np-mount'),window._fsVid,window._fsSubs);
+        renderCfPlayer(document.getElementById('np-mount'),window._fsVid,subs);
       } else {
-        renderNativePlayer(document.getElementById('np-mount'),window._fsVid,window._fsSubs);
+        renderNativePlayer(document.getElementById('np-mount'),window._fsVid,subs);
       }
-    } else {
+    } else if(mode==='listen'){
       body.innerHTML=`<div style="position:relative;"><iframe src="${window._fsLesson.url}" style="width:100%;height:calc(100vh - 300px);border:none;display:block;" allowfullscreen></iframe></div>`;
+    } else {
+      body.innerHTML='<div class="empty">표시할 문장이 없어요</div>';
     }
+  } else if(mode==='output'){
+    renderOutputMode(body,window._fsSubs.filter(s=>s.sel));
   } else {
     const subs=window._fsSubs.filter(s=>s.kor);
     body.innerHTML='<div id="mem-flash-area"></div>';
     window._memCards={subs,idx:0,known:0,unknown:[],total:subs.length};
     renderMemCard();
   }
+}
+
+// ── 아웃풋 모드: 문장을 보고 스스로 생각해본 뒤 한국어/영어 예문을 선택해서 확인 ──
+function renderOutputMode(body,subs){
+  if(!subs.length){body.innerHTML='<div class="empty">선별된 문장이 없어요</div>';return;}
+  window._opSubs=subs;
+  body.innerHTML=subs.map((s,i)=>`
+    <div style="background:var(--card,#fff);border:1.5px solid var(--brd);border-radius:12px;padding:12px 14px;margin-bottom:10px;">
+      <div style="font-size:14px;font-weight:700;margin-bottom:10px;color:var(--text);">${s.text||''}</div>
+      <div style="display:flex;gap:6px;margin-bottom:8px;">
+        <button onclick="opShowLang(${i},'kor')" style="flex:1;padding:8px;border-radius:8px;border:1.5px solid var(--brd);background:var(--sf);color:var(--text);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">한국어로 보기</button>
+        <button onclick="opShowLang(${i},'eng')" style="flex:1;padding:8px;border-radius:8px;border:1.5px solid var(--brd);background:var(--sf);color:var(--text);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">영어로 보기</button>
+      </div>
+      <div id="op-body-${i}" style="display:none;flex-direction:column;gap:6px;"></div>
+    </div>`).join('');
+}
+function opShowLang(i,lang){
+  const el=document.getElementById('op-body-'+i);if(!el)return;
+  const patterns=(window._opSubs[i]&&window._opSubs[i].patterns)||[];
+  const rows=patterns.filter(p=>p&&(p.en||p.kor)).map(p=>`<div style="font-size:12.5px;color:var(--text);padding:6px 0;border-top:1px solid var(--brd);">${(lang==='kor'?p.kor:p.en)||''}</div>`).join('');
+  el.style.display='flex';
+  el.innerHTML=rows||'<div style="font-size:11px;color:var(--mu);padding-top:6px;">등록된 예문이 없어요</div>';
 }
 
 // ── 스와이프 ──
