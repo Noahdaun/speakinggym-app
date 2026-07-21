@@ -1842,7 +1842,87 @@ function renderCfPlayer(mountEl,cfVideoId,subs){
   });
 }
 
+// 리뷰 목록에서 레슨을 열 때, 그 레슨에 온라인용으로 선별된 문장이 있으면
+// 오프라인 복습(기존 회차 시스템)과 온라인 학습(전체/온라인용/발음/아웃풋) 중 고르게 함.
+// 온라인용 데이터가 없는 레슨은 그냥 바로 기존 오프라인 복습으로 들어감 (동작 그대로 유지)
 async function oSes(lid,title,url,round){
+  const lessonObj=les.find(x=>x.id===lid)||{};
+  let subsArr=[];
+  try{const p=JSON.parse(lessonObj.subtitles);subsArr=Array.isArray(p)?p:[];}catch{}
+  if(!subsArr.some(s=>s.sel)){oSesOffline(lid,title,url,round);return;}
+  npDestroy();
+  document.getElementById('rs-title').textContent=title;
+  document.getElementById('rs-badge').textContent='선택';
+  document.getElementById('rs-badge').style.background='#E1F5EE';
+  document.getElementById('rs-badge').style.color='#1D9E75';
+  document.getElementById('rs-top').style.background='#1E2D45';
+  const safeTitle=title.replace(/'/g,"\\'");
+  document.getElementById('rs-content').innerHTML=`
+    <div style="background:var(--card,#fff);border:1.5px solid var(--brd);border-radius:14px;padding:26px 16px;text-align:center;">
+      <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:16px;">오프라인 복습으로 할까요,<br>온라인 학습으로 할까요?</div>
+      <div style="display:flex;gap:10px;">
+        <button onclick="oSesOffline('${lid}','${safeTitle}','${url}',${round})" style="flex:1;padding:16px 8px;border-radius:12px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">📘 오프라인 복습</button>
+        <button onclick="openOnlineReview('${lid}','${safeTitle}')" style="flex:1;padding:16px 8px;border-radius:12px;background:var(--sf);color:var(--text);border:1.5px solid var(--brd);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">🌐 온라인 학습</button>
+      </div>
+    </div>`;
+  document.getElementById('rs-bot').innerHTML='';
+  document.getElementById('rs').classList.add('on');
+}
+
+// ── 온라인 학습: 전체 / 온라인용 / 발음 / 아웃풋 (회차 시스템과 무관한 별도 트랙) ──
+async function openOnlineReview(lid,title){
+  npDestroy();
+  const l=les.find(x=>x.id===lid);if(!l)return;
+  ses={lid,title,url:l.url,round:'online',free:true,startedAt:Date.now()};
+  document.getElementById('rs-title').textContent=title;
+  document.getElementById('rs-badge').textContent='온라인 학습';
+  document.getElementById('rs-badge').style.background='#E6F1FB';
+  document.getElementById('rs-badge').style.color='#185FA5';
+  document.getElementById('rs-top').style.background='#1E2D45';
+  let subs=[];
+  try{const p=JSON.parse(l.subtitles);subs=Array.isArray(p)?p:[];}catch{}
+  const ytVid=lsYtId(l.url);
+  const cfVid=cfId(l.url);
+  window._orVid=ytVid||cfVid;
+  window._orVideoType=ytVid?'youtube':(cfVid?'cloudflare':null);
+  window._orSubs=subs;
+  document.getElementById('rs-content').innerHTML=`
+    <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;">
+      <button id="or-mode-all" onclick="orSetMode('all')" style="flex:1;min-width:70px;padding:9px 4px;border-radius:10px;border:none;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;">전체</button>
+      <button id="or-mode-sel" onclick="orSetMode('sel')" style="flex:1;min-width:70px;padding:9px 4px;border-radius:10px;border:1.5px solid var(--brd);font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;">온라인용</button>
+      <button id="or-mode-pron" onclick="orSetMode('pron')" style="flex:1;min-width:70px;padding:9px 4px;border-radius:10px;border:1.5px solid var(--brd);font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;">발음</button>
+      <button id="or-mode-output" onclick="orSetMode('output')" style="flex:1;min-width:70px;padding:9px 4px;border-radius:10px;border:1.5px solid var(--brd);font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;">아웃풋</button>
+    </div>
+    <div id="or-body"></div>`;
+  document.getElementById('rs-bot').innerHTML='';
+  orSetMode('sel');
+  document.getElementById('rs').classList.add('on');
+}
+function orSetMode(mode){
+  const btnIds={all:'or-mode-all',sel:'or-mode-sel',pron:'or-mode-pron',output:'or-mode-output'};
+  const style=(btn,on)=>{if(!btn)return;btn.style.background=on?'var(--g)':'var(--sf)';btn.style.color=on?'#fff':'var(--text)';};
+  Object.entries(btnIds).forEach(([m,id])=>style(document.getElementById(id),m===mode));
+  npDestroy();
+  const body=document.getElementById('or-body');if(!body)return;
+  if(mode==='output'){
+    renderOutputMode(body,window._orSubs.filter(s=>s.sel));
+    return;
+  }
+  const subs=mode==='sel'||mode==='pron'?window._orSubs.filter(s=>s.sel):window._orSubs;
+  if(window._orVid&&subs.length){
+    body.innerHTML='<div id="np-mount"></div>';
+    npState.pronMode=mode==='pron';
+    if(window._orVideoType==='cloudflare'){
+      renderCfPlayer(document.getElementById('np-mount'),window._orVid,subs);
+    } else {
+      renderNativePlayer(document.getElementById('np-mount'),window._orVid,subs);
+    }
+  } else {
+    body.innerHTML='<div class="empty">표시할 문장이 없어요</div>';
+  }
+}
+
+async function oSesOffline(lid,title,url,round){
   npDestroy();
   ses={lid,title,url,round,startedAt:Date.now()};
   sesStartTime=Date.now();
@@ -4904,48 +4984,36 @@ function openFreeStudy(lid){
   window._fsSubs=subs;
   window._fsLesson=l;
   const hasKor=subs.filter(s=>s.kor).length>0;
-  const hasOnlineSel=subs.some(s=>s.sel);
-  const tabsHtml=hasOnlineSel?`
-    <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;">
-      <button id="fs-mode-all" onclick="fsSetMode('all')" style="flex:1;min-width:70px;padding:9px 4px;border-radius:10px;border:none;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;">전체</button>
-      <button id="fs-mode-sel" onclick="fsSetMode('sel')" style="flex:1;min-width:70px;padding:9px 4px;border-radius:10px;border:1.5px solid var(--brd);font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;">온라인용</button>
-      <button id="fs-mode-pron" onclick="fsSetMode('pron')" style="flex:1;min-width:70px;padding:9px 4px;border-radius:10px;border:1.5px solid var(--brd);font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;">발음</button>
-      <button id="fs-mode-output" onclick="fsSetMode('output')" style="flex:1;min-width:70px;padding:9px 4px;border-radius:10px;border:1.5px solid var(--brd);font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;">아웃풋</button>
-    </div>`:`
+  document.getElementById('rs-content').innerHTML=`
     <div style="display:flex;gap:8px;margin-bottom:10px;">
       <button id="fs-mode-listen" onclick="fsSetMode('listen')" style="flex:1;padding:10px;border-radius:10px;border:none;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">🎧 듣기</button>
       <button id="fs-mode-mem" onclick="fsSetMode('mem')" style="flex:1;padding:10px;border-radius:10px;border:1.5px solid var(--brd);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;" ${hasKor?'':'disabled'}>📖 암기카드</button>
-    </div>`;
-  document.getElementById('rs-content').innerHTML=tabsHtml+'<div id="fs-body"></div>';
+    </div>
+    <div id="fs-body"></div>`;
   document.getElementById('rs-bot').innerHTML='';
-  fsSetMode(hasOnlineSel?'sel':(window._fsVid&&subs.length?'listen':'mem'));
+  fsSetMode(window._fsVid&&subs.length?'listen':'mem');
   document.getElementById('rs').classList.add('on');
 }
 
 function fsSetMode(mode){
-  const btnIds={listen:'fs-mode-listen',mem:'fs-mode-mem',all:'fs-mode-all',sel:'fs-mode-sel',pron:'fs-mode-pron',output:'fs-mode-output'};
+  const listenBtn=document.getElementById('fs-mode-listen');
+  const memBtn=document.getElementById('fs-mode-mem');
   const style=(btn,on)=>{if(!btn)return;btn.style.background=on?'var(--g)':'var(--sf)';btn.style.color=on?'#fff':'var(--text)';};
-  Object.entries(btnIds).forEach(([m,id])=>style(document.getElementById(id),m===mode));
+  style(listenBtn,mode==='listen');style(memBtn,mode==='mem');
   npDestroy();
   const body=document.getElementById('fs-body');if(!body)return;
   document.getElementById('rs-bot').innerHTML='';
-  if(mode==='listen'||mode==='all'||mode==='sel'||mode==='pron'){
-    const subs=mode==='sel'||mode==='pron'?window._fsSubs.filter(s=>s.sel):window._fsSubs;
-    if(window._fsVid&&subs.length){
+  if(mode==='listen'){
+    if(window._fsVid&&window._fsSubs.length){
       body.innerHTML='<div id="np-mount"></div>';
-      npState.pronMode=mode==='pron';
       if(window._fsVideoType==='cloudflare'){
-        renderCfPlayer(document.getElementById('np-mount'),window._fsVid,subs);
+        renderCfPlayer(document.getElementById('np-mount'),window._fsVid,window._fsSubs);
       } else {
-        renderNativePlayer(document.getElementById('np-mount'),window._fsVid,subs);
+        renderNativePlayer(document.getElementById('np-mount'),window._fsVid,window._fsSubs);
       }
-    } else if(mode==='listen'){
-      body.innerHTML=`<div style="position:relative;"><iframe src="${window._fsLesson.url}" style="width:100%;height:calc(100vh - 300px);border:none;display:block;" allowfullscreen></iframe></div>`;
     } else {
-      body.innerHTML='<div class="empty">표시할 문장이 없어요</div>';
+      body.innerHTML=`<div style="position:relative;"><iframe src="${window._fsLesson.url}" style="width:100%;height:calc(100vh - 300px);border:none;display:block;" allowfullscreen></iframe></div>`;
     }
-  } else if(mode==='output'){
-    renderOutputMode(body,window._fsSubs.filter(s=>s.sel));
   } else {
     const subs=window._fsSubs.filter(s=>s.kor);
     body.innerHTML='<div id="mem-flash-area"></div>';
