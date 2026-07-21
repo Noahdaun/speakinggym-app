@@ -783,6 +783,10 @@ function doUpdate(){
         <textarea id="ls-blanks-paste" placeholder='{"0":[2],"3":[1,4]}' style="height:50px;font-family:monospace;font-size:11px;"></textarea>
         <button onclick="lsApplyBlanksPaste()" style="width:100%;padding:9px;border-radius:9px;background:var(--sf);border:1.5px solid var(--brd);color:var(--text);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;margin-top:6px;margin-bottom:14px;">빈칸퀴즈 JSON 적용</button>
 
+        <div style="font-size:11px;color:var(--mu);margin-bottom:4px;">또는 Claude에게 받은 온라인용(강세·발음기호·아웃풋 예문) JSON을 여기에 붙여넣기 — 적용하면 해당 문장은 자동으로 온라인 선택됨</div>
+        <textarea id="ls-online-paste" placeholder='{"5":{"stress":[2,3],"ipa":"/wi ɪˈnɪd ʌp/","patterns":[{"en":"...","kor":"..."}]}}' style="height:50px;font-family:monospace;font-size:11px;"></textarea>
+        <button onclick="lsApplyOnlineJson()" style="width:100%;padding:9px;border-radius:9px;background:var(--sf);border:1.5px solid var(--brd);color:var(--text);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;margin-top:6px;margin-bottom:14px;">온라인용 JSON 적용</button>
+
         <!-- 핵심 표현 카드 (7회차) -->
         <div style="font-size:12px;font-weight:600;margin-bottom:4px;">💡 핵심 표현 카드 <span style="font-size:11px;font-weight:400;color:var(--mu);">(7회차 응용 시 표시, 선택)</span></div>
         <div style="font-size:11px;color:var(--mu);margin-bottom:7px;">영어,한국어 형식으로 줄마다 입력 (최대 10개)</div>
@@ -1527,7 +1531,7 @@ function getRoundLabel(round){
 // ── 네이티브 자막 재생 플레이어 (sg_builder 이식: 유튜브 IFrame API + 자막 클릭재생) ──
 let ytApiReady=false, ytApiLoading=false;
 let npPlayer=null;
-let npState={subs:[],playing:null,pausedIdx:null,activeIdx:null,timer:null,rate:1,loop:false,mode:'single',hideEng:false,showKor:false,pronMode:false};
+let npState={subs:[],playing:null,pausedIdx:null,activeIdx:null,timer:null,rate:1,loop:false,mode:'single',hideEng:false,showKor:false,pronMode:false,stressShown:new Set()};
 // 가로/세로 화면 전환 · 글자 크기는 npState와 달리 레슨을 넘어가도(npDestroy 이후에도) 유지 — 수업 중 TV 송출용 설정이라 계속 유지되는 게 편함
 let npLayout='vert'; // 'vert' | 'horiz'
 let npFontSize=16;
@@ -1692,13 +1696,17 @@ function npRenderSubList(){
   wrap.innerHTML=npState.subs.map((s,i)=>{
     const on=npState.activeIdx===i;
     if(npState.pronMode){
+      const revealed=npState.stressShown&&npState.stressShown.has(i);
       const stressSet=new Set(s.stress||[]);
-      const marked=(s.text||'').split(' ').map((w,wi)=>stressSet.has(wi)?`<span style="text-decoration:underline;font-weight:800;">${w}</span>`:w).join(' ');
+      const marked=(s.text||'').split(' ').map((w,wi)=>(revealed&&stressSet.has(wi))?`<span style="color:#E24B4A;font-weight:800;">${w}</span>`:w).join(' ');
       return `
-      <button data-idx="${i}" onclick="npPlaySeg(${i})" style="text-align:left;padding:10px 12px;border-radius:10px;cursor:pointer;font-family:inherit;background:${on?'var(--gl)':'var(--sf)'};border:1.5px solid ${on?'#1D9E75':'transparent'};">
-        <div style="font-size:${npFontSize}px;font-weight:600;color:${on?'var(--gd)':'var(--text)'};">${marked}</div>
+      <div data-idx="${i}" onclick="npPlaySeg(${i})" style="text-align:left;padding:10px 12px;border-radius:10px;cursor:pointer;font-family:inherit;background:${on?'var(--gl)':'var(--sf)'};border:1.5px solid ${on?'#1D9E75':'transparent'};">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
+          <div style="font-size:${npFontSize}px;font-weight:600;color:${on?'var(--gd)':'var(--text)'};flex:1;">${marked}</div>
+          <button onclick="event.stopPropagation();npToggleStress(${i})" style="flex-shrink:0;padding:3px 8px;border-radius:6px;border:1.5px solid var(--brd);background:${revealed?'var(--rl)':'var(--sf)'};color:${revealed?'var(--rd)':'var(--mu)'};font-size:10px;font-weight:600;cursor:pointer;font-family:inherit;">강세</button>
+        </div>
         ${s.ipa?`<div style="font-size:${Math.max(11,npFontSize-4)}px;color:${on?'var(--gd)':'var(--mu)'};font-family:monospace;margin-top:3px;">${s.ipa}</div>`:''}
-      </button>`;
+      </div>`;
     }
     return `
     <button data-idx="${i}" onclick="npPlaySeg(${i})" style="text-align:left;padding:10px 12px;border-radius:10px;cursor:pointer;font-family:inherit;background:${on?'var(--gl)':'var(--sf)'};border:1.5px solid ${on?'#1D9E75':'transparent'};">
@@ -1727,6 +1735,11 @@ function npToggleKor(){
   npState.showKor=!npState.showKor;
   const b=document.getElementById('np-tr-btn');
   if(b){b.textContent=npState.showKor?'번역 ✓':'번역';b.style.background=npState.showKor?'var(--g)':'var(--sf)';b.style.color=npState.showKor?'#fff':'var(--text)';}
+  npRenderSubList();
+}
+function npToggleStress(i){
+  npState.stressShown=npState.stressShown||new Set();
+  if(npState.stressShown.has(i))npState.stressShown.delete(i);else npState.stressShown.add(i);
   npRenderSubList();
 }
 function npToggleLoop(){
@@ -2088,12 +2101,12 @@ function lsOpenLineEditor(i){
     </div>
     <div style="font-size:11px;color:var(--mu);font-weight:700;margin-bottom:6px;">강세 — 단어를 눌러서 표시</div>
     <div id="ls-le-stress" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;">
-      ${words.map((w,wi)=>`<span onclick="lsToggleStressWord(${i},${wi})" style="padding:5px 9px;border-radius:7px;cursor:pointer;font-size:13px;font-weight:${s.stress.includes(wi)?'800':'500'};text-decoration:${s.stress.includes(wi)?'underline':'none'};background:${s.stress.includes(wi)?'var(--gl)':'var(--sf)'};color:${s.stress.includes(wi)?'var(--gd)':'var(--text)'};border:1.5px solid ${s.stress.includes(wi)?'#1D9E75':'var(--brd)'};">${w}</span>`).join('')}
+      ${words.map((w,wi)=>`<span onclick="lsToggleStressWord(${i},${wi})" style="padding:5px 9px;border-radius:7px;cursor:pointer;font-size:13px;font-weight:${s.stress.includes(wi)?'800':'500'};background:${s.stress.includes(wi)?'var(--rl)':'var(--sf)'};color:${s.stress.includes(wi)?'var(--rd)':'var(--text)'};border:1.5px solid ${s.stress.includes(wi)?'var(--rd)':'var(--brd)'};">${w}</span>`).join('')}
     </div>
     <div style="font-size:11px;color:var(--mu);font-weight:700;margin-bottom:6px;">발음기호 (선택)</div>
     <input class="inp" type="text" id="ls-le-ipa" value="${(s.ipa||'').replace(/"/g,'&quot;')}" placeholder="/juː noʊ ˈwɛn ɪn ˈroʊm raɪt/" style="font-family:monospace;">
     <div style="font-size:11px;color:var(--mu);font-weight:700;margin:10px 0 6px;">아웃풋 패턴 예문 3개 (영어,한국어)</div>
-    ${[0,1,2].map(pi=>`<input class="inp" type="text" id="ls-le-p${pi}" value="${((s.patterns[pi].en||'')+(s.patterns[pi].kor?','+s.patterns[pi].kor:'')).replace(/"/g,'&quot;')}" placeholder="You know when in doubt, ask.,모를 땐 물어봐." style="margin-bottom:6px;">`).join('')}
+    ${[0,1,2].map(pi=>`<input class="inp" type="text" id="ls-le-p${pi}" value="${((s.patterns[pi].en||'')+(s.patterns[pi].kor?','+s.patterns[pi].kor:'')).replace(/"/g,'&quot;')}" placeholder="예문 ${pi+1}: 영어 문장,한국어 뜻" style="margin-bottom:6px;">`).join('')}
     <button onclick="lsSaveLineEditor(${i})" style="width:100%;padding:12px;border-radius:10px;background:var(--g);color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:8px;">저장</button>
   </div>`;
   document.body.appendChild(pop);
@@ -2175,6 +2188,31 @@ function lsApplyBlanksPaste(){
     lsBlanks=parsed||{};
     document.getElementById('ls-blanks-paste').value='';
     tst('빈칸퀴즈 적용됐어요 ✓');
+  }catch(e){
+    tst('JSON 형식이 아니에요. 확인해주세요');
+  }
+}
+
+// 강세·발음기호·아웃풋 예문을 문장 번호별로 한 번에 적용 (Claude가 만들어준 JSON 붙여넣기용)
+function lsApplyOnlineJson(){
+  const raw=document.getElementById('ls-online-paste')?.value?.trim();
+  if(!raw){tst('붙여넣을 내용이 없어요');return;}
+  try{
+    const parsed=JSON.parse(raw);
+    let n=0;
+    Object.keys(parsed).forEach(k=>{
+      const idx=+k;
+      if(!lsSubs[idx])return;
+      const v=parsed[k]||{};
+      lsSubs[idx].sel=true;
+      if(Array.isArray(v.stress))lsSubs[idx].stress=v.stress;
+      if(typeof v.ipa==='string')lsSubs[idx].ipa=v.ipa;
+      if(Array.isArray(v.patterns))lsSubs[idx].patterns=v.patterns;
+      n++;
+    });
+    document.getElementById('ls-online-paste').value='';
+    lsRenderSubTable();
+    tst(`${n}개 문장에 온라인용 정보 적용됐어요 ✓`);
   }catch(e){
     tst('JSON 형식이 아니에요. 확인해주세요');
   }
