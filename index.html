@@ -281,7 +281,7 @@ function doUpdate(){
 <!-- ── APP ── -->
 <div id="as" class="scr">
   <div class="topbar">
-    <div class="topbar-title" id="ptit">홈</div>
+    <div class="topbar-title" id="ptit" style="cursor:pointer;">홈</div>
     <div style="display:flex;align-items:center;gap:8px;">
       <div id="msgBtn" onclick="onMsgBtnClick()" style="position:relative;width:36px;height:36px;border-radius:50%;background:var(--sf);border:1.5px solid var(--brd);display:flex;align-items:center;justify-content:center;font-size:15px;cursor:pointer;">
         💬
@@ -488,12 +488,6 @@ function doUpdate(){
 
     <!-- RECORD -->
     <div id="prc" class="pg">
-      <!-- 랭킹 (기록과 한 화면에서 볼 수 있게) -->
-      <div style="padding:14px 14px 0;">
-        <div style="font-size:14px;font-weight:700;margin-bottom:8px;">🏆 랭킹</div>
-        <div id="rec-rank-my" style="margin-bottom:10px;"></div>
-        <div id="rec-rank-list"><div class="loading">로딩중...</div></div>
-      </div>
       <!-- 프로필 히어로 -->
       <div style="padding:14px 14px 0;">
         <div style="background:linear-gradient(160deg,#1a2940 0%,#243054 100%);border-radius:20px;padding:18px 16px;margin-bottom:10px;position:relative;overflow:hidden;">
@@ -538,6 +532,13 @@ function doUpdate(){
               <div id="xp-bar-rec"></div>
             </div>
           </div>
+        </div>
+
+        <!-- 랭킹 (프로필 정보 다음에) -->
+        <div style="margin-bottom:12px;">
+          <div style="font-size:14px;font-weight:700;margin-bottom:8px;color:var(--text);">🏆 랭킹</div>
+          <div id="rec-rank-my" style="margin-bottom:10px;"></div>
+          <div id="rec-rank-list"><div class="loading">로딩중...</div></div>
         </div>
 
         <!-- 연속 + 통계 4개 -->
@@ -1153,12 +1154,15 @@ async function initApp(u){
     gp('admin');
   } else {
     document.getElementById('bnav').style.display='none';
-    document.getElementById('ptit').innerHTML=`<span style="font-weight:800;font-family:Georgia,'Noto Serif KR',serif;font-style:italic;color:#185FA5;letter-spacing:-.3px;">Speaking Gym</span>`;
+    const ptitEl=document.getElementById('ptit');
+    ptitEl.innerHTML=`<span style="font-weight:800;font-family:Georgia,'Noto Serif KR',serif;font-style:italic;color:#185FA5;letter-spacing:-.3px;">Speaking Gym</span>`;
+    ptitEl.onclick=()=>gp('home');
     const msgBtnEl=document.getElementById('msgBtn');
-    msgBtnEl.style.background='#E6F1FB';
-    msgBtnEl.style.borderColor='#B5D4F4';
-    msgBtnEl.innerHTML=`<svg width="17" height="17" viewBox="0 0 20 20" fill="none"><path d="M3 9.5c0-3.6 3.1-6.5 7-6.5s7 2.9 7 6.5-3.1 6.5-7 6.5c-.8 0-1.6-.1-2.3-.4L4 17l1.1-3.4C3.8 12.5 3 11.1 3 9.5z" stroke="#185FA5" stroke-width="1.5" stroke-linejoin="round"/><path d="M8.3 8c.2-.9 1-1.5 1.9-1.4.9.1 1.6.8 1.5 1.7 0 .7-.5 1-1 1.3-.4.3-.7.5-.7 1" stroke="#185FA5" stroke-width="1.4" stroke-linecap="round"/><circle cx="10" cy="12.6" r=".9" fill="#185FA5"/></svg><div id="msgBtnDot" style="display:none;position:absolute;top:-4px;right:-4px;min-width:16px;height:16px;padding:0 3px;border-radius:99px;background:var(--rd);border:2px solid var(--bg);color:#fff;font-size:9px;font-weight:800;align-items:center;justify-content:center;line-height:1;"></div>`;
+    msgBtnEl.style.cssText='position:relative;display:flex;align-items:center;gap:5px;padding:0 12px 0 10px;height:36px;border-radius:99px;background:#E6F1FB;border:1.5px solid #B5D4F4;font-size:15px;cursor:pointer;';
+    msgBtnEl.innerHTML=`<svg width="16" height="16" viewBox="0 0 20 20" fill="none"><path d="M3 9.5c0-3.6 3.1-6.5 7-6.5s7 2.9 7 6.5-3.1 6.5-7 6.5c-.8 0-1.6-.1-2.3-.4L4 17l1.1-3.4C3.8 12.5 3 11.1 3 9.5z" stroke="#185FA5" stroke-width="1.5" stroke-linejoin="round"/><path d="M8.3 8c.2-.9 1-1.5 1.9-1.4.9.1 1.6.8 1.5 1.7 0 .7-.5 1-1 1.3-.4.3-.7.5-.7 1" stroke="#185FA5" stroke-width="1.4" stroke-linecap="round"/><circle cx="10" cy="12.6" r=".9" fill="#185FA5"/></svg><span style="font-size:12px;font-weight:700;color:#185FA5;">질문하기</span><div id="msgBtnDot" style="display:none;position:absolute;top:-4px;right:-4px;min-width:16px;height:16px;padding:0 3px;border-radius:99px;background:var(--rd);border:2px solid var(--bg);color:#fff;font-size:9px;font-weight:800;align-items:center;justify-content:center;line-height:1;"></div>`;
     msgBtnEl.title='질문하기';
+    const uavEl=document.getElementById('uav');
+    uavEl.insertAdjacentHTML('afterend','<span id="uav-label" onclick="onAvatarClick()" style="font-size:11px;font-weight:700;color:var(--text);cursor:pointer;margin-left:-3px;">내정보</span>');
     // 최초 로드 — 모든 데이터 한 번에 로드하고 loaded 상태 세팅
     loaded={vocab:false,review:false,record:false};
     await Promise.all([lCal(),lVoc(),lRev(),lRec()]);
