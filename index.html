@@ -1251,21 +1251,22 @@ function buildHomeTodo(){
   const vocabLeft=tv.length;
   const revLeft=todayRevItems.length;
   const vocabDone=doneToday>=vocabLeft&&vocabLeft>0;
+  const cardHtml=(bg,border,iconBg,icon,title,sub)=>`
+    <div style="background:${bg};border:1.5px solid ${border};border-radius:16px;padding:16px;display:flex;align-items:center;gap:10px;cursor:pointer;height:100px;box-sizing:border-box;">
+      <div style="width:32px;height:32px;border-radius:99px;background:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px;">${icon}</div>
+      <div style="min-width:0;">
+        <div style="font-size:15px;font-weight:800;color:#1E293B;">${title}</div>
+        <div style="font-size:11px;color:#71717A;margin-top:2px;">${sub}</div>
+      </div>
+    </div>`;
   const html=`
     <div style="margin-bottom:10px;">
       <div style="font-size:14px;font-weight:700;margin-bottom:8px;">오늘 할 일</div>
-      <div onclick="gp('review')" style="background:linear-gradient(135deg,#185FA5,#0C447C);border-radius:16px;padding:22px 16px;margin-bottom:10px;cursor:pointer;text-align:center;box-shadow:0 6px 20px rgba(24,95,165,.25);">
-        <div style="font-size:21px;font-weight:800;color:#fff;">🌐 온라인 수업듣기</div>
-        <div style="font-size:12px;color:rgba(255,255,255,.8);margin-top:6px;">리뷰 목록에서 온라인 학습을 선택할 수 있어요</div>
-      </div>
-      <div onclick="gp('vocab')" style="background:${vocabDone?'#F0FAF6':'linear-gradient(135deg,#1D9E75,#159468)'};border-radius:16px;padding:22px 16px;margin-bottom:10px;cursor:pointer;text-align:center;border:1.5px solid ${vocabDone?'#C0E8D8':'transparent'};box-shadow:${vocabDone?'none':'0 6px 20px rgba(29,158,117,.28)'};">
-        <div style="font-size:21px;font-weight:800;color:${vocabDone?'var(--gd)':'#fff'};">단어 학습${vocabDone?' ✓':''}</div>
-        <div style="font-size:28px;font-weight:800;line-height:1.2;color:${vocabDone?'var(--gd)':'#fff'};margin-top:8px;">${vocabLeft>0?vocabLeft:'0'}<span style="font-size:13px;font-weight:600;margin-left:5px;opacity:.85;">장 남았어요</span></div>
-        ${vocabLeft>0?`<div style="background:${vocabDone?'#C0E8D8':'rgba(255,255,255,.3)'};border-radius:99px;height:4px;margin-top:10px;"><div style="background:${vocabDone?'var(--g)':'#fff'};border-radius:99px;height:4px;width:${Math.round(doneToday/Math.max(vocabLeft,1)*100)}%;transition:width .4s;"></div></div>`:`<div style="font-size:11px;color:${vocabDone?'var(--gm)':'rgba(255,255,255,.85)'};margin-top:8px;">오늘 복습할 단어가 없어요</div>`}
-      </div>
-      <div onclick="gp('review')" style="background:${revLeft===0?'#F0FAF6':'linear-gradient(135deg,#6B63D4,#5248B8)'};border-radius:16px;padding:22px 16px;cursor:pointer;text-align:center;border:1.5px solid ${revLeft===0?'#C0E8D8':'transparent'};box-shadow:${revLeft===0?'none':'0 6px 20px rgba(107,99,212,.22)'};">
-        <div style="font-size:21px;font-weight:800;color:${revLeft===0?'var(--gd)':'#fff'};">리뷰하기${revLeft===0?' ✓':''}</div>
-        <div style="font-size:12px;color:${revLeft===0?'var(--gm)':'rgba(255,255,255,.8)'};margin-top:6px;">${revLeft>0?`오늘 복습 대상 ${revLeft}개`:'오늘 리뷰 없음 또는 완료'}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div onclick="gp('review')">${cardHtml('#EAF4FF','#2F80ED33','#EAF4FF','🌐','온라인 수업','수업듣기')}</div>
+        <div onclick="gp('vocab')">${cardHtml('#EAFBF3','#1DB98133','#EAFBF3','📖','단어 학습',vocabLeft>0?`${vocabLeft}장 남음`:'완료 ✓')}</div>
+        <div onclick="gp('review')">${cardHtml('#F3EFFF','#8B5CF633','#F3EFFF','🔁','리뷰하기',revLeft>0?`${revLeft}개 대상`:'완료 ✓')}</div>
+        <div onclick="openMsgThread(U.id,'','feedback')">${cardHtml('#FFF7E6','#D9770633','#FFF7E6','⭐','피드백','원장님 피드백 보기')}</div>
       </div>
     </div>`;
   document.getElementById('home-todo').innerHTML=html;
@@ -3961,9 +3962,9 @@ async function sendBroadcast(target){
 // 1:1 대화창 — 학생 자신이 열면 본인 스레드, 관리자가 열면 골라둔 학생의 스레드 (둘 다 이 함수 하나 재사용)
 let _msgViewType='all'; // 학생이 보는 탭: all/message/feedback
 let _msgSendType='message'; // 관리자가 보낼 때 고르는 종류
-function openMsgThread(targetStudentId,otherName){
+function openMsgThread(targetStudentId,otherName,initialType){
   document.getElementById('msg-thread-modal')?.remove();
-  _msgViewType='all';_msgSendType='message';
+  _msgViewType=initialType||'all';_msgSendType='message';
   const pop=document.createElement('div');
   pop.id='msg-thread-modal';
   pop.style.cssText='position:fixed;inset:0;background:var(--bg);z-index:9300;display:flex;flex-direction:column;';
