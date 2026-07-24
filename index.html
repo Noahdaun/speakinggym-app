@@ -1622,7 +1622,7 @@ function npDestroy(){
 }
 
 // 버튼 하나짜리 공통 스타일 (한 줄에 최대한 많이 들어가도록 작게)
-const NP_BTN_STYLE='padding:5px 9px;border-radius:7px;border:1.5px solid var(--brd);background:var(--sf);color:var(--text);font-size:10.5px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;';
+const NP_BTN_STYLE='padding:4px 7px;border-radius:6px;border:1.5px solid var(--brd);background:var(--sf);color:var(--text);font-size:9px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;';
 
 // "⚙ 설정" 팝업 — 다른 곳에 이미 쓰던 방식과 동일하게 화면 전체 위에 뜨는 독립적인 바텀시트로 구현.
 // (전에는 컨트롤 줄 안에 작은 팝업을 끼워넣었는데, 그 줄이 스크롤 영역 안에 있어서 팝업이 잘리거나 안 보이는 문제가 있었음)
@@ -1663,7 +1663,7 @@ function npControlsHtml(){
       <button id="np-hide-btn" onclick="npToggleHideEng()" style="${NP_BTN_STYLE}">🙈 영어가리기</button>
       <button id="np-tr-btn" onclick="npToggleKor()" style="${NP_BTN_STYLE}">번역</button>
       <button id="np-loop-btn" onclick="npToggleLoop()" style="${NP_BTN_STYLE}${npState.loop?'background:var(--g);color:#fff;border-color:var(--g);':''}">🔁 구간반복</button>
-      <button id="np-layout-btn" onclick="npToggleLayout()" style="${NP_BTN_STYLE}">${npLayout==='horiz'?'↕ 세로화면':'↔ 가로화면'}</button>
+      <button id="np-layout-btn" onclick="npToggleLayout()" style="${NP_BTN_STYLE}">${npLayout==='horiz'?'↕ 세로':'↔ 가로'}</button>
       <button id="np-settings-btn" onclick="npOpenSettingsPop()" style="${NP_BTN_STYLE}">⚙ 설정</button>
     </div>`;
 }
@@ -1946,7 +1946,7 @@ async function completeOnlineReview(){
 function orRestoreCompleteBtn(){
   document.getElementById('rs-bot').innerHTML=(ses&&typeof ses.round==='number')?`
     <div style="padding:10px 14px 6px;">
-      <button onclick="completeOnlineReview()" style="width:100%;padding:13px;border-radius:11px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">✓ 오늘 복습 완료</button>
+      <button onclick="completeOnlineReview()" style="width:100%;padding:13px;border-radius:11px;background:linear-gradient(135deg,#FF7A45,#F06020);color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">✓ 오늘 복습 완료</button>
     </div>`:'';
 }
 function orSetMode(mode){
@@ -5251,7 +5251,7 @@ function renderOutputMode(body,subs){
     </div>`).join('');
   body.innerHTML=`
     <div style="display:flex;gap:5px;justify-content:flex-end;margin-bottom:10px;">
-      <button onclick="npToggleLayout()" style="${NP_BTN_STYLE}">${npLayout==='horiz'?'↕ 세로화면':'↔ 가로화면'}</button>
+      <button onclick="npToggleLayout()" style="${NP_BTN_STYLE}">${npLayout==='horiz'?'↕ 세로':'↔ 가로'}</button>
       <button onclick="npOpenSettingsPop()" style="${NP_BTN_STYLE}">⚙ 설정</button>
     </div>
     <div id="op-cards">${cardsHtml}</div>`;
