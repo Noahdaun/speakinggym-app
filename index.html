@@ -377,7 +377,7 @@ function doUpdate(){
     <div id="pr" class="pg">
       <div style="background:var(--pul);border-radius:12px;padding:12px 14px;margin-bottom:12px;border:1.5px solid #BDB8EF;">
         <div style="font-size:12px;font-weight:700;color:var(--pud);margin-bottom:4px;">복습 스케줄이란?</div>
-        <div style="font-size:11px;color:var(--pu);line-height:1.7;">수업 후 1·2·3·5·7번째 수업 때 복습하면 가장 잘 기억돼요. 선생님이 출석을 체크하면 자동으로 계산됩니다.</div>
+        <div style="font-size:11px;color:var(--pu);line-height:1.7;">수업 후 1·2·3·5번째 수업 때 복습하면 가장 잘 기억돼요. 선생님이 출석을 체크하면 자동으로 계산됩니다.</div>
       </div>
       <div class="sec">오늘 복습 대상</div>
       <div id="rtd"><div class="loading">로딩중...</div></div>
@@ -1484,7 +1484,7 @@ async function lRev(){
   const rounds=[1,2,3,5];
   const items=[];
 
-  // 1) 수업 날짜가 지정된 레슨: 매칭된 출석일 기준 회차 계산
+  // 1) 수업 날짜가 지정된 레슨: 매칭된 출석일 기준 회차 계산 (완료된 것도 포함 — 오늘 목록에 계속 남겨서 회색으로 표시)
   myLessons.filter(l=>l.hasSchedule&&l.myDate)
     .sort((a,b)=>b.myDate.localeCompare(a.myDate))
     .forEach(lesson=>{
@@ -1493,46 +1493,42 @@ async function lRev(){
       const sessionsAgo=latestAttendIdx-lessonAttendIdx;
       const round=sessionsAgo+1;
       if(!rounds.includes(round))return;
-      const doneRounds=new Set((logs||[]).filter(l=>l.lesson_id===lesson.id&&l.completed).map(l=>l.review_round));
-      if(!doneRounds.has(round)){
-        items.push({lesson,round,date:lesson.myDate});
-      }
+      const lg=(logs||[]).find(l=>l.lesson_id===lesson.id&&l.review_round===round);
+      items.push({lesson,round,date:lesson.myDate,done:lg?.completed||false,count:lg?.count||0});
     });
 
   // 2) 수업 날짜 미지정 레슨: 새 규칙 적용 기준시각(SCHEDULE_GATE_CUTOFF) 이전에 만들어진 레슨은
   //    예전 학생들이 계속 볼 수 있던 대로 그대로 유지 (전체 공개). 그 이후 새로 만든 레슨부터만 비공개 규칙 적용.
   myLessons.filter(l=>!l.hasSchedule&&l.created_at&&l.created_at<SCHEDULE_GATE_CUTOFF)
     .forEach(lesson=>{
-      const doneRounds=new Set((logs||[]).filter(l=>l.lesson_id===lesson.id&&l.completed).map(l=>l.review_round));
-      if(!doneRounds.has(1)){
-        items.push({lesson,round:1,date:null});
-      }
+      const lg=(logs||[]).find(l=>l.lesson_id===lesson.id&&l.review_round===1);
+      items.push({lesson,round:1,date:null,done:lg?.completed||false,count:lg?.count||0});
     });
-  todayRevItems=items.slice(0,4);
-  renderRT(todayRevItems,logs||[]);
+  todayRevItems=items.filter(it=>!it.done).slice(0,4);
+  renderRT(items.slice(0,6));
   renderRH(logs||[]);
 }
-function renderRT(items,logs){
+function renderRT(items){
   if(!items.length){document.getElementById('rtd').innerHTML='<div class="empty">오늘 복습할 레슨이 없어요.<br>선생님이 출석을 체크하면 자동으로 나타나요.</div>';return;}
-  document.getElementById('rtd').innerHTML=items.map((it,i)=>{
-    const lg=logs.find(l=>l.lesson_id===it.lesson.id&&l.review_round===it.round);
-    const done=lg?.completed||false;
+  const today=new Date();
+  document.getElementById('rtd').innerHTML=items.map(it=>{
     const rtype=getRoundType(it.round);
-    const rtypeLabel=rtype==='follow'?'듣고 따라하기':rtype==='memorize'?'내용 암기':'표현 응용';
-    const rtypeColor=rtype==='follow'?'#1D9E75':rtype==='memorize'?'#854F0B':'#085041';
-    const rtypeEmoji=rtype==='follow'?'🎧':rtype==='memorize'?'📖':'✍️';
-    const btnBg=done?'linear-gradient(135deg,#1D9E75,#159468)':rtype==='follow'?'linear-gradient(135deg,#1D9E75,#159468)':rtype==='memorize'?'linear-gradient(135deg,#FFB347,#E8940A)':'linear-gradient(135deg,#1D9E75,#159468)';
-    const btnSh=done?'0 3px 10px rgba(29,158,117,.3)':rtype==='memorize'?'0 3px 10px rgba(255,179,71,.3)':'0 3px 10px rgba(29,158,117,.3)';
-    return`<div class="csm" style="margin-bottom:8px;">
-      <div class="row" style="margin-bottom:3px;">
-        <div style="font-size:13px;font-weight:700;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${it.lesson.title}</div>
-        <span class="bdg ba" style="flex-shrink:0;">${it.round}회 전</span>
+    const isFollow=rtype==='follow';
+    const label=isFollow?'듣고 따라하기':'내용 암기';
+    const color=it.done?'#A1A1AA':(isFollow?'#1D9E75':'#D97706');
+    const bg=it.done?'#EDEDEB':(isFollow?'#E1F5EE':'#FDE9CC');
+    let dayLabel='복습할 내용';
+    if(it.date){
+      const days=Math.round((today-new Date(it.date+'T00:00:00'))/86400000);
+      dayLabel=days<=0?'오늘 배운 내용':`${days}일 전 수업 내용`;
+    }
+    return`<div onclick="oSes('${it.lesson.id}','${it.lesson.title.replace(/'/g,"\\'")}','${it.lesson.url}',${it.round})" style="display:flex;align-items:center;gap:12px;padding:12px;margin-bottom:8px;border-radius:14px;background:${it.done?'#F9FAFB':'var(--card,#fff)'};border:1.5px solid ${it.done?'var(--brd)':color};cursor:pointer;">
+      <div style="width:40px;height:40px;border-radius:99px;background:${bg};display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px;">${isFollow?'🎧':'📖'}</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13px;font-weight:700;color:${it.done?'var(--mu)':'var(--text)'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${it.lesson.title}</div>
+        <div style="font-size:10px;color:${it.done?'#C4C4C4':'var(--mu)'};margin-top:2px;">${dayLabel} · ${label}${it.count?` · ${it.count}/5`:''}</div>
       </div>
-      <div style="font-size:11px;font-weight:700;color:${rtypeColor};margin-bottom:8px;">${rtypeEmoji} ${rtypeLabel}</div>
-      <button onclick="oSes('${it.lesson.id}','${it.lesson.title.replace(/'/g,"\\'")}','${it.lesson.url}',${it.round})"
-        style="width:100%;padding:10px;border-radius:10px;font-size:13px;font-weight:700;border:none;cursor:pointer;color:#fff;background:${btnBg};box-shadow:${btnSh};font-family:inherit;">
-        ${done?'✓ 완료':rtypeLabel+' 시작'}
-      </button>
+      ${it.done?`<svg width="20" height="20" viewBox="0 0 20 20"><circle cx="10" cy="10" r="9" fill="none" stroke="#A1A1AA" stroke-width="1.5"/><polyline points="6,10 9,13 14,7" fill="none" stroke="#A1A1AA" stroke-width="1.8"/></svg>`:`<svg width="18" height="18" viewBox="0 0 18 18"><polyline points="7,4 12,9 7,14" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`}
     </div>`;
   }).join('');
 }
@@ -1552,7 +1548,7 @@ function renderRH(logs){
         </div>
         <div style="flex:1;overflow:hidden;">
           <div style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${it.lesson.title}</div>
-          <div class="mu" style="font-size:11px;">${it.completed_at?.slice(0,10)} · ${it.review_round}회차</div>
+          <div class="mu" style="font-size:11px;">${it.completed_at?.slice(0,10)}</div>
         </div>
         <div style="display:flex;gap:3px;">${dots}</div>
         <button onclick="startReviewByLesson('${it.lesson.id}')" style="font-size:11px;font-weight:600;padding:4px 10px;border-radius:99px;background:var(--gl);color:var(--gd);border:1.5px solid #C0E8D8;cursor:pointer;font-family:inherit;white-space:nowrap;flex-shrink:0;">다시 →</button>
@@ -1932,13 +1928,16 @@ async function completeOnlineReview(){
   if(!ses||typeof ses.round!=='number'){cses();return;}
   const now=new Date().toISOString();
   const durSec=ses.startedAt?Math.round((Date.now()-ses.startedAt)/1000):0;
+  let newCount=1,done=false;
   try{
-    const{data:ex}=await sb.from('review_logs').select('id').eq('student_id',U.id).eq('lesson_id',ses.lid).eq('review_round',ses.round).single();
-    if(ex)await sb.from('review_logs').update({count:1,completed:true,completed_at:now,duration_sec:durSec}).eq('id',ex.id);
-    else await sb.from('review_logs').insert({student_id:U.id,lesson_id:ses.lid,review_round:ses.round,count:1,completed:true,completed_at:now,duration_sec:durSec});
+    const{data:ex}=await sb.from('review_logs').select('id,count').eq('student_id',U.id).eq('lesson_id',ses.lid).eq('review_round',ses.round).single();
+    newCount=Math.min((ex?.count||0)+1,5);
+    done=newCount>=5;
+    if(ex)await sb.from('review_logs').update({count:newCount,completed:done,completed_at:done?now:null,duration_sec:durSec}).eq('id',ex.id);
+    else await sb.from('review_logs').insert({student_id:U.id,lesson_id:ses.lid,review_round:ses.round,count:newCount,completed:done,completed_at:done?now:null,duration_sec:durSec});
   }catch(e){}
   earnXP(XP_TABLE.follow,'online_review_complete_'+ses.lid+'_'+ses.round);
-  tst('복습 완료! 🎉');
+  tst(done?'복습 완료! 🎉':`${newCount}/5회 · 계속해봐요`);
   setTimeout(()=>{cses();refreshReview().then(autoNextReview);lCal();buildHomeTodo();},1000);
 }
 // 퀴즈 모드(암기카드·빈칸채우기)가 rs-bot을 자기 용도로 갈아치우기 때문에,
