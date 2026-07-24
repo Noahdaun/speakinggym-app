@@ -3696,6 +3696,7 @@ async function renderXPBar(){
 
 // ── 홈 화면 "내 기록" (오늘/이번주/이번달) — 단어학습·리뷰 횟수, 리뷰 페이지에 머문 시간만 합산 ──
 function fmtDur(sec){
+  if(sec<60)return`${sec}초`;
   const h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60);
   return h>0?`${h}시간 ${m}분`:`${m}분`;
 }
