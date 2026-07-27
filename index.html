@@ -294,10 +294,8 @@ function doUpdate(){
 
     <!-- HOME -->
     <div id="ph" class="pg on">
-      <!-- XP 바 -->
+      <!-- 스트릭 + 이번주 랭킹 -->
       <div id="xp-bar-wrap"></div>
-      <!-- 이번주 랭킹 티저 -->
-      <div id="home-rank"></div>
       <!-- 이번주 학습시간 그래프 -->
       <div id="home-stats"></div>
       <!-- 알림 -->
@@ -477,6 +475,12 @@ function doUpdate(){
     <div id="prk" class="pg">
       <div style="padding:14px 14px 0;">
         <div style="font-size:22px;font-weight:800;letter-spacing:-.5px;margin-bottom:14px;">랭킹</div>
+        <div style="display:flex;gap:6px;margin-bottom:12px;">
+          <button onclick="setRankPeriod('day')" id="rp-day" style="flex:1;padding:9px;border-radius:10px;border:none;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">일간</button>
+          <button onclick="setRankPeriod('week')" id="rp-week" style="flex:1;padding:9px;border-radius:10px;border:none;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">주간</button>
+          <button onclick="setRankPeriod('month')" id="rp-month" style="flex:1;padding:9px;border-radius:10px;border:none;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">월간</button>
+          <button onclick="setRankPeriod('all')" id="rp-all" style="flex:1;padding:9px;border-radius:10px;border:none;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">누적</button>
+        </div>
         <div id="rank-my" style="margin-bottom:10px;"></div>
         <div id="rank-list"><div class="loading">로딩중...</div></div>
       </div>
@@ -1177,7 +1181,6 @@ async function initApp(u){
     buildHomeTodo();
     loadMyNotices();
     loadMyStats();
-    renderRankTeaser();
     checkCallBookingBanner();
   }
   refreshMsgBadge();
@@ -3727,52 +3730,46 @@ async function getStreakDays(){
   while(activeDates.has(cur.toISOString().slice(0,10))){streak++;cur.setDate(cur.getDate()-1);}
   return streak;
 }
+// 스트릭 카드 + 이번주 랭킹(리뷰 누적시간 기준)을 한 카드로 합침
 async function renderXPBar(){
   const el=document.getElementById('xp-bar-wrap');if(!el)return;
   const streak=await getStreakDays();
-  el.innerHTML=`<div style="background:linear-gradient(135deg,#1a2940,#243054);border-radius:14px;padding:14px 16px;margin-bottom:10px;cursor:pointer;display:flex;align-items:center;gap:12px;" onclick="gp('record')">
-    <div style="width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#FFB347,#E8940A);display:flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0;">🔥</div>
-    <div>
-      <div style="font-size:20px;font-weight:800;color:#fff;line-height:1.2;">${streak}일째 <span style="font-size:13px;font-weight:600;color:rgba(255,255,255,.75);">학습중</span></div>
-      <div style="font-size:11px;color:rgba(255,255,255,.5);margin-top:1px;">${streak>0?'오늘도 이어가볼까요?':'오늘부터 다시 시작해봐요'}</div>
+  let rankHtml='';
+  try{
+    const now=new Date();
+    const day=now.getDay();
+    const monday=new Date(now);monday.setDate(now.getDate()+(day===0?-6:1-day));
+    const weekStartStr=monday.toISOString().slice(0,10);
+    const[{data:rv},{data:profiles}]=await Promise.all([
+      sb.from('review_logs').select('student_id,duration_sec').eq('completed',true).gte('completed_at',weekStartStr),
+      sb.from('profiles').select('id').eq('role','student')
+    ]);
+    const totals={};(rv||[]).forEach(r=>{totals[r.student_id]=(totals[r.student_id]||0)+(r.duration_sec||0);});
+    const ranked=(profiles||[]).map(p=>({sid:p.id,sec:totals[p.id]||0})).sort((a,b)=>b.sec-a.sec);
+    const myIdx=ranked.findIndex(r=>r.sid===U.id);
+    if(myIdx>=0){
+      const myRank=myIdx+1;
+      const above=myIdx>0?ranked[myIdx-1]:null;
+      const below=myIdx<ranked.length-1?ranked[myIdx+1]:null;
+      const medal=myRank===1?'🥇':myRank===2?'🥈':myRank===3?'🥉':'🏅';
+      const line1=above?`🏆 이번주 랭킹 ${myRank}위 ${medal} · ${myRank-1}위까지 ${fmtDur(above.sec-ranked[myIdx].sec)} 남았어요!`:`🏆 이번주 랭킹 ${myRank}위 ${medal} · 1등이에요! 계속 유지해봐요`;
+      const line2=below?`${myRank+1}위와는 ${fmtDur(ranked[myIdx].sec-below.sec)} 차이예요, 방심 금지!`:'';
+      rankHtml=`<div style="width:100%;height:1px;background:#FFFFFF33;margin:5px 0 1px;"></div>
+        <div style="font-size:12px;font-weight:700;color:#fff;">${line1}</div>
+        ${line2?`<div style="font-size:11px;color:#FFE4D6;margin-top:2px;">${line2}</div>`:''}`;
+    }
+  }catch(e){console.warn('랭킹 로드 실패',e);}
+  el.innerHTML=`<div style="background:#FF7A45;border-radius:14px;padding:12px;margin-bottom:10px;cursor:pointer;" onclick="gp('rank')">
+    <div style="display:flex;align-items:flex-start;gap:10px;">
+      <div style="width:34px;height:34px;border-radius:10px;background:#FFFFFF;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;">🔥</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:19px;font-weight:800;color:#fff;line-height:1.2;">${streak}일째 <span style="font-size:13px;font-weight:600;color:rgba(255,255,255,.75);">학습중</span></div>
+        <div style="font-size:11px;color:#FFE4D6;margin-top:1px;">${streak>0?'오늘도 이어가볼까요?':'오늘부터 다시 시작해봐요'}</div>
+        ${rankHtml}
+      </div>
+      <svg width="16" height="16" viewBox="0 0 16 16" style="flex-shrink:0;margin-top:9px;"><polyline points="6,3 11,8 6,13" fill="none" stroke="rgba(255,255,255,.7)" stroke-width="1.8"/></svg>
     </div>
   </div>`;
-}
-
-// ── 홈 화면 "이번주 랭킹" 티저 — 이번주 XP 합산 기준, 위/아래 순위와의 격차를 보여줌 ──
-async function renderRankTeaser(){
-  const el=document.getElementById('home-rank');if(!el)return;
-  const now=new Date();
-  const day=now.getDay();
-  const monday=new Date(now);monday.setDate(now.getDate()+(day===0?-6:1-day));
-  const weekStartStr=monday.toISOString().slice(0,10);
-  try{
-    const{data:xl}=await sb.from('xp_logs').select('student_id,xp').gte('created_at',weekStartStr);
-    if(!xl?.length){el.innerHTML='';return;}
-    const totals={};
-    xl.forEach(x=>{totals[x.student_id]=(totals[x.student_id]||0)+(x.xp||0);});
-    const ranked=Object.entries(totals).map(([sid,xp])=>({sid,xp})).sort((a,b)=>b.xp-a.xp);
-    const myIdx=ranked.findIndex(r=>r.sid===U.id);
-    if(myIdx<0){el.innerHTML='';return;}
-    const myRank=myIdx+1;
-    const above=myIdx>0?ranked[myIdx-1]:null;
-    const below=myIdx<ranked.length-1?ranked[myIdx+1]:null;
-    const medal=myRank===1?'🥇':myRank===2?'🥈':myRank===3?'🥉':'🏅';
-    let subLines=[];
-    if(above)subLines.push(`${myRank-1}위까지 ${above.xp-ranked[myIdx].xp}XP 남았어요!`);
-    else subLines.push('이번주 1등이에요! 계속 유지해봐요');
-    if(below)subLines.push(`${myRank+1}위와는 ${ranked[myIdx].xp-below.xp}XP 차이예요, 방심 금지!`);
-    el.innerHTML=`<div onclick="gp('rank')" style="background:linear-gradient(180deg,#FBBF24,#F59E0B);border-radius:16px;padding:12px;margin-bottom:10px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;">
-      <div style="display:flex;align-items:center;gap:10px;">
-        <div style="width:34px;height:34px;border-radius:10px;background:#fff;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;">🏆</div>
-        <div>
-          <div style="font-size:13px;font-weight:800;color:#4A2E00;">이번주 랭킹 ${myRank}위 ${medal}</div>
-          ${subLines.map(s=>`<div style="font-size:11px;color:#7A4E00;">${s}</div>`).join('')}
-        </div>
-      </div>
-      <svg width="18" height="18" viewBox="0 0 18 18"><polyline points="7,4 12,9 7,14" fill="none" stroke="#7A4E00" stroke-width="1.8"/></svg>
-    </div>`;
-  }catch(e){console.warn('랭킹 티저 로드 실패',e);el.innerHTML='';}
 }
 
 // ── 홈 화면 "이번주 학습시간" 그래프 — 요일별 리뷰 시간 + 반 평균 비교 + 주간 목표 ──
@@ -5214,7 +5211,7 @@ function gp(n){
   if(n==='review'){lRev();}
   if(n==='home'){lRev().then(buildHomeTodo);loadMyNotices();loadMyStats();}
   if(n==='record'){if(!loaded.record){loaded.record=true;lRec();}lRank('rec-rank-my','rec-rank-list');}
-  if(n==='rank'){lRank();}
+  if(n==='rank'){setRankPeriod(curRankPeriod);}
   if(n==='cert'){lCert();}
   if(n==='online'){lOnline();}
   if(n==='quiz'){lQuiz();}
@@ -6301,35 +6298,66 @@ function olTab(t, b){
   if(t==='pay')loadOlPayList();
 }
 
-async function lRank(myId,listId){
+let curRankPeriod='week';
+function rankPeriodStart(period){
+  const now=new Date();
+  if(period==='day')return now.toISOString().slice(0,10);
+  if(period==='month')return new Date(now.getFullYear(),now.getMonth(),1).toISOString().slice(0,10);
+  if(period==='all')return null;
+  const day=now.getDay();
+  const monday=new Date(now);monday.setDate(now.getDate()+(day===0?-6:1-day));
+  return monday.toISOString().slice(0,10);
+}
+function setRankPeriod(p){
+  curRankPeriod=p;
+  ['day','week','month','all'].forEach(k=>{
+    const btn=document.getElementById('rp-'+k);if(!btn)return;
+    const on=k===p;
+    btn.style.background=on?'var(--g)':'var(--sf)';
+    btn.style.color=on?'#fff':'var(--text)';
+  });
+  lRank('rank-my','rank-list',p);
+}
+// 랭킹은 리뷰 누적시간(review_logs.duration_sec) 기준으로만 집계. 레벨/XP 배지는 참고용으로만 같이 보여줌
+async function lRank(myId,listId,period){
+  period=period||'week';
   const myEl=document.getElementById(myId||'rank-my');
   const listEl=document.getElementById(listId||'rank-list');if(!listEl)return;
   listEl.innerHTML='<div class="loading">로딩중...</div>';
-  const{data:xpData}=await sb.from('user_xp').select('student_id,total_xp,level').order('total_xp',{ascending:false});
-  const{data:profiles}=await sb.from('profiles').select('id,name,email').eq('role','student');
-  if(!xpData?.length){listEl.innerHTML='<div class="empty">아직 랭킹 데이터가 없어요</div>';return;}
+  const startStr=rankPeriodStart(period);
+  let rvQuery=sb.from('review_logs').select('student_id,duration_sec').eq('completed',true);
+  if(startStr)rvQuery=rvQuery.gte('completed_at',startStr);
+  const[{data:rv},{data:profiles},{data:xpData}]=await Promise.all([
+    rvQuery,
+    sb.from('profiles').select('id,name,email').eq('role','student'),
+    sb.from('user_xp').select('student_id,total_xp')
+  ]);
+  if(!profiles?.length){listEl.innerHTML='<div class="empty">아직 랭킹 데이터가 없어요</div>';return;}
   const profMap={};(profiles||[]).forEach(p=>profMap[p.id]=p);
-  const myRank=xpData.findIndex(x=>x.student_id===U.id)+1;
-  const myData=xpData.find(x=>x.student_id===U.id);
-  const myLvInfo=getLevelInfo(myData?.total_xp||0);
+  const xpMap={};(xpData||[]).forEach(x=>xpMap[x.student_id]=x.total_xp||0);
+  const totals={};(rv||[]).forEach(r=>{totals[r.student_id]=(totals[r.student_id]||0)+(r.duration_sec||0);});
+  const ranked=profiles.map(p=>({sid:p.id,sec:totals[p.id]||0})).sort((a,b)=>b.sec-a.sec);
+  const myRank=ranked.findIndex(r=>r.sid===U.id)+1;
+  const myData=ranked.find(r=>r.sid===U.id);
   if(myEl&&myData){
     const myProf=profMap[U.id];const myName=dispName(myProf?.name,myProf?.email)||'나';
+    const myLvInfo=getLevelInfo(xpMap[U.id]||0);
     myEl.innerHTML=`<div style="background:linear-gradient(135deg,#1a2940,#243054);border-radius:16px;padding:14px 16px;display:flex;align-items:center;gap:12px;margin-bottom:10px;">
       <div style="font-size:24px;font-weight:800;color:#FFB347;width:32px;text-align:center;">${myRank}</div>
       <div style="width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,#1D9E75,#159468);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff;flex-shrink:0;">${myName.slice(0,2)}</div>
       <div style="flex:1;min-width:0;"><div style="font-size:14px;font-weight:800;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${myName}</div><div style="font-size:10px;color:rgba(255,255,255,.5);">내 순위</div></div>
-      <div style="text-align:right;flex-shrink:0;"><div style="font-size:15px;font-weight:800;color:#FFB347;">${(myData.total_xp||0).toLocaleString()} XP</div><div style="font-size:10px;color:rgba(255,255,255,.5);">${myLvInfo.cur.emoji} Lv.${myLvInfo.cur.level}</div></div>
+      <div style="text-align:right;flex-shrink:0;"><div style="font-size:15px;font-weight:800;color:#FFB347;">${fmtDur(myData.sec)}</div><div style="font-size:10px;color:rgba(255,255,255,.5);">${myLvInfo.cur.emoji} Lv.${myLvInfo.cur.level}</div></div>
     </div>`;
   }
-  listEl.innerHTML=xpData.map((x,i)=>{
-    const rank=i+1;const prof=profMap[x.student_id];const name=dispName(prof?.name,prof?.email)||'?';const lvInfo=getLevelInfo(x.total_xp||0);const isMe=x.student_id===U.id;
+  listEl.innerHTML=ranked.map((r,i)=>{
+    const rank=i+1;const prof=profMap[r.sid];const name=dispName(prof?.name,prof?.email)||'?';const lvInfo=getLevelInfo(xpMap[r.sid]||0);const isMe=r.sid===U.id;
     const rankColor=rank===1?'#EF9F27':rank===2?'#B4B2A9':rank===3?'#D85A30':'var(--mu)';
     const style=isMe?'border:2px solid #1D9E75;':'background:var(--sf);border:1.5px solid var(--brd);';
-    return`<div style="${style}border-radius:13px;padding:10px 13px;display:flex;align-items:center;gap:10px;margin-bottom:6px;cursor:pointer;" onclick="showCertDetail('${x.student_id}','${name.replace(/'/g,"\\'")}')">
+    return`<div style="${style}border-radius:13px;padding:10px 13px;display:flex;align-items:center;gap:10px;margin-bottom:6px;cursor:pointer;" onclick="showCertDetail('${r.sid}','${name.replace(/'/g,"\\'")}')">
       <div style="font-size:${rank<=3?18:15}px;font-weight:800;color:${rankColor};width:28px;text-align:center;">${rank}</div>
       <div style="width:38px;height:38px;border-radius:10px;background:${isMe?'linear-gradient(135deg,#1D9E75,#159468)':'var(--brd)'};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:${isMe?'#fff':'var(--text)'};flex-shrink:0;">${name.slice(0,2)}</div>
       <div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:5px;">${name}${isMe?'<span style="font-size:9px;background:var(--gl);color:var(--gd);padding:1px 6px;border-radius:99px;">나</span>':''}</div><div style="font-size:10px;color:var(--mu);">${lvInfo.cur.emoji} Lv.${lvInfo.cur.level} ${lvInfo.cur.name}</div></div>
-      <div style="font-size:13px;font-weight:700;color:var(--text);flex-shrink:0;">${(x.total_xp||0).toLocaleString()} XP</div>
+      <div style="font-size:13px;font-weight:700;color:var(--text);flex-shrink:0;">${fmtDur(r.sec)}</div>
     </div>`;
   }).join('');
 }
