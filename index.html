@@ -1934,15 +1934,17 @@ async function completeOnlineReview(){
   const durSec=ses.startedAt?Math.round((Date.now()-ses.startedAt)/1000):0;
   let newCount=1,done=false;
   try{
-    const{data:ex}=await sb.from('review_logs').select('id,count').eq('student_id',U.id).eq('lesson_id',ses.lid).eq('review_round',ses.round).single();
+    const{data:ex}=await sb.from('review_logs').select('id,count,duration_sec').eq('student_id',U.id).eq('lesson_id',ses.lid).eq('review_round',ses.round).single();
     newCount=Math.min((ex?.count||0)+1,5);
     done=newCount>=5;
-    if(ex)await sb.from('review_logs').update({count:newCount,completed:done,completed_at:done?now:null,duration_sec:durSec}).eq('id',ex.id);
-    else await sb.from('review_logs').insert({student_id:U.id,lesson_id:ses.lid,review_round:ses.round,count:newCount,completed:done,completed_at:done?now:null,duration_sec:durSec});
+    const totalDurSec=(ex?.duration_sec||0)+durSec;
+    if(ex)await sb.from('review_logs').update({count:newCount,completed:done,completed_at:done?now:null,duration_sec:totalDurSec}).eq('id',ex.id);
+    else await sb.from('review_logs').insert({student_id:U.id,lesson_id:ses.lid,review_round:ses.round,count:newCount,completed:done,completed_at:done?now:null,duration_sec:totalDurSec});
   }catch(e){}
   earnXP(XP_TABLE.follow,'online_review_complete_'+ses.lid+'_'+ses.round);
   tst(done?'복습 완료! 🎉':`${newCount}/5회 · 계속해봐요`);
-  setTimeout(()=>{cses(true);refreshReview().then(autoNextReview);lCal();buildHomeTodo();},1000);
+  const justLid=ses.lid;
+  setTimeout(()=>{cses(true);refreshReview().then(()=>autoNextReview(justLid));lCal();buildHomeTodo();},1000);
 }
 // 퀴즈 모드(암기카드·빈칸채우기)가 rs-bot을 자기 용도로 갈아치우기 때문에,
 // 다른 탭으로 돌아오면 "오늘 복습 완료" 버튼을 다시 세팅해줌
@@ -2158,7 +2160,8 @@ async function tapRSC(n){
   if(done){
     earnXP(XP_TABLE.follow,'follow_complete_'+ses.lid+'_'+ses.round);
     tst('5회 달성! 따라하기 완료!');
-    setTimeout(()=>{cses();refreshReview().then(autoNextReview);lCal();lRec();buildHomeTodo();},1200);
+    const justLid=ses.lid;
+    setTimeout(()=>{cses();refreshReview().then(()=>autoNextReview(justLid));lCal();lRec();buildHomeTodo();},1200);
   }
 }
 
@@ -2836,8 +2839,8 @@ function submitMemorize(){tapMemorizeCheck(true);}
 // ── 5·7회차: 핵심 표현 카드 + 문장 제출 ──
 
 
-function autoNextReview(){
-  const next=todayRevItems.find(it=>it.lesson.id!==ses?.lid);
+function autoNextReview(excludeLid){
+  const next=todayRevItems.find(it=>it.lesson.id!==excludeLid);
   if(next){setTimeout(()=>{tst(`다음: ${next.lesson.title}`);oSes(next.lesson.id,next.lesson.title,next.lesson.url,next.round);},800);}
 }
 
@@ -3718,11 +3721,11 @@ async function getStreakDays(){
   const since=new Date();since.setDate(since.getDate()-400);
   const sinceStr=since.toISOString().slice(0,10);
   const[{data:rv},{data:xl}]=await Promise.all([
-    sb.from('review_logs').select('completed_at').eq('student_id',U.id).eq('completed',true).gte('completed_at',sinceStr),
+    sb.from('review_logs').select('created_at').eq('student_id',U.id).gte('created_at',sinceStr),
     sb.from('xp_logs').select('reason').eq('student_id',U.id).like('reason','vocab_start_%').gte('created_at',sinceStr)
   ]);
   const activeDates=new Set();
-  (rv||[]).forEach(r=>{const d=r.completed_at?.slice(0,10);if(d)activeDates.add(d);});
+  (rv||[]).forEach(r=>{const d=r.created_at?.slice(0,10);if(d)activeDates.add(d);});
   (xl||[]).forEach(x=>{const d=(x.reason||'').replace('vocab_start_','');if(d)activeDates.add(d);});
   let streak=0;
   const cur=new Date();
@@ -3741,7 +3744,7 @@ async function renderXPBar(){
     const monday=new Date(now);monday.setDate(now.getDate()+(day===0?-6:1-day));
     const weekStartStr=monday.toISOString().slice(0,10);
     const[{data:rv},{data:profiles}]=await Promise.all([
-      sb.from('review_logs').select('student_id,duration_sec').eq('completed',true).gte('completed_at',weekStartStr),
+      sb.from('review_logs').select('student_id,duration_sec').gte('created_at',weekStartStr),
       sb.from('profiles').select('id').eq('role','student')
     ]);
     const totals={};(rv||[]).forEach(r=>{totals[r.student_id]=(totals[r.student_id]||0)+(r.duration_sec||0);});
@@ -3788,8 +3791,8 @@ async function loadMyStats(){
   for(let i=0;i<7;i++){const d=new Date(monday);d.setDate(monday.getDate()+i);weekDates.push(d.toISOString().slice(0,10));}
   const weekStartStr=weekDates[0];
   const todayStr=now.toISOString().slice(0,10);
-  const{data:myRv}=await sb.from('review_logs').select('completed_at,duration_sec').eq('student_id',U.id).eq('completed',true).gte('completed_at',weekStartStr);
-  const secByDate={};(myRv||[]).forEach(r=>{const d=r.completed_at?.slice(0,10);if(!d)return;secByDate[d]=(secByDate[d]||0)+(r.duration_sec||0);});
+  const{data:myRv}=await sb.from('review_logs').select('created_at,duration_sec').eq('student_id',U.id).gte('created_at',weekStartStr);
+  const secByDate={};(myRv||[]).forEach(r=>{const d=r.created_at?.slice(0,10);if(!d)return;secByDate[d]=(secByDate[d]||0)+(r.duration_sec||0);});
   const daySecs=weekDates.map(d=>secByDate[d]||0);
   const myWeekSec=daySecs.reduce((a,b)=>a+b,0);
   let classAvgSec=0;
@@ -3799,7 +3802,7 @@ async function loadMyStats(){
       const{data:peers}=await sb.from('profiles').select('id').eq('role','student').eq('class_name',myCls).neq('id',U.id);
       const peerIds=(peers||[]).map(p=>p.id);
       if(peerIds.length){
-        const{data:peerRv}=await sb.from('review_logs').select('student_id,duration_sec').eq('completed',true).gte('completed_at',weekStartStr).in('student_id',peerIds);
+        const{data:peerRv}=await sb.from('review_logs').select('student_id,duration_sec').gte('created_at',weekStartStr).in('student_id',peerIds);
         const bySt={};(peerRv||[]).forEach(r=>{bySt[r.student_id]=(bySt[r.student_id]||0)+(r.duration_sec||0);});
         const vals=peerIds.map(id=>bySt[id]||0);
         classAvgSec=Math.round(vals.reduce((a,b)=>a+b,0)/vals.length);
@@ -6325,8 +6328,8 @@ async function lRank(myId,listId,period){
   const listEl=document.getElementById(listId||'rank-list');if(!listEl)return;
   listEl.innerHTML='<div class="loading">로딩중...</div>';
   const startStr=rankPeriodStart(period);
-  let rvQuery=sb.from('review_logs').select('student_id,duration_sec').eq('completed',true);
-  if(startStr)rvQuery=rvQuery.gte('completed_at',startStr);
+  let rvQuery=sb.from('review_logs').select('student_id,duration_sec');
+  if(startStr)rvQuery=rvQuery.gte('created_at',startStr);
   const[{data:rv},{data:profiles},{data:xpData}]=await Promise.all([
     rvQuery,
     sb.from('profiles').select('id,name,email').eq('role','student'),
