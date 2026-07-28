@@ -2277,8 +2277,8 @@ function lsRenderSubTable(){
       <td><input type="number" value="${s.end}" step="0.1" onchange="lsSubs[${i}].end=+this.value" style="width:56px;border:1px solid var(--brd);border-radius:4px;padding:3px 4px;font-size:11px;"></td>
       <td><input type="text" value="${(s.text||'').replace(/"/g,'&quot;')}" onchange="lsSubs[${i}].text=this.value" style="width:100%;border:1px solid var(--brd);border-radius:4px;padding:3px 6px;font-size:11px;"></td>
       <td><input type="text" value="${(s.kor||'').replace(/"/g,'&quot;')}" onchange="lsSubs[${i}].kor=this.value" style="width:100%;border:1px solid var(--brd);border-radius:4px;padding:3px 6px;font-size:11px;"></td>
-      <td style="text-align:center;"><input type="checkbox" ${s.sel?'checked':''} onchange="lsSubs[${i}].sel=this.checked;lsRenderSubTable();" title="온라인용 선택"></td>
-      <td style="text-align:center;"><button onclick="lsOpenLineEditor(${i})" style="background:${s.sel?'var(--gl)':'var(--sf)'};color:${s.sel?'var(--gd)':'var(--mu)'};border:none;border-radius:4px;padding:3px 6px;cursor:pointer;font-size:11px;" ${s.sel?'':'disabled'} title="발음·아웃풋 편집">🎯</button></td>
+      <td style="text-align:center;"><input type="checkbox" ${s.sel?'checked':''} onchange="lsSubs[${i}].sel=this.checked;lsRenderSubTable();" title="온라인수업용 선택"></td>
+      <td style="text-align:center;"><button onclick="lsOpenLineEditor(${i})" style="background:${(s.sel||(lsBlanks[i]&&lsBlanks[i].length))?'var(--gl)':'var(--sf)'};color:${(s.sel||(lsBlanks[i]&&lsBlanks[i].length))?'var(--gd)':'var(--mu)'};border:none;border-radius:4px;padding:3px 6px;cursor:pointer;font-size:11px;" title="온라인용·발음·아웃풋·퀴즈 편집">🎯</button></td>
       <td><button onclick="lsSubs.splice(${i},1);lsRenderSubTable();" style="background:var(--rl);color:var(--rd);border:none;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:10px;">삭제</button></td>
     </tr>`).join('');
   const cnt=document.getElementById('ls-sub-count');
@@ -2296,11 +2296,18 @@ function lsOpenLineEditor(i){
   pop.id='ls-line-editor';
   pop.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9200;display:flex;align-items:flex-end;justify-content:center;';
   const words=(s.text||'').split(' ');
+  lsBlanks[i]=lsBlanks[i]||[];
   pop.innerHTML=`<div style="background:var(--card,#fff);border-radius:16px 16px 0 0;width:100%;max-width:480px;max-height:85vh;overflow-y:auto;padding:16px 16px 26px;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
       <div style="font-size:14px;font-weight:700;color:var(--text);">문장 ${i+1} 편집</div>
       <div onclick="lsCloseLineEditor()" style="width:26px;height:26px;border-radius:8px;background:var(--sf);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:14px;">✕</div>
     </div>
+    <div style="font-size:13px;color:var(--text);margin-bottom:2px;">${s.text||''}</div>
+    <div style="font-size:12px;color:var(--mu);margin-bottom:14px;">${s.kor||''}</div>
+    <label style="display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:10px;background:var(--sf);cursor:pointer;margin-bottom:14px;">
+      <input type="checkbox" id="ls-le-sel" ${s.sel?'checked':''} onchange="lsSubs[${i}].sel=this.checked;">
+      <span style="font-size:12px;font-weight:700;color:var(--text);">이 문장을 온라인수업용으로 사용 (강세·발음기호·아웃풋 노출)</span>
+    </label>
     <div style="font-size:11px;color:var(--mu);font-weight:700;margin-bottom:6px;">강세 — 단어를 눌러서 표시</div>
     <div id="ls-le-stress" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;">
       ${words.map((w,wi)=>`<span onclick="lsToggleStressWord(${i},${wi})" style="padding:5px 9px;border-radius:7px;cursor:pointer;font-size:13px;font-weight:${s.stress.includes(wi)?'800':'500'};background:${s.stress.includes(wi)?'var(--rl)':'var(--sf)'};color:${s.stress.includes(wi)?'var(--rd)':'var(--text)'};border:1.5px solid ${s.stress.includes(wi)?'var(--rd)':'var(--brd)'};">${w}</span>`).join('')}
@@ -2309,6 +2316,10 @@ function lsOpenLineEditor(i){
     <input class="inp" type="text" id="ls-le-ipa" value="${(s.ipa||'').replace(/"/g,'&quot;')}" placeholder="/juː noʊ ˈwɛn ɪn ˈroʊm raɪt/" style="font-family:monospace;">
     <div style="font-size:11px;color:var(--mu);font-weight:700;margin:10px 0 6px;">아웃풋 패턴 예문 3개 (영어,한국어)</div>
     ${[0,1,2].map(pi=>`<input class="inp" type="text" id="ls-le-p${pi}" value="${((s.patterns[pi].en||'')+(s.patterns[pi].kor?','+s.patterns[pi].kor:'')).replace(/"/g,'&quot;')}" placeholder="예문 ${pi+1}: 영어 문장,한국어 뜻" style="margin-bottom:6px;">`).join('')}
+    <div style="font-size:11px;color:var(--mu);font-weight:700;margin:10px 0 6px;">퀴즈 빈칸 — 단어를 눌러서 표시 (온라인수업용 여부와 무관하게 적용돼요)</div>
+    <div id="ls-le-blanks" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;">
+      ${words.map((w,wi)=>`<span onclick="lsToggleBlankWord(${i},${wi})" style="padding:5px 9px;border-radius:7px;cursor:pointer;font-size:13px;font-weight:${lsBlanks[i].includes(wi)?'800':'500'};background:${lsBlanks[i].includes(wi)?'#DBEAFE':'var(--sf)'};color:${lsBlanks[i].includes(wi)?'#1D4ED8':'var(--text)'};border:1.5px solid ${lsBlanks[i].includes(wi)?'#1D4ED8':'var(--brd)'};">${w}</span>`).join('')}
+    </div>
     <button onclick="lsSaveLineEditor(${i})" style="width:100%;padding:12px;border-radius:10px;background:var(--g);color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:8px;">저장</button>
   </div>`;
   document.body.appendChild(pop);
@@ -2322,6 +2333,13 @@ function lsToggleStressWord(i,wi){
   if(idx>=0)s.stress.splice(idx,1);else s.stress.push(wi);
   lsOpenLineEditor(i);
 }
+function lsToggleBlankWord(i,wi){
+  lsBlanks[i]=lsBlanks[i]||[];
+  const idx=lsBlanks[i].indexOf(wi);
+  if(idx>=0)lsBlanks[i].splice(idx,1);else lsBlanks[i].push(wi);
+  if(!lsBlanks[i].length)delete lsBlanks[i];
+  lsOpenLineEditor(i);
+}
 function lsSaveLineEditor(i){
   const s=lsSubs[i];if(!s)return;
   s.ipa=document.getElementById('ls-le-ipa')?.value?.trim()||'';
@@ -2332,6 +2350,7 @@ function lsSaveLineEditor(i){
     return{en:raw.slice(0,idx).trim(),kor:raw.slice(idx+1).trim()};
   });
   lsCloseLineEditor();
+  lsRenderSubTable();
   tst('저장됐어요 ✓');
 }
 
