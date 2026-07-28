@@ -6351,7 +6351,7 @@ async function lRank(myId,listId,period){
   if(startStr)rvQuery=rvQuery.gte('created_at',startStr);
   const[{data:rv},{data:profiles},{data:xpData}]=await Promise.all([
     rvQuery,
-    sb.from('profiles').select('id,name,email').eq('role','student'),
+    sb.from('profiles').select('id,name,email,weekly_goal_min').eq('role','student'),
     sb.from('user_xp').select('student_id,total_xp')
   ]);
   if(!profiles?.length){listEl.innerHTML='<div class="empty">아직 랭킹 데이터가 없어요</div>';return;}
@@ -6361,25 +6361,43 @@ async function lRank(myId,listId,period){
   const ranked=profiles.map(p=>({sid:p.id,sec:totals[p.id]||0})).sort((a,b)=>b.sec-a.sec);
   const myRank=ranked.findIndex(r=>r.sid===U.id)+1;
   const myData=ranked.find(r=>r.sid===U.id);
+  // 주간 탭에서만 목표 대비 진행률을 보여줌(목표는 주간 목표라 다른 기간엔 의미가 없음)
+  const goalRowHtml=(sid,sec,barColor)=>{
+    if(period!=='week')return'';
+    const goalMin=profMap[sid]?.weekly_goal_min;
+    if(!goalMin)return`<div style="display:flex;align-items:center;gap:5px;margin-top:6px;"><span style="font-size:10px;color:#A1A1AA;">🚩 목표 미설정</span></div>`;
+    const pct=Math.min(100,Math.round(sec/(goalMin*60)*100));
+    return`<div style="display:flex;align-items:center;gap:6px;margin-top:6px;">
+      <span style="font-size:10px;font-weight:600;color:${barColor};white-space:nowrap;">🚩 목표 ${fmtDur(goalMin*60)}</span>
+      <div style="flex:1;height:5px;border-radius:99px;background:var(--sf,#F0F0EE);overflow:hidden;"><div style="width:${pct}%;height:100%;border-radius:99px;background:${barColor};"></div></div>
+      <span style="font-size:10px;font-weight:800;color:${barColor};">${pct}%</span>
+    </div>`;
+  };
   if(myEl&&myData){
     const myProf=profMap[U.id];const myName=dispName(myProf?.name,myProf?.email)||'나';
     const myLvInfo=getLevelInfo(xpMap[U.id]||0);
-    myEl.innerHTML=`<div style="background:linear-gradient(135deg,#1a2940,#243054);border-radius:16px;padding:14px 16px;display:flex;align-items:center;gap:12px;margin-bottom:10px;">
-      <div style="font-size:24px;font-weight:800;color:#FFB347;width:32px;text-align:center;">${myRank}</div>
-      <div style="width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,#1D9E75,#159468);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff;flex-shrink:0;">${myName.slice(0,2)}</div>
-      <div style="flex:1;min-width:0;"><div style="font-size:14px;font-weight:800;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${myName}</div><div style="font-size:10px;color:rgba(255,255,255,.5);">내 순위</div></div>
-      <div style="text-align:right;flex-shrink:0;"><div style="font-size:15px;font-weight:800;color:#FFB347;">${fmtDur(myData.sec)}</div><div style="font-size:10px;color:rgba(255,255,255,.5);">${myLvInfo.cur.emoji} Lv.${myLvInfo.cur.level}</div></div>
+    myEl.innerHTML=`<div style="background:linear-gradient(135deg,#1a2940,#243054);border-radius:16px;padding:14px 16px;margin-bottom:10px;">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div style="font-size:24px;font-weight:800;color:#FFB347;width:32px;text-align:center;">${myRank}</div>
+        <div style="width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,#1D9E75,#159468);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff;flex-shrink:0;">${myName.slice(0,2)}</div>
+        <div style="flex:1;min-width:0;"><div style="font-size:14px;font-weight:800;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${myName}</div><div style="font-size:10px;color:rgba(255,255,255,.5);">내 순위</div></div>
+        <div style="text-align:right;flex-shrink:0;"><div style="font-size:15px;font-weight:800;color:#FFB347;">${fmtDur(myData.sec)}</div><div style="font-size:10px;color:rgba(255,255,255,.5);">${myLvInfo.cur.emoji} Lv.${myLvInfo.cur.level}</div></div>
+      </div>
+      ${goalRowHtml(U.id,myData.sec,'#FFB347').replace('#A1A1AA','rgba(255,255,255,.5)')}
     </div>`;
   }
   listEl.innerHTML=ranked.map((r,i)=>{
     const rank=i+1;const prof=profMap[r.sid];const name=dispName(prof?.name,prof?.email)||'?';const lvInfo=getLevelInfo(xpMap[r.sid]||0);const isMe=r.sid===U.id;
     const rankColor=rank===1?'#EF9F27':rank===2?'#B4B2A9':rank===3?'#D85A30':'var(--mu)';
     const style=isMe?'border:2px solid #1D9E75;':'background:var(--sf);border:1.5px solid var(--brd);';
-    return`<div style="${style}border-radius:13px;padding:10px 13px;display:flex;align-items:center;gap:10px;margin-bottom:6px;cursor:pointer;" onclick="showCertDetail('${r.sid}','${name.replace(/'/g,"\\'")}')">
-      <div style="font-size:${rank<=3?18:15}px;font-weight:800;color:${rankColor};width:28px;text-align:center;">${rank}</div>
-      <div style="width:38px;height:38px;border-radius:10px;background:${isMe?'linear-gradient(135deg,#1D9E75,#159468)':'var(--brd)'};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:${isMe?'#fff':'var(--text)'};flex-shrink:0;">${name.slice(0,2)}</div>
-      <div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:5px;">${name}${isMe?'<span style="font-size:9px;background:var(--gl);color:var(--gd);padding:1px 6px;border-radius:99px;">나</span>':''}</div><div style="font-size:10px;color:var(--mu);">${lvInfo.cur.emoji} Lv.${lvInfo.cur.level} ${lvInfo.cur.name}</div></div>
-      <div style="font-size:13px;font-weight:700;color:var(--text);flex-shrink:0;">${fmtDur(r.sec)}</div>
+    return`<div style="${style}border-radius:13px;padding:10px 13px;margin-bottom:6px;cursor:pointer;" onclick="showCertDetail('${r.sid}','${name.replace(/'/g,"\\'")}')">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="font-size:${rank<=3?18:15}px;font-weight:800;color:${rankColor};width:28px;text-align:center;">${rank}</div>
+        <div style="width:38px;height:38px;border-radius:10px;background:${isMe?'linear-gradient(135deg,#1D9E75,#159468)':'var(--brd)'};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:${isMe?'#fff':'var(--text)'};flex-shrink:0;">${name.slice(0,2)}</div>
+        <div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:5px;">${name}${isMe?'<span style="font-size:9px;background:var(--gl);color:var(--gd);padding:1px 6px;border-radius:99px;">나</span>':''}</div><div style="font-size:10px;color:var(--mu);">${lvInfo.cur.emoji} Lv.${lvInfo.cur.level} ${lvInfo.cur.name}</div></div>
+        <div style="font-size:13px;font-weight:700;color:var(--text);flex-shrink:0;">${fmtDur(r.sec)}</div>
+      </div>
+      ${goalRowHtml(r.sid,r.sec,isMe?'#159468':'#2F80ED')}
     </div>`;
   }).join('');
 }
