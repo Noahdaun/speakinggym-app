@@ -11,6 +11,7 @@
 <link rel="manifest" href="manifest.json">
 <title>Speaking Gym</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://js.tosspayments.com/v1/payment"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
 :root{
@@ -525,6 +526,9 @@ function doUpdate(){
                   <div onclick="toggleRankSection()" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:#FFB347;cursor:pointer;">
                     🏆 랭킹 보기
                   </div>
+                  <div onclick="openTuitionPay()" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:#7DD3B0;cursor:pointer;">
+                    💳 수강료 결제
+                  </div>
                 </div>
                 <div id="profile-level-badge" style="display:inline-flex;align-items:center;gap:5px;background:linear-gradient(135deg,#FFB347,#E8940A);border-radius:99px;padding:5px 13px;box-shadow:0 3px 10px rgba(255,179,71,.4);">
                   <span style="font-size:14px;">🔥</span>
@@ -742,6 +746,7 @@ function doUpdate(){
         <div style="font-size:13px;font-weight:600;margin-bottom:9px;">새 반 만들기</div>
         <div style="display:flex;gap:7px;margin-bottom:14px;">
           <input class="inp" type="text" id="ncls" placeholder="반 이름 (예: 월수금반)" style="flex:1;margin-bottom:0;">
+          <input class="inp" type="number" id="ncls-price" placeholder="월 수강료(원)" style="width:120px;margin-bottom:0;">
           <button onclick="addClass()" style="padding:0 16px;border-radius:10px;background:var(--g);color:#fff;border:none;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:inherit;">추가</button>
         </div>
         <div id="cls-list"><div class="loading">로딩중...</div></div>
@@ -979,6 +984,108 @@ const sb=supabase.createClient(SU,SK);
 // 이 시각 이전에 만들어진, 수업 날짜 미지정 레슨은 예전 규칙(전체 공개) 그대로 유지 — 기존 학생 접근 유지용
 const SCHEDULE_GATE_CUTOFF='2026-07-19T14:52:25.000Z';
 
+// ── 토스페이먼츠 결제 ──
+// ⚠️ 아래는 토스페이먼츠 공식 문서에서 제공하는 공용 테스트 클라이언트 키입니다.
+// 실제 서비스 전에는 반드시 본인 가맹점의 테스트/운영 클라이언트 키로 교체하세요.
+const TOSS_CLIENT_KEY='test_ck_D5GePWvyJnrK0W0k6q8gLzN97Eoq';
+
+function tossOrderId(){
+  return `order_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
+}
+
+// productType: 'course' | 'enrollment'
+async function startTossPayment({productType,courseId,months,amount,orderName}){
+  if(!amount||amount<=0){tst('결제 금액을 확인해주세요');return;}
+  const orderId=tossOrderId();
+  const{error}=await sb.from('toss_orders').insert({
+    order_id:orderId,student_id:U.id,product_type:productType,
+    course_id:courseId||null,months:months||null,amount,order_name:orderName,status:'pending'
+  });
+  if(error){tst('주문 생성 실패: '+error.message);return;}
+  const tp=TossPayments(TOSS_CLIENT_KEY);
+  const returnUrl=location.origin+location.pathname;
+  try{
+    await tp.requestPayment('카드',{
+      amount,orderId,orderName,
+      customerName:P?.name||U.email,
+      successUrl:returnUrl,
+      failUrl:returnUrl,
+    });
+  }catch(e){
+    if(e?.code!=='USER_CANCEL')tst('결제창 오류: '+(e?.message||e));
+  }
+}
+
+// ── 학생용 수강료(오프라인 수강권) 결제 ──
+async function openTuitionPay(){
+  if(!P?.class_name){tst('배정된 반이 없어 결제할 수 없어요. 원장님께 문의해주세요');return;}
+  const{data:cls}=await sb.from('classes').select('price').eq('name',P.class_name).maybeSingle();
+  const price=cls?.price;
+  if(!price){tst('아직 수강료가 설정되지 않았어요. 원장님께 문의해주세요');return;}
+  const pop=document.createElement('div');
+  pop.id='tuition-pay-pop';
+  pop.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9000;display:flex;align-items:flex-end;justify-content:center;';
+  pop.innerHTML=`<div style="background:var(--bg);border-radius:20px 20px 0 0;width:100%;max-width:480px;padding:16px 14px 30px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <div style="font-size:16px;font-weight:800;">${P.class_name} 수강료 결제</div>
+      <div onclick="document.getElementById('tuition-pay-pop').remove()" style="width:28px;height:28px;border-radius:8px;background:var(--sf);display:flex;align-items:center;justify-content:center;cursor:pointer;">
+        <svg width="12" height="12" viewBox="0 0 12 12"><line x1="1" y1="1" x2="11" y2="11" stroke="#888" stroke-width="1.8"/><line x1="11" y1="1" x2="1" y2="11" stroke="#888" stroke-width="1.8"/></svg>
+      </div>
+    </div>
+    <div style="font-size:12px;color:var(--mu);margin-bottom:6px;">월 수강료 ${price.toLocaleString()}원</div>
+    <div style="font-size:12px;font-weight:600;margin-bottom:5px;">결제할 개월수</div>
+    <select id="tp-months" onchange="tpUpdateTotal(${price})" style="width:100%;padding:12px;border:1.5px solid var(--brd);border-radius:var(--rs);font-size:14px;background:var(--sf);margin-bottom:10px;font-family:inherit;">
+      <option value="1">1개월</option>
+      <option value="3">3개월</option>
+      <option value="6">6개월</option>
+      <option value="12">12개월</option>
+    </select>
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 4px;border-top:1px solid var(--brd);margin-bottom:14px;">
+      <span style="font-size:13px;color:var(--mu);">결제 금액</span>
+      <span id="tp-total" style="font-size:18px;font-weight:800;color:var(--gd);">${price.toLocaleString()}원</span>
+    </div>
+    <button class="btn btn-p" onclick="submitTuitionPay(${price})">결제하기</button>
+  </div>`;
+  document.body.appendChild(pop);
+  pop.addEventListener('click',e=>{if(e.target===pop)pop.remove();});
+}
+
+function tpUpdateTotal(price){
+  const months=parseInt(document.getElementById('tp-months')?.value)||1;
+  document.getElementById('tp-total').textContent=(price*months).toLocaleString()+'원';
+}
+
+async function submitTuitionPay(price){
+  const months=parseInt(document.getElementById('tp-months')?.value)||1;
+  const amount=price*months;
+  document.getElementById('tuition-pay-pop')?.remove();
+  await startTossPayment({productType:'enrollment',months,amount,orderName:`${P.class_name} 수강료 ${months}개월`});
+}
+
+// 결제창에서 돌아왔을 때(성공/실패) 처리 — successUrl/failUrl이 같은 페이지라 쿼리스트링으로 구분
+async function checkTossReturn(){
+  const qs=new URLSearchParams(location.search);
+  const paymentKey=qs.get('paymentKey'),orderId=qs.get('orderId'),amount=qs.get('amount');
+  const failCode=qs.get('code');
+  if(!orderId||(!paymentKey&&!failCode))return;
+  history.replaceState(null,'',location.pathname);
+  if(failCode){
+    tst('결제가 취소됐어요: '+(qs.get('message')||failCode));
+    return;
+  }
+  tst('결제 확인중...');
+  const{data,error}=await sb.functions.invoke('confirm-toss-payment',{
+    body:{orderId,paymentKey,amount:Number(amount)}
+  });
+  if(error||!data?.success){
+    tst('결제 확인 실패: '+(data?.error||error?.message||'알 수 없는 오류'));
+    return;
+  }
+  tst('결제가 완료됐어요! 🎉');
+  await lCal?.();
+  buildHomeTodo?.();
+}
+
 // ── 푸시 알림 (Web Push) ──
 const VAPID_PUBLIC_KEY='BJE3HgXlhVQ6bYbg94Nemv2vtP8NGecr6b6bJ8Wz2kadYd1EXkvwM9FnygNA8W8aBnaz0RIQfdWTlprmdXDWveY';
 const PUSH_ENDPOINT='https://hrmiyejhhzptwjzbrzvv.supabase.co/functions/v1/smooth-endpoint';
@@ -1044,7 +1151,7 @@ function dispInitial(name, email){
 let U=null,P=null,cY,cM;
 let aMap={},rMap={},vMap={},oMap={};// 달력용 (출석/리뷰/단어/온라인)
 let vc=[],tv=[],ci=0,fl=false,doneToday=0;
-let les=[],sts=[],classes=[];
+let les=[],sts=[],classes=[],classPrices={};
 let ses=null;
 let sesStartTime=null;
 let todayRevItems=[];
@@ -1182,6 +1289,7 @@ async function initApp(u){
     loadMyNotices();
     loadMyStats();
     checkCallBookingBanner();
+    checkTossReturn();
   }
   refreshMsgBadge();
   updatePushBanner();
@@ -5438,8 +5546,9 @@ async function rClsList(){
   const el=document.getElementById('cls-list');
   if(el)el.innerHTML='<div class="loading">로딩중...</div>';
   try{
-    const{data:clsData}=await sb.from('classes').select('name').order('name');
+    const{data:clsData}=await sb.from('classes').select('name,price').order('name');
     classes=(clsData||[]).map(c=>c.name);
+    classPrices={};(clsData||[]).forEach(c=>{classPrices[c.name]=c.price||0;});
     const{data:stData}=await sb.from('profiles').select('*').eq('role','student').order('name');
     sts=stData||[];
     renderClsList();
@@ -5925,15 +6034,42 @@ async function openMyOnlineCourse(){
   const{data:subs}=await sb.from('course_subscriptions').select('*,online_courses(id,title)').eq('student_id',U.id).gte('expires_at',today).order('expires_at',{ascending:false});
   document.getElementById('rs-top').style.background='#1E2D45';
   if(!subs||!subs.length){
-    document.getElementById('rs-title').textContent='온라인 수업';
-    document.getElementById('rs-badge').textContent='';
-    document.getElementById('rs-content').innerHTML='<div class="empty">구매하신 온라인 강의가 없어요<br><span style="font-size:11px;color:var(--mu);">원장님께 문의해주세요</span></div>';
-    document.getElementById('rs-bot').innerHTML='';
-    document.getElementById('rs').classList.add('on');
+    await renderOlCourseStore();
     return;
   }
   const sub=subs[0];
   await openCourseCalendar(sub.course_id, sub.online_courses?.title||'온라인 수업');
+}
+
+// 구매하신 온라인 강의가 없을 때 — 판매중인 강의 목록 + 구매 버튼
+async function renderOlCourseStore(){
+  document.getElementById('rs-title').textContent='온라인 강의';
+  document.getElementById('rs-badge').textContent='';
+  document.getElementById('rs-bot').innerHTML='';
+  document.getElementById('rs').classList.add('on');
+  const el=document.getElementById('rs-content');
+  el.innerHTML='<div class="loading">로딩중...</div>';
+  const{data}=await sb.from('online_courses').select('*').eq('is_active',true).order('month',{ascending:false});
+  const courses=data||[];
+  if(!courses.length){
+    el.innerHTML='<div class="empty">판매중인 온라인 강의가 없어요<br><span style="font-size:11px;color:var(--mu);">원장님께 문의해주세요</span></div>';
+    return;
+  }
+  el.innerHTML=courses.map(c=>`
+    <div class="card" style="margin-bottom:10px;">
+      <div style="font-size:14px;font-weight:700;">${c.title}</div>
+      <div style="font-size:11px;color:var(--mu);margin-top:2px;">${c.month}</div>
+      ${c.description?`<div style="font-size:12px;color:var(--text2);margin-top:6px;">${c.description}</div>`:''}
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;">
+        <div style="font-size:16px;font-weight:800;color:var(--gd);">${c.price.toLocaleString()}원</div>
+        <button onclick="buyOnlineCourse('${c.id}','${c.title.replace(/'/g,"\\'")}',${c.price})" style="padding:10px 18px;border-radius:10px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">구매하기</button>
+      </div>
+    </div>`).join('');
+}
+
+async function buyOnlineCourse(courseId,title,price){
+  if(!confirm(`"${title}"\n${price.toLocaleString()}원을 결제할까요?`))return;
+  await startTossPayment({productType:'course',courseId,amount:price,orderName:`온라인강의: ${title}`});
 }
 
 let _ocCourseId=null,_ocCourseTitle='',_ocLessons=[],_ocCY=0,_ocCM=0,_ocSelDate=null;
@@ -6421,6 +6557,10 @@ function renderClsList(){
         <div style="display:flex;align-items:center;gap:6px;"><span class="bdg bgr">${members.length}명</span><div onclick="delCls('${cls}')" style="font-size:11px;color:var(--rd);background:var(--rl);padding:3px 9px;border-radius:7px;cursor:pointer;">삭제</div></div>
       </div>
       <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:9px;min-height:22px;">${tags||'<div style="font-size:11px;color:var(--mu);">학생 없음</div>'}</div>
+      <div style="display:flex;gap:7px;margin-bottom:7px;">
+        <input class="inp" type="number" id="clsprice-${cls.replace(/\s/g,'_')}" placeholder="월 수강료(원)" value="${classPrices[cls]||''}" style="flex:1;margin-bottom:0;">
+        <button onclick="updateClassPrice('${cls}')" style="padding:0 13px;border-radius:9px;background:var(--sf);color:var(--text);border:1.5px solid var(--brd);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">저장</button>
+      </div>
       <div style="display:flex;gap:7px;">
         <select id="addto-${cls.replace(/\s/g,'_')}" style="flex:1;margin-bottom:0;padding:8px 10px;font-size:12px;"><option value="">학생 선택...</option>${opts}</select>
         <button onclick="addToCls('${cls}')" style="padding:0 13px;border-radius:9px;background:var(--g);color:#fff;border:none;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">추가</button>
@@ -6502,14 +6642,25 @@ function showPhotoPositionEditor(url){
 // ── 반관리 ──
 async function addClass(){
   const name=document.getElementById('ncls')?.value?.trim();
+  const price=parseInt(document.getElementById('ncls-price')?.value)||null;
   if(!name){tst('반 이름을 입력해주세요');return;}
   if(classes.includes(name)){tst('이미 있는 반 이름이에요');return;}
-  const{error}=await sb.from('classes').insert({name});
+  const{error}=await sb.from('classes').insert({name,price});
   if(error&&!error.message?.includes('duplicate')){tst('추가 실패: '+error.message);return;}
   classes.push(name);classes.sort();
+  classPrices[name]=price||0;
   document.getElementById('ncls').value='';
+  document.getElementById('ncls-price').value='';
   renderClsList();
   tst(`${name} 반 추가됐어요!`);
+}
+
+async function updateClassPrice(cls){
+  const price=parseInt(document.getElementById(`clsprice-${cls.replace(/\s/g,'_')}`)?.value)||null;
+  const{error}=await sb.from('classes').update({price}).eq('name',cls);
+  if(error){tst('저장 실패: '+error.message);return;}
+  classPrices[cls]=price||0;
+  tst('수강료가 저장됐어요');
 }
 
 async function addToCls(cls){
