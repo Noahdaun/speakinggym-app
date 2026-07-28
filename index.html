@@ -3828,7 +3828,7 @@ async function loadMyStats(){
       }
     }
   }catch(e){}
-  const goalMin=P?.weekly_goal_min||180;
+  const goalMin=P?.weekly_goal_min||null;
   renderWeeklyChart(weekDates,daySecs,myWeekSec,classAvgSec,goalMin,todayStr);
 }
 function renderWeeklyChart(weekDates,daySecs,myWeekSec,classAvgSec,goalMin,todayStr){
@@ -3855,8 +3855,10 @@ function renderWeeklyChart(weekDates,daySecs,myWeekSec,classAvgSec,goalMin,today
       반 평균(${fmtDur(classAvgSec)})보다 ${fmtDur(Math.abs(diff))} ${up?'더 했어요':'적어요'}
     </div>`;
   }
-  const goalSec=Math.max(1,goalMin*60);
-  const pct=Math.min(100,Math.round(myWeekSec/goalSec*100));
+  const hasGoal=!!goalMin;
+  const goalSec=hasGoal?goalMin*60:0;
+  const pct=hasGoal?Math.min(100,Math.round(myWeekSec/goalSec*100)):0;
+  const goalLabel=hasGoal?`주간 목표 ${fmtDur(goalSec)} 중 ${fmtDur(myWeekSec)}`:'주간 목표 미설정';
   el.innerHTML=`
     <div style="background:var(--card,#fff);border:1.5px solid var(--brd);border-radius:16px;padding:14px;margin-bottom:10px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
@@ -3868,19 +3870,19 @@ function renderWeeklyChart(weekDates,daySecs,myWeekSec,classAvgSec,goalMin,today
       <div style="display:flex;gap:8px;margin-top:4px;">${labels}</div>
       <div style="margin-top:12px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-          <div style="font-size:11px;font-weight:700;color:var(--text);">주간 목표 ${fmtDur(goalMin*60)} 중 ${fmtDur(myWeekSec)}</div>
+          <div style="font-size:11px;font-weight:700;color:${hasGoal?'var(--text)':'#A1A1AA'};">${goalLabel}</div>
           <div onclick="editWeeklyGoal()" style="display:flex;align-items:center;gap:3px;padding:3px 8px;border-radius:99px;background:var(--sf);cursor:pointer;">
-            <span style="font-size:10px;">✏️</span><span style="font-size:10px;font-weight:700;color:var(--mu);">목표 수정</span>
+            <span style="font-size:10px;">✏️</span><span style="font-size:10px;font-weight:700;color:var(--mu);">${hasGoal?'목표 수정':'목표 설정'}</span>
           </div>
         </div>
-        <div style="width:100%;height:8px;border-radius:99px;background:var(--sf);overflow:hidden;">
+        ${hasGoal?`<div style="width:100%;height:8px;border-radius:99px;background:var(--sf);overflow:hidden;">
           <div style="width:${pct}%;height:100%;border-radius:99px;background:linear-gradient(90deg,#60A5FA,#2563EB);"></div>
-        </div>
+        </div>`:''}
       </div>
     </div>`;
 }
 async function editWeeklyGoal(){
-  const curMin=P?.weekly_goal_min||180;
+  const curMin=P?.weekly_goal_min||'';
   const input=prompt('주간 목표 시간을 분 단위로 입력해주세요 (예: 180 = 3시간)',curMin);
   if(input===null)return;
   const min=parseInt(input,10);
