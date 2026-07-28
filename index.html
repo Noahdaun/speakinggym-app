@@ -301,6 +301,8 @@ function doUpdate(){
       <div id="home-stats"></div>
       <!-- 알림 -->
       <div id="home-notice"></div>
+      <!-- 푸시 알림 켜기 배너 -->
+      <div id="push-banner" style="display:none;"></div>
       <!-- 오늘 체크리스트 -->
       <div id="home-todo"></div>
       <!-- 달력 -->
@@ -1121,8 +1123,28 @@ async function enablePushNotifications(){
 
 function updatePushBanner(){
   const el=document.getElementById('push-banner');if(!el)return;
-  if(!('Notification' in window)||Notification.permission==='granted'){el.style.display='none';}
-  else{el.style.display='flex';}
+  const isStandalone=window.matchMedia?.('(display-mode: standalone)')?.matches||window.navigator.standalone===true;
+  const isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent);
+
+  if('Notification' in window && Notification.permission==='granted'){
+    el.style.display='none';return;
+  }
+  if('Notification' in window && Notification.permission==='default'){
+    el.style.display='flex';
+    el.style.cssText='display:flex;align-items:center;gap:10px;background:#EAF4FF;border:1.5px solid #B5D4F4;border-radius:14px;padding:12px 14px;margin-bottom:10px;';
+    el.innerHTML=`<span style="font-size:20px;">🔔</span>
+      <div style="flex:1;font-size:12px;font-weight:600;color:#185FA5;">알림을 켜면 원장님 메시지·공지를 바로 받아볼 수 있어요</div>
+      <button onclick="enablePushNotifications()" style="padding:8px 14px;border-radius:9px;background:#2F80ED;color:#fff;border:none;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">알림 켜기</button>`;
+    return;
+  }
+  if(isIOS && !isStandalone){
+    el.style.display='flex';
+    el.style.cssText='display:flex;align-items:center;gap:10px;background:#FFF7E6;border:1.5px solid #FDE68A;border-radius:14px;padding:12px 14px;margin-bottom:10px;';
+    el.innerHTML=`<span style="font-size:20px;">📲</span>
+      <div style="flex:1;font-size:12px;font-weight:600;color:#92400E;">아이폰은 홈 화면에 추가해야 알림을 받을 수 있어요<br><span style="font-weight:400;">공유 버튼 → "홈 화면에 추가"</span></div>`;
+    return;
+  }
+  el.style.display='none';
 }
 
 // 메시지 등 이벤트가 생겼을 때 대상 사용자(들)에게 푸시 발송 요청 (배포 전이면 조용히 무시)
@@ -5341,7 +5363,7 @@ function gp(n){
   const btns=document.querySelectorAll('.bni');if(idx>=0&&btns[idx])btns[idx].classList.add('on');
   if(n==='vocab'){if(!loaded.vocab){loaded.vocab=true;startVocab();}else{renderVHead();renderFC();}}
   if(n==='review'){lRev();}
-  if(n==='home'){lRev().then(buildHomeTodo);loadMyNotices();loadMyStats();}
+  if(n==='home'){lRev().then(buildHomeTodo);loadMyNotices();loadMyStats();updatePushBanner();}
   if(n==='record'){if(!loaded.record){loaded.record=true;lRec();}lRank('rec-rank-my','rec-rank-list');}
   if(n==='rank'){setRankPeriod(curRankPeriod);}
   if(n==='cert'){lCert();}
