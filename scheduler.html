@@ -125,6 +125,12 @@ input,textarea,select{font-family:inherit;}
 .field select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%236b7570'%3E%3Cpath d='M5.5 7.5l4.5 4.5 4.5-4.5' stroke='%236b7570' stroke-width='1.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:32px;}
 .field textarea{resize:vertical;min-height:60px;}
 .repeat-note{font-size:12px;font-weight:700;color:var(--brand-dk);background:var(--brand-bg);border-radius:9px;padding:8px 11px;margin-top:6px;}
+.weekday-picker{display:flex;gap:6px;}
+.weekday-btn{flex:1;aspect-ratio:1;border-radius:50%;border:1.5px solid var(--line);background:#FBFAF6;font-size:13px;font-weight:800;color:var(--sub);display:flex;align-items:center;justify-content:center;}
+.weekday-btn.sel{background:var(--brand);border-color:var(--brand);color:#fff;}
+.weekday-btn.sun{color:var(--sun);}
+.weekday-btn.sat{color:var(--sat);}
+.weekday-btn.sel.sun,.weekday-btn.sel.sat{color:#fff;}
 .row2{display:flex;gap:10px;}
 .row2 .field{flex:1;}
 .allday-toggle{display:flex;align-items:center;gap:9px;margin-bottom:15px;}
@@ -219,6 +225,10 @@ input,textarea,select{font-family:inherit;}
         <label>반복 종료일(선택)</label>
         <input type="date" id="f-repeatUntil">
       </div>
+    </div>
+    <div class="field" id="weekdayPickerWrap" style="display:none;">
+      <label>반복 요일</label>
+      <div class="weekday-picker" id="weekdayPicker"></div>
     </div>
     <div class="field" id="repeatNoteWrap" style="display:none;">
       <div class="repeat-note">반복 일정은 제목·시간·색상 수정과 삭제가 전체 반복에 적용돼요.</div>
@@ -327,7 +337,13 @@ function occursOnClient(ev,dateStr){
   if(ev.repeat_until && dateStr>ev.repeat_until) return false;
   const cur=parseYMD(dateStr), start=parseYMD(ev.start_date);
   if(ev.repeat_type==='daily') return true;
-  if(ev.repeat_type==='weekly') return cur.getDay()===start.getDay();
+  if(ev.repeat_type==='weekly'){
+    if(ev.repeat_days){
+      const days=ev.repeat_days.split(',').map(Number);
+      return days.includes(cur.getDay());
+    }
+    return cur.getDay()===start.getDay();
+  }
   if(ev.repeat_type==='monthly') return cur.getDate()===start.getDate();
   if(ev.repeat_type==='yearly') return cur.getMonth()===start.getMonth()&&cur.getDate()===start.getDate();
   return false;
@@ -566,6 +582,26 @@ function toggleRepeatUntil(){
   const rep=document.getElementById('f-repeat').value;
   document.getElementById('repeatUntilWrap').style.display=rep==='none'?'none':'block';
   document.getElementById('repeatNoteWrap').style.display=rep==='none'?'none':'block';
+  document.getElementById('weekdayPickerWrap').style.display=rep==='weekly'?'block':'none';
+  if(rep==='weekly' && !document.getElementById('weekdayPicker').children.length){
+    const startDow=parseYMD(document.getElementById('f-date').value||fmt(curDate)).getDay();
+    buildWeekdayPicker([startDow]);
+  }
+}
+function buildWeekdayPicker(selectedDays){
+  const wrap=document.getElementById('weekdayPicker');
+  wrap.innerHTML='';
+  const sel=new Set(selectedDays);
+  DOW.forEach((w,i)=>{
+    const btn=document.createElement('div');
+    btn.className='weekday-btn'+(sel.has(i)?' sel':'')+(i===0?' sun':i===6?' sat':'');
+    btn.textContent=w;
+    btn.onclick=()=>{ btn.classList.toggle('sel'); };
+    wrap.appendChild(btn);
+  });
+}
+function getSelectedWeekdays(){
+  return [...document.querySelectorAll('#weekdayPicker .weekday-btn')].reduce((acc,btn,i)=>{ if(btn.classList.contains('sel')) acc.push(i); return acc; },[]);
 }
 function openModal(id=null, dateStr=null, timeStr=null){
   editingId=id;
@@ -583,6 +619,11 @@ function openModal(id=null, dateStr=null, timeStr=null){
     document.getElementById('f-memo').value=ev.memo||'';
     document.getElementById('f-repeat').value=ev.repeat_type||'none';
     document.getElementById('f-repeatUntil').value=ev.repeat_until||'';
+    document.getElementById('weekdayPicker').innerHTML='';
+    if(ev.repeat_type==='weekly'){
+      const days=ev.repeat_days?ev.repeat_days.split(',').map(Number):[parseYMD(ev.start_date).getDay()];
+      buildWeekdayPicker(days);
+    }
     buildColorPicker(ev.color);
     toggleAllday();
     toggleRepeatUntil();
@@ -597,6 +638,7 @@ function openModal(id=null, dateStr=null, timeStr=null){
     document.getElementById('f-memo').value='';
     document.getElementById('f-repeat').value='none';
     document.getElementById('f-repeatUntil').value='';
+    document.getElementById('weekdayPicker').innerHTML='';
     buildColorPicker(COLORS[0]);
     toggleAllday();
     toggleRepeatUntil();
@@ -617,6 +659,12 @@ async function saveEvent(){
   const memo=document.getElementById('f-memo').value.trim();
   const repeatType=document.getElementById('f-repeat').value;
   const repeatUntil=document.getElementById('f-repeatUntil').value||null;
+  let repeatDays=null;
+  if(repeatType==='weekly'){
+    const days=getSelectedWeekdays();
+    if(days.length===0){ toast('반복할 요일을 최소 1개 선택해주세요'); return; }
+    repeatDays=days.join(',');
+  }
   const payload={
     title, all_day:allDay,
     start_date:startDate, end_date:endDate,
@@ -624,7 +672,8 @@ async function saveEvent(){
     end_time:allDay?null:document.getElementById('f-end').value,
     color, memo,
     repeat_type:repeatType,
-    repeat_until:repeatType==='none'?null:repeatUntil
+    repeat_until:repeatType==='none'?null:repeatUntil,
+    repeat_days:repeatDays
   };
   let error;
   if(editingId){
