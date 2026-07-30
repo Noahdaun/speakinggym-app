@@ -196,7 +196,7 @@ input,textarea,select{font-family:inherit;}
         <input type="date" id="f-date">
       </div>
       <div class="field" id="f-endDateWrap">
-        <label>종료일(선택)</label>
+        <label>종료일 (여러 날짜짜리 일정만)</label>
         <input type="date" id="f-endDate">
       </div>
     </div>
@@ -222,7 +222,7 @@ input,textarea,select{font-family:inherit;}
         </select>
       </div>
       <div class="field" id="repeatUntilWrap" style="display:none;">
-        <label>반복 종료일(선택)</label>
+        <label>반복은 언제까지?(선택, 안 정하면 계속 반복)</label>
         <input type="date" id="f-repeatUntil">
       </div>
     </div>
@@ -230,8 +230,12 @@ input,textarea,select{font-family:inherit;}
       <label>반복 요일</label>
       <div class="weekday-picker" id="weekdayPicker"></div>
     </div>
+    <div class="allday-toggle" id="skipHolidaysWrap" style="display:none;">
+      <input type="checkbox" id="f-skipHolidays">
+      <label for="f-skipHolidays">공휴일에는 반복 안 함</label>
+    </div>
     <div class="field" id="repeatNoteWrap" style="display:none;">
-      <div class="repeat-note">반복 일정은 제목·시간·색상 수정과 삭제가 전체 반복에 적용돼요.</div>
+      <div class="repeat-note">반복 일정은 제목·시간·색상 수정과 삭제가 전체 반복에 적용돼요. (하루짜리 일정으로 반복돼요 — 위의 "종료일"은 반복에는 쓰이지 않아요)</div>
     </div>
     <div class="field">
       <label>색상</label>
@@ -240,6 +244,10 @@ input,textarea,select{font-family:inherit;}
     <div class="field">
       <label>메모</label>
       <textarea id="f-memo" placeholder="메모 (선택)"></textarea>
+    </div>
+    <div class="sheet-btns" id="repeatDelRow" style="display:none;">
+      <button class="btn btn-del" onclick="deleteOccurrence()">이 날짜만 삭제</button>
+      <button class="btn btn-del" onclick="deleteEvent()">전체 반복 삭제</button>
     </div>
     <div class="sheet-btns">
       <button class="btn btn-cancel" onclick="closeModal()">취소</button>
@@ -266,6 +274,7 @@ let view='month';
 let events=[]; // loaded for the visible range (반복 일정은 occurrence별로 확장됨)
 let rawEventsById={}; // 원본(반복 시리즈) row — 수정 모달은 이걸 기준으로 연다
 let editingId=null;
+let editingOccDate=null; // 반복 일정에서 클릭한 실제 발생일 (개별 삭제용)
 let holidays={}; // 'YYYY-MM-DD' -> 공휴일 이름
 
 function fmt(d){ // YYYY-MM-DD local
@@ -336,17 +345,20 @@ function occursOnClient(ev,dateStr){
   if(dateStr<ev.start_date) return false;
   if(ev.repeat_until && dateStr>ev.repeat_until) return false;
   const cur=parseYMD(dateStr), start=parseYMD(ev.start_date);
-  if(ev.repeat_type==='daily') return true;
-  if(ev.repeat_type==='weekly'){
+  let match=false;
+  if(ev.repeat_type==='daily') match=true;
+  else if(ev.repeat_type==='weekly'){
     if(ev.repeat_days){
       const days=ev.repeat_days.split(',').map(Number);
-      return days.includes(cur.getDay());
-    }
-    return cur.getDay()===start.getDay();
+      match=days.includes(cur.getDay());
+    } else match=cur.getDay()===start.getDay();
   }
-  if(ev.repeat_type==='monthly') return cur.getDate()===start.getDate();
-  if(ev.repeat_type==='yearly') return cur.getMonth()===start.getMonth()&&cur.getDate()===start.getDate();
-  return false;
+  else if(ev.repeat_type==='monthly') match=cur.getDate()===start.getDate();
+  else if(ev.repeat_type==='yearly') match=cur.getMonth()===start.getMonth()&&cur.getDate()===start.getDate();
+  if(!match) return false;
+  if(ev.skip_holidays && holidayName(dateStr)) return false;
+  if(ev.repeat_exceptions && ev.repeat_exceptions.split(',').includes(dateStr)) return false;
+  return true;
 }
 async function loadEvents(){
   const {start,end}=rangeForView();
@@ -402,11 +414,11 @@ function holidayName(dateStr){ return holidays[dateStr]||null; }
 
 async function render(){
   updateLabel();
-  await loadEvents();
   const {start:_hs,end:_he}=rangeForView();
   const years=new Set();
   for(let y=_hs.getFullYear();y<=_he.getFullYear();y++) years.add(y);
   await Promise.all([...years].map(ensureHolidays));
+  await loadEvents();
   const root=document.getElementById('viewRoot');
   if(view==='month') root.innerHTML=renderMonth();
   else if(view==='week') root.innerHTML=renderWeekOrDay(false);
@@ -445,7 +457,7 @@ function renderMonth(){
     const show=dayEvs.slice(0,3);
     show.forEach(ev=>{
       const icon=(ev.repeat_type&&ev.repeat_type!=='none'?'🔁 ':'');
-      html+=`<div class="ev-chip" style="${chipStyle(ev.color)}" onclick="event.stopPropagation();editById('${ev.id}')">${icon}${escapeHtml(ev.title)}</div>`;
+      html+=`<div class="ev-chip" style="${chipStyle(ev.color)}" onclick="event.stopPropagation();editById('${ev.id}','${ev.start_date}')">${icon}${escapeHtml(ev.title)}</div>`;
     });
     if(dayEvs.length>3) html+=`<div class="ev-more">+${dayEvs.length-3}개</div>`;
     html+=`</div>`;
@@ -474,7 +486,7 @@ function renderWeekOrDay(isDay){
     html+=`<div style="display:flex;flex-direction:column;gap:2px;">`;
     allDayEvs.forEach(ev=>{
       const icon=(ev.repeat_type&&ev.repeat_type!=='none'?'🔁 ':'');
-      html+=`<div class="allday-chip" style="${chipStyle(ev.color)}" onclick="editById('${ev.id}')">${icon}${escapeHtml(ev.title)}</div>`;
+      html+=`<div class="allday-chip" style="${chipStyle(ev.color)}" onclick="editById('${ev.id}','${ev.start_date}')">${icon}${escapeHtml(ev.title)}</div>`;
     });
     html+=`</div>`;
   });
@@ -505,7 +517,7 @@ function renderWeekOrDay(isDay){
       let heightMin=(eh+em/60)-(sh+sm/60); if(heightMin<0.5) heightMin=0.5;
       const height=heightMin*52;
       const icon=(ev.repeat_type&&ev.repeat_type!=='none'?'🔁 ':'');
-      html+=`<div class="tevent" style="top:${top}px;height:${height}px;${chipStyle(ev.color)}" onclick="event.stopPropagation();editById('${ev.id}')">${icon}${escapeHtml(ev.title)}<span class="ttime">${ev.start_time?.slice(0,5)||''}${ev.end_time?'–'+ev.end_time.slice(0,5):''}</span></div>`;
+      html+=`<div class="tevent" style="top:${top}px;height:${height}px;${chipStyle(ev.color)}" onclick="event.stopPropagation();editById('${ev.id}','${ev.start_date}')">${icon}${escapeHtml(ev.title)}<span class="ttime">${ev.start_time?.slice(0,5)||''}${ev.end_time?'–'+ev.end_time.slice(0,5):''}</span></div>`;
     });
     html+=`</div>`;
   });
@@ -580,9 +592,14 @@ function toggleAllday(){
 }
 function toggleRepeatUntil(){
   const rep=document.getElementById('f-repeat').value;
-  document.getElementById('repeatUntilWrap').style.display=rep==='none'?'none':'block';
-  document.getElementById('repeatNoteWrap').style.display=rep==='none'?'none':'block';
+  const isRepeating=rep!=='none';
+  document.getElementById('repeatUntilWrap').style.display=isRepeating?'block':'none';
+  document.getElementById('repeatNoteWrap').style.display=isRepeating?'block':'none';
+  document.getElementById('skipHolidaysWrap').style.display=isRepeating?'flex':'none';
   document.getElementById('weekdayPickerWrap').style.display=rep==='weekly'?'block':'none';
+  // 반복 일정은 하루짜리로만 반복돼요 — "종료일"(여러 날짜짜리 일정용) 필드는 반복과 같이 쓰면 헷갈리니 숨김
+  document.getElementById('f-endDateWrap').style.display=isRepeating?'none':'block';
+  if(isRepeating) document.getElementById('f-endDate').value='';
   if(rep==='weekly' && !document.getElementById('weekdayPicker').children.length){
     const startDow=parseYMD(document.getElementById('f-date').value||fmt(curDate)).getDay();
     buildWeekdayPicker([startDow]);
@@ -603,13 +620,16 @@ function buildWeekdayPicker(selectedDays){
 function getSelectedWeekdays(){
   return [...document.querySelectorAll('#weekdayPicker .weekday-btn')].reduce((acc,btn,i)=>{ if(btn.classList.contains('sel')) acc.push(i); return acc; },[]);
 }
-function openModal(id=null, dateStr=null, timeStr=null){
+function openModal(id=null, dateStr=null, timeStr=null, occDate=null){
   editingId=id;
   document.getElementById('sheetTitle').textContent=id?'일정 수정':'새 일정';
-  document.getElementById('delBtn').style.display=id?'block':'none';
   if(id){
     // 원본(반복 시리즈) 레코드를 그대로 찾아 편집한다 — 확장된 occurrence가 아닌 base row 기준
     const ev=rawEventsById[id]||events.find(x=>x.id===id);
+    const isRepeatSeries=ev.repeat_type&&ev.repeat_type!=='none';
+    editingOccDate=occDate||ev.start_date;
+    document.getElementById('delBtn').style.display=isRepeatSeries?'none':'block';
+    document.getElementById('repeatDelRow').style.display=isRepeatSeries?'flex':'none';
     document.getElementById('f-title').value=ev.title;
     document.getElementById('f-allday').checked=ev.all_day;
     document.getElementById('f-date').value=ev.start_date;
@@ -619,6 +639,7 @@ function openModal(id=null, dateStr=null, timeStr=null){
     document.getElementById('f-memo').value=ev.memo||'';
     document.getElementById('f-repeat').value=ev.repeat_type||'none';
     document.getElementById('f-repeatUntil').value=ev.repeat_until||'';
+    document.getElementById('f-skipHolidays').checked=!!ev.skip_holidays;
     document.getElementById('weekdayPicker').innerHTML='';
     if(ev.repeat_type==='weekly'){
       const days=ev.repeat_days?ev.repeat_days.split(',').map(Number):[parseYMD(ev.start_date).getDay()];
@@ -628,6 +649,9 @@ function openModal(id=null, dateStr=null, timeStr=null){
     toggleAllday();
     toggleRepeatUntil();
   } else {
+    editingOccDate=null;
+    document.getElementById('delBtn').style.display='none';
+    document.getElementById('repeatDelRow').style.display='none';
     document.getElementById('f-title').value='';
     document.getElementById('f-allday').checked=false;
     document.getElementById('f-date').value=dateStr||fmt(curDate);
@@ -638,6 +662,7 @@ function openModal(id=null, dateStr=null, timeStr=null){
     document.getElementById('f-memo').value='';
     document.getElementById('f-repeat').value='none';
     document.getElementById('f-repeatUntil').value='';
+    document.getElementById('f-skipHolidays').checked=false;
     document.getElementById('weekdayPicker').innerHTML='';
     buildColorPicker(COLORS[0]);
     toggleAllday();
@@ -645,7 +670,7 @@ function openModal(id=null, dateStr=null, timeStr=null){
   }
   document.getElementById('overlay').classList.add('open');
 }
-function editById(id){ openModal(id); }
+function editById(id,occDate){ openModal(id,null,null,occDate); }
 function closeModal(){ document.getElementById('overlay').classList.remove('open'); }
 
 async function saveEvent(){
@@ -653,12 +678,14 @@ async function saveEvent(){
   if(!title){ toast('제목을 입력해주세요'); return; }
   const allDay=document.getElementById('f-allday').checked;
   const startDate=document.getElementById('f-date').value;
-  const endDate=document.getElementById('f-endDate').value||startDate;
+  const repeatType=document.getElementById('f-repeat').value;
+  // 반복 일정은 항상 하루짜리로만 반복돼요 (여러 날짜짜리 "종료일"과 섞으면 중복·오류가 생기기 쉬움)
+  const endDate=repeatType==='none'?(document.getElementById('f-endDate').value||startDate):startDate;
   if(endDate<startDate){ toast('종료일이 시작일보다 빠릅니다'); return; }
   const color=document.getElementById('colorPicker').dataset.selected||COLORS[0];
   const memo=document.getElementById('f-memo').value.trim();
-  const repeatType=document.getElementById('f-repeat').value;
   const repeatUntil=document.getElementById('f-repeatUntil').value||null;
+  const skipHolidays=document.getElementById('f-skipHolidays').checked;
   let repeatDays=null;
   if(repeatType==='weekly'){
     const days=getSelectedWeekdays();
@@ -673,7 +700,8 @@ async function saveEvent(){
     color, memo,
     repeat_type:repeatType,
     repeat_until:repeatType==='none'?null:repeatUntil,
-    repeat_days:repeatDays
+    repeat_days:repeatDays,
+    skip_holidays:repeatType==='none'?false:skipHolidays
   };
   let error;
   if(editingId){
@@ -689,8 +717,20 @@ async function saveEvent(){
 async function deleteEvent(){
   if(!editingId) return;
   const isRepeat=rawEventsById[editingId]?.repeat_type&&rawEventsById[editingId].repeat_type!=='none';
-  if(!confirm(isRepeat?'반복되는 일정이에요. 전체 반복 일정을 삭제할까요?':'이 일정을 삭제할까요?')) return;
+  if(!confirm(isRepeat?'이 반복 일정 전체(모든 날짜)를 삭제할까요?':'이 일정을 삭제할까요?')) return;
   const {error}=await sb.from(TABLE).delete().eq('id',editingId);
+  if(error){ toast('삭제 실패: '+error.message); return; }
+  toast('삭제되었습니다');
+  closeModal();
+  render();
+}
+async function deleteOccurrence(){
+  if(!editingId||!editingOccDate) return;
+  if(!confirm(`${editingOccDate} 일정 하나만 삭제할까요? (나머지 반복은 그대로 남아요)`)) return;
+  const ev=rawEventsById[editingId];
+  const existing=ev.repeat_exceptions?ev.repeat_exceptions.split(','):[];
+  if(!existing.includes(editingOccDate)) existing.push(editingOccDate);
+  const {error}=await sb.from(TABLE).update({repeat_exceptions:existing.join(',')}).eq('id',editingId);
   if(error){ toast('삭제 실패: '+error.message); return; }
   toast('삭제되었습니다');
   closeModal();
