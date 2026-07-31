@@ -36,3 +36,26 @@ create policy "scheduler_events_select" on scheduler_events for select using (tr
 create policy "scheduler_events_insert" on scheduler_events for insert with check (true);
 create policy "scheduler_events_update" on scheduler_events for update using (true);
 create policy "scheduler_events_delete" on scheduler_events for delete using (true);
+
+-- 일간/주간/월간 목표 체크리스트
+create table if not exists scheduler_goals (
+  id uuid primary key default gen_random_uuid(),
+  period_type text not null check (period_type in ('day','week','month')),
+  period_key text not null, -- day: 'YYYY-MM-DD', week: 그 주 일요일 날짜, month: 'YYYY-MM'
+  text text not null,
+  done boolean not null default false,
+  sort_order integer not null default 0,
+  created_at timestamptz not null default now()
+);
+create index if not exists idx_scheduler_goals_period on scheduler_goals (period_type, period_key);
+
+alter table scheduler_goals enable row level security;
+
+drop policy if exists "scheduler_goals_select" on scheduler_goals;
+drop policy if exists "scheduler_goals_insert" on scheduler_goals;
+drop policy if exists "scheduler_goals_update" on scheduler_goals;
+drop policy if exists "scheduler_goals_delete" on scheduler_goals;
+create policy "scheduler_goals_select" on scheduler_goals for select using (true);
+create policy "scheduler_goals_insert" on scheduler_goals for insert with check (true);
+create policy "scheduler_goals_update" on scheduler_goals for update using (true);
+create policy "scheduler_goals_delete" on scheduler_goals for delete using (true);
