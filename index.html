@@ -5975,8 +5975,8 @@ async function openOlLessonMgr(cid, ctitle){
         <div style="font-size:13px;font-weight:700;margin-bottom:10px;">➕ 영상 추가</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
           <div>
-            <div style="font-size:11px;color:var(--mu);margin-bottom:4px;">날짜</div>
-            <input type="date" id="ol-ls-date" style="width:100%;padding:9px;border:1.5px solid var(--brd);border-radius:var(--rs);font-size:12px;background:var(--sf);font-family:inherit;">
+            <div style="font-size:11px;color:var(--mu);margin-bottom:4px;">주차</div>
+            <input type="number" id="ol-ls-week" min="1" placeholder="예: 1" style="width:100%;padding:9px;border:1.5px solid var(--brd);border-radius:var(--rs);font-size:12px;background:var(--sf);font-family:inherit;">
           </div>
           <div>
             <div style="font-size:11px;color:var(--mu);margin-bottom:4px;">시간 (분)</div>
@@ -6008,18 +6008,17 @@ async function openOlLessonMgr(cid, ctitle){
 
 async function loadOlLessons(cid){
   const el=document.getElementById('ol-lesson-list');if(!el)return;
-  const{data}=await sb.from('online_lessons').select('*').eq('course_id',cid).order('lesson_date');
+  const{data}=await sb.from('online_lessons').select('*').eq('course_id',cid).order('week');
   const lessons=data||[];
   if(!lessons.length){el.innerHTML='<div class="empty">등록된 영상이 없어요</div>';return;}
-  const dw=['일','월','화','수','목','금','토'];
   el.innerHTML=lessons.map(l=>{
-    const dLabel=l.lesson_date?`${l.lesson_date} (${dw[new Date(l.lesson_date+'T00:00:00').getDay()]})`:'날짜 없음';
+    const wLabel=l.week?`${l.week}주차`:'주차 미지정';
     return`
         <div style="background:var(--sf);border-radius:11px;padding:11px 13px;margin-bottom:6px;border:1.5px solid var(--brd);">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
             <div style="flex:1;min-width:0;">
               <div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${l.title}</div>
-              <div style="font-size:10px;color:var(--mu);margin-top:2px;">${dLabel} · ${l.lesson_type} · ${l.duration_min}분${l.is_free?' · 🆓 무료':''}</div>
+              <div style="font-size:10px;color:var(--mu);margin-top:2px;">${wLabel} · ${l.lesson_type} · ${l.duration_min}분${l.is_free?' · 🆓 무료':''}</div>
             </div>
             <button onclick="deleteOlLesson('${l.id}','${cid}')" style="margin-left:8px;padding:4px 10px;border-radius:7px;background:var(--rl);color:var(--rd);border:none;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">삭제</button>
           </div>
@@ -6029,17 +6028,17 @@ async function loadOlLessons(cid){
 }
 
 async function saveOlLesson(cid){
-  const lesson_date=document.getElementById('ol-ls-date')?.value;
+  const week=parseInt(document.getElementById('ol-ls-week')?.value)||null;
   const lesson_type=document.getElementById('ol-ls-type')?.value||'메인';
   const duration_min=parseInt(document.getElementById('ol-ls-dur')?.value)||20;
   const title=document.getElementById('ol-ls-title')?.value?.trim();
   const bunny_video_id=document.getElementById('ol-ls-vid')?.value?.trim()||null;
   const is_free=document.getElementById('ol-ls-free')?.checked||false;
-  if(!lesson_date){tst('날짜를 선택해주세요');return;}
+  if(!week){tst('주차를 입력해주세요');return;}
   if(!title){tst('영상 제목을 입력해주세요');return;}
-  const{error}=await sb.from('online_lessons').insert({course_id:cid,lesson_date,lesson_type,title,bunny_video_id,duration_min,is_free});
+  const{error}=await sb.from('online_lessons').insert({course_id:cid,week,lesson_type,title,bunny_video_id,duration_min,is_free});
   if(error){tst('저장 실패: '+error.message);return;}
-  ['ol-ls-title','ol-ls-vid'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ['ol-ls-week','ol-ls-title','ol-ls-vid'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('ol-ls-free').checked=false;
   tst('영상이 추가됐어요!');
   await loadOlLessons(cid);
@@ -6063,7 +6062,7 @@ async function openMyOnlineCourse(){
     return;
   }
   const sub=subs[0];
-  await openCourseCalendar(sub.course_id, sub.online_courses?.title||'온라인 수업');
+  await openCourseWeeks(sub.course_id, sub.online_courses?.title||'온라인 수업');
 }
 
 // 구매하신 온라인 강의가 없을 때 — 무료 체험 영상(상단) + 강의 목록 + 구매 버튼(스마트스토어 연결)
@@ -6101,96 +6100,49 @@ function buyOnlineCourse(){
   window.open(EXTERNAL_COURSE_LINK,'_blank');
 }
 
-let _ocCourseId=null,_ocCourseTitle='',_ocLessons=[],_ocCY=0,_ocCM=0,_ocSelDate=null,_ocHasAccess=true,_ocPrice=0;
-async function openCourseCalendar(courseId,title,hasAccess,price){
+let _ocCourseId=null,_ocCourseTitle='',_ocLessons=[],_ocHasAccess=true,_ocPrice=0;
+// 가입 날짜와 무관하게 주차별로 강의를 보여줌 (달력 방식 폐기)
+async function openCourseWeeks(courseId,title,hasAccess,price){
   _ocCourseId=courseId;_ocCourseTitle=title;_ocHasAccess=hasAccess!==false;_ocPrice=price||0;
-  const now=new Date();_ocCY=now.getFullYear();_ocCM=now.getMonth();
   document.getElementById('rs-title').textContent=title;
   document.getElementById('rs-badge').textContent=_ocHasAccess?'온라인 수업':'무료 미리보기';
   document.getElementById('rs-badge').style.background='#E6F1FB';
   document.getElementById('rs-badge').style.color='#185FA5';
   document.getElementById('rs-top').style.background='#1E2D45';
-  const{data}=await sb.from('online_lessons').select('*').eq('course_id',courseId).order('lesson_date');
+  const{data}=await sb.from('online_lessons').select('*').eq('course_id',courseId).order('week');
   _ocLessons=_ocHasAccess?(data||[]):(data||[]).filter(l=>l.is_free);
-  _ocSelDate=now.toISOString().slice(0,10);
   document.getElementById('rs-content').innerHTML=`
     ${_ocHasAccess?'':'<div style="background:var(--aml);border:1.5px solid #FAC775;border-radius:12px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:#854F0B;">🔓 무료로 공개된 영상만 보여요. 전체 강의를 보려면 구매해주세요.</div>'}
-    <div style="background:var(--card,#fff);border:1.5px solid var(--brd);border-radius:16px;padding:14px;margin-bottom:10px;">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-        <button onclick="ocCalMv(-1)" style="width:26px;height:26px;border-radius:8px;background:var(--sf);border:none;cursor:pointer;">‹</button>
-        <span id="oc-cal-label" style="font-size:14px;font-weight:800;color:var(--text);"></span>
-        <button onclick="ocCalMv(1)" style="width:26px;height:26px;border-radius:8px;background:var(--sf);border:none;cursor:pointer;">›</button>
-      </div>
-      <div id="oc-dow-row" style="margin-bottom:4px;"></div>
-      <div id="oc-cal-grid" style="display:flex;flex-direction:column;gap:3px;"></div>
-      <div style="display:flex;gap:10px;margin-top:8px;flex-wrap:wrap;">
-        <div style="display:flex;align-items:center;gap:3px;font-size:9px;color:var(--mu);"><div style="width:8px;height:8px;border-radius:2px;background:#DBEAFE;"></div>메인·발음</div>
-        <div style="display:flex;align-items:center;gap:3px;font-size:9px;color:var(--mu);"><div style="width:8px;height:8px;border-radius:2px;background:#EDE9FE;"></div>리뷰·아웃풋</div>
-      </div>
-    </div>
-    <div id="oc-day-lessons"></div>`;
+    <div id="oc-week-list"></div>`;
   document.getElementById('rs-bot').innerHTML=_ocHasAccess?'':`<button onclick="buyOnlineCourse()" style="width:100%;padding:13px;border-radius:12px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;">전체 강의 신청하기</button>`;
   document.getElementById('rs').classList.add('on');
-  renderOcCalendar();
+  renderOcWeekList();
 }
-function ocCalMv(d){
-  _ocCM+=d;if(_ocCM>11){_ocCM=0;_ocCY++;}if(_ocCM<0){_ocCM=11;_ocCY--;}
-  renderOcCalendar();
-}
-function renderOcCalendar(){
-  const y=_ocCY,m=_ocCM;
-  const mn=['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
-  document.getElementById('oc-cal-label').textContent=`${y}년 ${mn[m]}`;
-  document.getElementById('oc-dow-row').innerHTML=`<div style="display:grid;grid-template-columns:repeat(7,1fr);">${['일','월','화','수','목','금','토'].map(d=>`<div style="text-align:center;font-size:10px;color:var(--mu);">${d}</div>`).join('')}</div>`;
-  const fd=new Date(y,m,1).getDay(),dim=new Date(y,m+1,0).getDate(),td=new Date().toISOString().slice(0,10);
-  const byDate={};
-  _ocLessons.forEach(l=>{if(!l.lesson_date)return;if(!byDate[l.lesson_date])byDate[l.lesson_date]=[];byDate[l.lesson_date].push(l);});
-  const cells=[];
-  for(let i=0;i<fd;i++)cells.push(null);
-  for(let d=1;d<=dim;d++)cells.push(`${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`);
-  while(cells.length%7!==0)cells.push(null);
-  let html='';
-  for(let i=0;i<cells.length;i+=7){
-    html+='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;">';
-    for(let j=i;j<i+7;j++){
-      const ds=cells[j];
-      if(!ds){html+='<div></div>';continue;}
-      const d=parseInt(ds.slice(-2));
-      const ls=byDate[ds]||[];
-      const hasMain=ls.some(l=>l.lesson_type==='메인'||l.lesson_type==='발음');
-      const hasRev=ls.some(l=>l.lesson_type==='리뷰'||l.lesson_type==='아웃풋');
-      let bg='transparent';
-      if(hasMain)bg='#DBEAFE';else if(hasRev)bg='#EDE9FE';
-      const isToday=ds===td;
-      const isSel=ds===_ocSelDate;
-      html+=`<div onclick="ocSelectDate('${ds}')" style="aspect-ratio:1;border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer;background:${bg};border:${isSel?'2px solid #2F80ED':(isToday?'1.5px solid #2F80ED':'none')};font-size:11px;font-weight:${isToday?'800':'500'};color:var(--text);">${d}</div>`;
-    }
-    html+='</div>';
-  }
-  document.getElementById('oc-cal-grid').innerHTML=html;
-  renderOcDayLessons();
-}
-function ocSelectDate(ds){_ocSelDate=ds;renderOcCalendar();}
-function renderOcDayLessons(){
-  const el=document.getElementById('oc-day-lessons');if(!el)return;
-  const ls=_ocLessons.filter(l=>l.lesson_date===_ocSelDate);
-  const dw=['일','월','화','수','목','금','토'];
-  const dateObj=new Date(_ocSelDate+'T00:00:00');
-  const header=`${dateObj.getMonth()+1}월 ${dateObj.getDate()}일 (${dw[dateObj.getDay()]}) 강의`;
-  if(!ls.length){el.innerHTML=`<div style="font-size:13px;font-weight:700;margin-bottom:8px;color:var(--text);">${header}</div><div class="empty">이 날은 강의가 없어요</div>`;return;}
-  const typeColor={'메인':['#2F80ED','#DBEAFE'],'발음':['#1DB981','#D1FAE5'],'리뷰':['#8B5CF6','#EDE9FE'],'아웃풋':['#D97706','#FDE9CC']};
-  el.innerHTML=`<div style="font-size:13px;font-weight:700;margin-bottom:8px;color:var(--text);">${header}</div>`+
-    ls.map(l=>{
-      const[c,bg]=typeColor[l.lesson_type]||['#71717A','#F1F2F5'];
-      return`<div onclick="playOnlineLesson('${l.id}')" style="display:flex;align-items:center;gap:10px;background:var(--card,#fff);border:1.5px solid var(--brd);border-radius:14px;padding:12px;margin-bottom:8px;cursor:pointer;">
-        <div style="width:44px;height:44px;border-radius:10px;background:${bg};display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px;color:${c};">▶</div>
-        <div style="flex:1;min-width:0;">
-          <div style="display:inline-block;font-size:9px;font-weight:700;color:${c};background:${bg};padding:2px 7px;border-radius:99px;margin-bottom:3px;">${l.lesson_type}강의</div>
-          <div style="font-size:13px;font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${l.title}</div>
-          <div style="font-size:10px;color:var(--mu);margin-top:2px;">${l.duration_min}분${!l.bunny_video_id?' · 준비중':''}</div>
-        </div>
-      </div>`;
-    }).join('');
+const OC_TYPE_COLOR={'메인':['#2F80ED','#DBEAFE'],'발음':['#1DB981','#D1FAE5'],'리뷰':['#8B5CF6','#EDE9FE'],'아웃풋':['#D97706','#FDE9CC']};
+function renderOcWeekList(){
+  const el=document.getElementById('oc-week-list');if(!el)return;
+  if(!_ocLessons.length){el.innerHTML='<div class="empty">아직 등록된 강의가 없어요</div>';return;}
+  const byWeek={};
+  _ocLessons.forEach(l=>{const w=l.week||0;if(!byWeek[w])byWeek[w]=[];byWeek[w].push(l);});
+  const weeks=Object.keys(byWeek).map(Number).sort((a,b)=>a-b);
+  el.innerHTML=weeks.map(w=>{
+    const ls=byWeek[w];
+    const header=w?`${w}주차`:'주차 미지정';
+    return`<div style="margin-bottom:16px;">
+      <div style="font-size:13px;font-weight:800;color:var(--text);margin-bottom:8px;">${header}</div>
+      ${ls.map(l=>{
+        const[c,bg]=OC_TYPE_COLOR[l.lesson_type]||['#71717A','#F1F2F5'];
+        return`<div onclick="playOnlineLesson('${l.id}')" style="display:flex;align-items:center;gap:10px;background:var(--card,#fff);border:1.5px solid var(--brd);border-radius:14px;padding:12px;margin-bottom:8px;cursor:pointer;">
+          <div style="width:44px;height:44px;border-radius:10px;background:${bg};display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px;color:${c};">▶</div>
+          <div style="flex:1;min-width:0;">
+            <div style="display:inline-block;font-size:9px;font-weight:700;color:${c};background:${bg};padding:2px 7px;border-radius:99px;margin-bottom:3px;">${l.lesson_type}강의</div>
+            <div style="font-size:13px;font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${l.title}</div>
+            <div style="font-size:10px;color:var(--mu);margin-top:2px;">${l.duration_min}분${!l.bunny_video_id?' · 준비중':''}</div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
+  }).join('');
 }
 function playOnlineLesson(lid){
   const l=_ocLessons.find(x=>x.id===lid);if(!l)return;
@@ -6201,7 +6153,7 @@ function playOnlineLesson(lid){
     <div style="border-radius:12px;overflow:hidden;aspect-ratio:16/9;background:#000;margin-bottom:12px;">
       ${BUNNY_LIBRARY_ID?`<iframe src="https://iframe.mediadelivery.net/embed/${BUNNY_LIBRARY_ID}/${l.bunny_video_id}?autoplay=true" style="width:100%;height:100%;border:none;" allow="autoplay; fullscreen" allowfullscreen></iframe>`:'<div style="color:#fff;font-size:12px;display:flex;align-items:center;justify-content:center;height:100%;text-align:center;padding:20px;">Bunny 라이브러리 ID가 아직 설정되지 않았어요</div>'}
     </div>
-    <button onclick="openCourseCalendar('${_ocCourseId}','${_ocCourseTitle.replace(/'/g,"\\'")}',${_ocHasAccess},${_ocPrice})" style="width:100%;padding:11px;border-radius:11px;background:var(--sf);border:1.5px solid var(--brd);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;color:var(--text);">← 달력으로</button>`;
+    <button onclick="openCourseWeeks('${_ocCourseId}','${_ocCourseTitle.replace(/'/g,"\\'")}',${_ocHasAccess},${_ocPrice})" style="width:100%;padding:11px;border-radius:11px;background:var(--sf);border:1.5px solid var(--brd);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;color:var(--text);">← 목록으로</button>`;
   document.getElementById('rs-bot').innerHTML='';
 }
 
