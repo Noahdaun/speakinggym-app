@@ -5983,11 +5983,19 @@ async function openOlLessonMgr(cid, ctitle){
             <input type="number" id="ol-ls-dur" value="20" min="1" style="width:100%;padding:9px;border:1.5px solid var(--brd);border-radius:var(--rs);font-size:12px;background:var(--sf);font-family:inherit;">
           </div>
         </div>
-        <div style="margin-bottom:8px;">
-          <div style="font-size:11px;color:var(--mu);margin-bottom:4px;">강의 유형</div>
-          <select id="ol-ls-type" style="width:100%;padding:9px;border:1.5px solid var(--brd);border-radius:var(--rs);font-size:12px;background:var(--sf);font-family:inherit;">
-            <option value="메인">메인강의</option><option value="발음">발음강의</option><option value="리뷰">리뷰강의</option><option value="아웃풋">아웃풋강의</option>
-          </select>
+        <div style="display:grid;grid-template-columns:2fr 1fr;gap:8px;margin-bottom:8px;">
+          <div>
+            <div style="font-size:11px;color:var(--mu);margin-bottom:4px;">강의 유형</div>
+            <select id="ol-ls-type" style="width:100%;padding:9px;border:1.5px solid var(--brd);border-radius:var(--rs);font-size:12px;background:var(--sf);font-family:inherit;">
+              <option value="메인">메인강의</option><option value="발음">발음강의</option><option value="리뷰">리뷰강의</option><option value="아웃풋">아웃풋강의</option>
+            </select>
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--mu);margin-bottom:4px;">회차</div>
+            <select id="ol-ls-session" style="width:100%;padding:9px;border:1.5px solid var(--brd);border-radius:var(--rs);font-size:12px;background:var(--sf);font-family:inherit;">
+              <option value="1">1회차</option><option value="2">2회차</option>
+            </select>
+          </div>
         </div>
         <input class="inp" type="text" id="ol-ls-title" placeholder="영상 제목">
         <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
@@ -6017,13 +6025,14 @@ async function loadOlLessons(cid){
   if(!_olLessonsCache.length){el.innerHTML='<div class="empty">등록된 영상이 없어요</div>';return;}
   el.innerHTML=_olLessonsCache.map(l=>{
     const wLabel=l.week?`${l.week}주차`:'미리보기(주차 없음)';
+    const sLabel=l.sort_order===2?'2회차':'1회차';
     const vidLabel=l.bunny_video_id?(lsYtId(l.bunny_video_id)?'유튜브':'Bunny'):null;
     return`
         <div style="background:var(--sf);border-radius:11px;padding:11px 13px;margin-bottom:6px;border:1.5px solid var(--brd);">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
             <div style="flex:1;min-width:0;">
               <div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${l.title}</div>
-              <div style="font-size:10px;color:var(--mu);margin-top:2px;">${wLabel} · ${l.lesson_type} · ${l.duration_min}분${l.is_free?' · 🆓 무료':''}</div>
+              <div style="font-size:10px;color:var(--mu);margin-top:2px;">${wLabel} · ${l.lesson_type} ${sLabel} · ${l.duration_min}분${l.is_free?' · 🆓 무료':''}</div>
             </div>
             <div style="display:flex;gap:5px;flex-shrink:0;margin-left:8px;">
               <button onclick="editOlLesson('${l.id}')" style="padding:4px 10px;border-radius:7px;background:var(--gl);color:var(--gd);border:none;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">수정</button>
@@ -6041,6 +6050,7 @@ function editOlLesson(lid){
   document.getElementById('ol-ls-week').value=l.week||'';
   document.getElementById('ol-ls-dur').value=l.duration_min||20;
   document.getElementById('ol-ls-type').value=l.lesson_type||'메인';
+  document.getElementById('ol-ls-session').value=l.sort_order===2?'2':'1';
   document.getElementById('ol-ls-title').value=l.title||'';
   document.getElementById('ol-ls-vid').value=l.bunny_video_id||'';
   document.getElementById('ol-ls-free').checked=!!l.is_free;
@@ -6053,6 +6063,7 @@ function cancelEditOlLesson(){
   _olEditLessonId=null;
   ['ol-ls-week','ol-ls-title','ol-ls-vid'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('ol-ls-free').checked=false;
+  document.getElementById('ol-ls-session').value='1';
   document.getElementById('ol-ls-save-btn').textContent='영상 추가';
   document.getElementById('ol-ls-cancel-btn').style.display='none';
 }
@@ -6060,19 +6071,20 @@ function cancelEditOlLesson(){
 async function saveOlLesson(cid){
   const week=parseInt(document.getElementById('ol-ls-week')?.value)||null;
   const lesson_type=document.getElementById('ol-ls-type')?.value||'메인';
+  const sort_order=parseInt(document.getElementById('ol-ls-session')?.value)||1;
   const duration_min=parseInt(document.getElementById('ol-ls-dur')?.value)||20;
   const title=document.getElementById('ol-ls-title')?.value?.trim();
   const bunny_video_id=document.getElementById('ol-ls-vid')?.value?.trim()||null;
   const is_free=document.getElementById('ol-ls-free')?.checked||false;
   if(!title){tst('영상 제목을 입력해주세요');return;}
   if(_olEditLessonId){
-    const{error}=await sb.from('online_lessons').update({week,lesson_type,title,bunny_video_id,duration_min,is_free}).eq('id',_olEditLessonId);
+    const{error}=await sb.from('online_lessons').update({week,lesson_type,sort_order,title,bunny_video_id,duration_min,is_free}).eq('id',_olEditLessonId);
     if(error){tst('수정 실패: '+error.message);return;}
     tst('수정됐어요!');
     cancelEditOlLesson();
   }else{
     if(!week){tst('주차를 입력해주세요');return;}
-    const{error}=await sb.from('online_lessons').insert({course_id:cid,week,lesson_type,title,bunny_video_id,duration_min,is_free});
+    const{error}=await sb.from('online_lessons').insert({course_id:cid,week,lesson_type,sort_order,title,bunny_video_id,duration_min,is_free});
     if(error){tst('저장 실패: '+error.message);return;}
     ['ol-ls-week','ol-ls-title','ol-ls-vid'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
     document.getElementById('ol-ls-free').checked=false;
@@ -6178,35 +6190,36 @@ function renderOcWeekList(){
     }).join('');
     return;
   }
-  // 결제 후 — 6개월(24주) 커리큘럼을 4주(1개월) 단위 아코디언으로 묶어서 표시. 영상이 등록된 칸만 재생 가능
+  // 결제 후 — 6개월(24주) 커리큘럼을 4주(1개월) 단위 아코디언으로 묶어서 표시. 각 주차는 유형 4개 x 회차 2개 = 8칸. 영상이 등록된 칸만 재생 가능
+  const OC_SESSIONS=[1,2];
   const byKey={};
-  _ocLessons.forEach(l=>{if(l.week)byKey[`${l.week}_${l.lesson_type}`]=l;});
+  _ocLessons.forEach(l=>{if(l.week)byKey[`${l.week}_${l.lesson_type}_${l.sort_order===2?2:1}`]=l;});
   const totalMonths=Math.ceil(OC_TOTAL_WEEKS/4);
+  const ocTile=(l,t)=>{
+    const[c,bg]=OC_TYPE_COLOR[t];
+    if(l&&l.bunny_video_id){
+      return`<div onclick="playOnlineLesson('${l.id}')" style="cursor:pointer;background:${bg};border-radius:9px;padding:7px 2px;text-align:center;">
+        <div style="font-size:14px;color:${c};">▶</div>
+        <div style="font-size:8px;font-weight:700;color:${c};margin-top:1px;">${t}</div>
+      </div>`;
+    }
+    return`<div style="background:var(--sf);border:1px dashed var(--brd);border-radius:9px;padding:7px 2px;text-align:center;opacity:.5;">
+      <div style="font-size:14px;color:var(--mu);">🔒</div>
+      <div style="font-size:8px;font-weight:700;color:var(--mu);margin-top:1px;">${t}</div>
+    </div>`;
+  };
   const weekBlock=(w)=>`<div style="margin-bottom:10px;">
       <div style="font-size:11px;font-weight:700;color:var(--mu);margin-bottom:5px;">${w}주차</div>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;">
-        ${OC_LESSON_TYPES.map(t=>{
-          const l=byKey[`${w}_${t}`];
-          const[c,bg]=OC_TYPE_COLOR[t];
-          if(l&&l.bunny_video_id){
-            return`<div onclick="playOnlineLesson('${l.id}')" style="cursor:pointer;background:${bg};border-radius:10px;padding:9px 3px;text-align:center;">
-              <div style="font-size:16px;color:${c};">▶</div>
-              <div style="font-size:9px;font-weight:700;color:${c};margin-top:2px;">${t}</div>
-            </div>`;
-          }
-          return`<div style="background:var(--sf);border:1px dashed var(--brd);border-radius:10px;padding:9px 3px;text-align:center;opacity:.5;">
-            <div style="font-size:16px;color:var(--mu);">🔒</div>
-            <div style="font-size:9px;font-weight:700;color:var(--mu);margin-top:2px;">${t}</div>
-          </div>`;
-        }).join('')}
-      </div>
+      ${OC_SESSIONS.map(s=>`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:4px;">
+        ${OC_LESSON_TYPES.map(t=>ocTile(byKey[`${w}_${t}_${s}`],t)).join('')}
+      </div>`).join('')}
     </div>`;
   let html='';
   for(let m=1;m<=totalMonths;m++){
     const startW=(m-1)*4+1,endW=Math.min(m*4,OC_TOTAL_WEEKS);
     const isOpen=_ocOpenMonths.has(m);
     let doneCnt=0,totalCnt=0;
-    for(let w=startW;w<=endW;w++)OC_LESSON_TYPES.forEach(t=>{totalCnt++;if(byKey[`${w}_${t}`]?.bunny_video_id)doneCnt++;});
+    for(let w=startW;w<=endW;w++)OC_LESSON_TYPES.forEach(t=>OC_SESSIONS.forEach(s=>{totalCnt++;if(byKey[`${w}_${t}_${s}`]?.bunny_video_id)doneCnt++;}));
     html+=`<div style="border:1.5px solid var(--brd);border-radius:14px;overflow:hidden;margin-bottom:10px;">
       <div onclick="toggleOcMonth(${m})" style="display:flex;align-items:center;justify-content:space-between;padding:13px 14px;cursor:pointer;background:var(--card,#fff);">
         <span style="font-size:14px;font-weight:800;color:var(--text);">${m}개월차 <span style="font-size:11px;font-weight:500;color:var(--mu);">(${startW}~${endW}주차)</span></span>
