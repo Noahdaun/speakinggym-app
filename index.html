@@ -6178,13 +6178,12 @@ function renderOcWeekList(){
     }).join('');
     return;
   }
-  // 결제 후 — 6개월(24주) 커리큘럼을 주차별 아이콘으로 자동 표시. 영상이 등록된 칸만 재생 가능
+  // 결제 후 — 6개월(24주) 커리큘럼을 4주(1개월) 단위 아코디언으로 묶어서 표시. 영상이 등록된 칸만 재생 가능
   const byKey={};
   _ocLessons.forEach(l=>{if(l.week)byKey[`${l.week}_${l.lesson_type}`]=l;});
-  let html='';
-  for(let w=1;w<=OC_TOTAL_WEEKS;w++){
-    html+=`<div style="margin-bottom:14px;">
-      <div style="font-size:12px;font-weight:800;color:var(--text);margin-bottom:6px;">${w}주차</div>
+  const totalMonths=Math.ceil(OC_TOTAL_WEEKS/4);
+  const weekBlock=(w)=>`<div style="margin-bottom:10px;">
+      <div style="font-size:11px;font-weight:700;color:var(--mu);margin-bottom:5px;">${w}주차</div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;">
         ${OC_LESSON_TYPES.map(t=>{
           const l=byKey[`${w}_${t}`];
@@ -6202,8 +6201,31 @@ function renderOcWeekList(){
         }).join('')}
       </div>
     </div>`;
+  let html='';
+  for(let m=1;m<=totalMonths;m++){
+    const startW=(m-1)*4+1,endW=Math.min(m*4,OC_TOTAL_WEEKS);
+    const isOpen=_ocOpenMonths.has(m);
+    let doneCnt=0,totalCnt=0;
+    for(let w=startW;w<=endW;w++)OC_LESSON_TYPES.forEach(t=>{totalCnt++;if(byKey[`${w}_${t}`]?.bunny_video_id)doneCnt++;});
+    html+=`<div style="border:1.5px solid var(--brd);border-radius:14px;overflow:hidden;margin-bottom:10px;">
+      <div onclick="toggleOcMonth(${m})" style="display:flex;align-items:center;justify-content:space-between;padding:13px 14px;cursor:pointer;background:var(--card,#fff);">
+        <span style="font-size:14px;font-weight:800;color:var(--text);">${m}개월차 <span style="font-size:11px;font-weight:500;color:var(--mu);">(${startW}~${endW}주차)</span></span>
+        <span style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:10px;color:var(--mu);">${doneCnt}/${totalCnt}개 준비됨</span>
+          <span style="font-size:11px;color:var(--mu);">${isOpen?'▲':'▼'}</span>
+        </span>
+      </div>
+      ${isOpen?`<div style="padding:2px 14px 14px;background:var(--bg);">
+        ${Array.from({length:endW-startW+1},(_,i)=>weekBlock(startW+i)).join('')}
+      </div>`:''}
+    </div>`;
   }
   el.innerHTML=html;
+}
+let _ocOpenMonths=new Set([1]);
+function toggleOcMonth(m){
+  if(_ocOpenMonths.has(m))_ocOpenMonths.delete(m);else _ocOpenMonths.add(m);
+  renderOcWeekList();
 }
 function playOnlineLesson(lid){
   const l=_ocLessons.find(x=>x.id===lid);if(!l)return;
