@@ -5991,12 +5991,15 @@ async function openOlLessonMgr(cid, ctitle){
         </div>
         <input class="inp" type="text" id="ol-ls-title" placeholder="영상 제목">
         <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
-          <input class="inp" type="text" id="ol-ls-vid" placeholder="Bunny 영상 ID" style="flex:1;margin-bottom:0;">
+          <input class="inp" type="text" id="ol-ls-vid" placeholder="Bunny 영상 ID 또는 유튜브 URL" style="flex:1;margin-bottom:0;">
           <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;white-space:nowrap;">
             <input type="checkbox" id="ol-ls-free" style="accent-color:var(--g);width:15px;height:15px;">무료공개
           </label>
         </div>
-        <button onclick="saveOlLesson('${cid}')" style="width:100%;padding:11px;border-radius:11px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">영상 추가</button>
+        <div style="display:flex;gap:6px;">
+          <button id="ol-ls-save-btn" onclick="saveOlLesson('${cid}')" style="flex:1;padding:11px;border-radius:11px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">영상 추가</button>
+          <button id="ol-ls-cancel-btn" onclick="cancelEditOlLesson()" style="display:none;padding:11px 14px;border-radius:11px;background:var(--sf);color:var(--text);border:1.5px solid var(--brd);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">취소</button>
+        </div>
       </div>
       <!-- 영상 목록 -->
       <div class="sec">등록된 영상</div>
@@ -6006,13 +6009,15 @@ async function openOlLessonMgr(cid, ctitle){
   await loadOlLessons(cid);
 }
 
+let _olLessonsCache=[],_olEditLessonId=null;
 async function loadOlLessons(cid){
   const el=document.getElementById('ol-lesson-list');if(!el)return;
   const{data}=await sb.from('online_lessons').select('*').eq('course_id',cid).order('week');
-  const lessons=data||[];
-  if(!lessons.length){el.innerHTML='<div class="empty">등록된 영상이 없어요</div>';return;}
-  el.innerHTML=lessons.map(l=>{
-    const wLabel=l.week?`${l.week}주차`:'주차 미지정';
+  _olLessonsCache=data||[];
+  if(!_olLessonsCache.length){el.innerHTML='<div class="empty">등록된 영상이 없어요</div>';return;}
+  el.innerHTML=_olLessonsCache.map(l=>{
+    const wLabel=l.week?`${l.week}주차`:'미리보기(주차 없음)';
+    const vidLabel=l.bunny_video_id?(lsYtId(l.bunny_video_id)?'유튜브':'Bunny'):null;
     return`
         <div style="background:var(--sf);border-radius:11px;padding:11px 13px;margin-bottom:6px;border:1.5px solid var(--brd);">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
@@ -6020,11 +6025,36 @@ async function loadOlLessons(cid){
               <div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${l.title}</div>
               <div style="font-size:10px;color:var(--mu);margin-top:2px;">${wLabel} · ${l.lesson_type} · ${l.duration_min}분${l.is_free?' · 🆓 무료':''}</div>
             </div>
-            <button onclick="deleteOlLesson('${l.id}','${cid}')" style="margin-left:8px;padding:4px 10px;border-radius:7px;background:var(--rl);color:var(--rd);border:none;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">삭제</button>
+            <div style="display:flex;gap:5px;flex-shrink:0;margin-left:8px;">
+              <button onclick="editOlLesson('${l.id}')" style="padding:4px 10px;border-radius:7px;background:var(--gl);color:var(--gd);border:none;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">수정</button>
+              <button onclick="deleteOlLesson('${l.id}','${cid}')" style="padding:4px 10px;border-radius:7px;background:var(--rl);color:var(--rd);border:none;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">삭제</button>
+            </div>
           </div>
-          ${l.bunny_video_id?`<div style="font-size:10px;color:var(--mu);font-family:monospace;background:var(--bg);padding:4px 8px;border-radius:6px;border:1px solid var(--brd);">ID: ${l.bunny_video_id}</div>`:'<div style="font-size:10px;color:#E24B4A;">⚠️ Bunny ID 미등록</div>'}
+          ${l.bunny_video_id?`<div style="font-size:10px;color:var(--mu);font-family:monospace;background:var(--bg);padding:4px 8px;border-radius:6px;border:1px solid var(--brd);">${vidLabel}: ${l.bunny_video_id}</div>`:'<div style="font-size:10px;color:#E24B4A;">⚠️ 영상 미등록</div>'}
         </div>`;
   }).join('');
+}
+
+function editOlLesson(lid){
+  const l=_olLessonsCache.find(x=>x.id===lid);if(!l)return;
+  _olEditLessonId=lid;
+  document.getElementById('ol-ls-week').value=l.week||'';
+  document.getElementById('ol-ls-dur').value=l.duration_min||20;
+  document.getElementById('ol-ls-type').value=l.lesson_type||'메인';
+  document.getElementById('ol-ls-title').value=l.title||'';
+  document.getElementById('ol-ls-vid').value=l.bunny_video_id||'';
+  document.getElementById('ol-ls-free').checked=!!l.is_free;
+  document.getElementById('ol-ls-save-btn').textContent='✓ 수정 저장';
+  document.getElementById('ol-ls-cancel-btn').style.display='block';
+  document.getElementById('ol-lesson-pop')?.scrollTo({top:0,behavior:'smooth'});
+}
+
+function cancelEditOlLesson(){
+  _olEditLessonId=null;
+  ['ol-ls-week','ol-ls-title','ol-ls-vid'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  document.getElementById('ol-ls-free').checked=false;
+  document.getElementById('ol-ls-save-btn').textContent='영상 추가';
+  document.getElementById('ol-ls-cancel-btn').style.display='none';
 }
 
 async function saveOlLesson(cid){
@@ -6034,19 +6064,27 @@ async function saveOlLesson(cid){
   const title=document.getElementById('ol-ls-title')?.value?.trim();
   const bunny_video_id=document.getElementById('ol-ls-vid')?.value?.trim()||null;
   const is_free=document.getElementById('ol-ls-free')?.checked||false;
-  if(!week){tst('주차를 입력해주세요');return;}
   if(!title){tst('영상 제목을 입력해주세요');return;}
-  const{error}=await sb.from('online_lessons').insert({course_id:cid,week,lesson_type,title,bunny_video_id,duration_min,is_free});
-  if(error){tst('저장 실패: '+error.message);return;}
-  ['ol-ls-week','ol-ls-title','ol-ls-vid'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
-  document.getElementById('ol-ls-free').checked=false;
-  tst('영상이 추가됐어요!');
+  if(_olEditLessonId){
+    const{error}=await sb.from('online_lessons').update({week,lesson_type,title,bunny_video_id,duration_min,is_free}).eq('id',_olEditLessonId);
+    if(error){tst('수정 실패: '+error.message);return;}
+    tst('수정됐어요!');
+    cancelEditOlLesson();
+  }else{
+    if(!week){tst('주차를 입력해주세요');return;}
+    const{error}=await sb.from('online_lessons').insert({course_id:cid,week,lesson_type,title,bunny_video_id,duration_min,is_free});
+    if(error){tst('저장 실패: '+error.message);return;}
+    ['ol-ls-week','ol-ls-title','ol-ls-vid'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+    document.getElementById('ol-ls-free').checked=false;
+    tst('영상이 추가됐어요!');
+  }
   await loadOlLessons(cid);
 }
 
 async function deleteOlLesson(lid, cid){
   if(!confirm('이 영상을 삭제할까요?'))return;
   await sb.from('online_lessons').delete().eq('id',lid);
+  if(_olEditLessonId===lid)cancelEditOlLesson();
   tst('삭제됐어요');
   await loadOlLessons(cid);
 }
@@ -6079,9 +6117,10 @@ async function renderOlCourseStore(){
   ]);
   const cs=courses||[];
   const freeLesson=(freeLessons||[])[0];
+  const freeYtId=freeLesson?lsYtId(freeLesson.bunny_video_id):null;
   const videoHtml=freeLesson?`
     <div style="border-radius:14px;overflow:hidden;aspect-ratio:16/9;background:#000;margin-bottom:14px;">
-      ${BUNNY_LIBRARY_ID?`<iframe src="https://iframe.mediadelivery.net/embed/${BUNNY_LIBRARY_ID}/${freeLesson.bunny_video_id}" style="width:100%;height:100%;border:none;" allow="autoplay; fullscreen" allowfullscreen></iframe>`:''}
+      ${freeYtId?`<iframe src="https://www.youtube.com/embed/${freeYtId}" style="width:100%;height:100%;border:none;" allow="autoplay; fullscreen" allowfullscreen></iframe>`:(BUNNY_LIBRARY_ID?`<iframe src="https://iframe.mediadelivery.net/embed/${BUNNY_LIBRARY_ID}/${freeLesson.bunny_video_id}" style="width:100%;height:100%;border:none;" allow="autoplay; fullscreen" allowfullscreen></iframe>`:'')}
     </div>`:'';
   if(!cs.length){
     el.innerHTML=videoHtml+'<div class="empty">판매중인 온라인 강의가 없어요<br><span style="font-size:11px;color:var(--mu);">원장님께 문의해주세요</span></div>';
@@ -6110,7 +6149,7 @@ async function openCourseWeeks(courseId,title,hasAccess,price){
   document.getElementById('rs-badge').style.color='#185FA5';
   document.getElementById('rs-top').style.background='#1E2D45';
   const{data}=await sb.from('online_lessons').select('*').eq('course_id',courseId).order('week');
-  _ocLessons=_ocHasAccess?(data||[]):(data||[]).filter(l=>l.is_free);
+  _ocLessons=(data||[]);
   document.getElementById('rs-content').innerHTML=`
     ${_ocHasAccess?'':'<div style="background:var(--aml);border:1.5px solid #FAC775;border-radius:12px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:#854F0B;">🔓 무료로 공개된 영상만 보여요. 전체 강의를 보려면 구매해주세요.</div>'}
     <div id="oc-week-list"></div>`;
@@ -6119,39 +6158,70 @@ async function openCourseWeeks(courseId,title,hasAccess,price){
   renderOcWeekList();
 }
 const OC_TYPE_COLOR={'메인':['#2F80ED','#DBEAFE'],'발음':['#1DB981','#D1FAE5'],'리뷰':['#8B5CF6','#EDE9FE'],'아웃풋':['#D97706','#FDE9CC']};
+const OC_LESSON_TYPES=['메인','발음','리뷰','아웃풋'];
+const OC_TOTAL_WEEKS=24; // 6개월 과정 = 4주 x 6개월
 function renderOcWeekList(){
   const el=document.getElementById('oc-week-list');if(!el)return;
-  if(!_ocLessons.length){el.innerHTML='<div class="empty">아직 등록된 강의가 없어요</div>';return;}
-  const byWeek={};
-  _ocLessons.forEach(l=>{const w=l.week||0;if(!byWeek[w])byWeek[w]=[];byWeek[w].push(l);});
-  const weeks=Object.keys(byWeek).map(Number).sort((a,b)=>a-b);
-  el.innerHTML=weeks.map(w=>{
-    const ls=byWeek[w];
-    const header=w?`${w}주차`:'주차 미지정';
-    return`<div style="margin-bottom:16px;">
-      <div style="font-size:13px;font-weight:800;color:var(--text);margin-bottom:8px;">${header}</div>
-      ${ls.map(l=>{
-        const[c,bg]=OC_TYPE_COLOR[l.lesson_type]||['#71717A','#F1F2F5'];
-        return`<div onclick="playOnlineLesson('${l.id}')" style="display:flex;align-items:center;gap:10px;background:var(--card,#fff);border:1.5px solid var(--brd);border-radius:14px;padding:12px;margin-bottom:8px;cursor:pointer;">
-          <div style="width:44px;height:44px;border-radius:10px;background:${bg};display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px;color:${c};">▶</div>
-          <div style="flex:1;min-width:0;">
-            <div style="display:inline-block;font-size:9px;font-weight:700;color:${c};background:${bg};padding:2px 7px;border-radius:99px;margin-bottom:3px;">${l.lesson_type}강의</div>
-            <div style="font-size:13px;font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${l.title}</div>
-            <div style="font-size:10px;color:var(--mu);margin-top:2px;">${l.duration_min}분${!l.bunny_video_id?' · 준비중':''}</div>
-          </div>
-        </div>`;
-      }).join('')}
+  if(!_ocHasAccess){
+    // 결제 전 — 무료공개(체험)로 표시된 영상만 리스트로 보여줌
+    const previewLessons=_ocLessons.filter(l=>l.is_free);
+    if(!previewLessons.length){el.innerHTML='<div class="empty">아직 무료로 공개된 영상이 없어요</div>';return;}
+    el.innerHTML=previewLessons.map(l=>{
+      const[c,bg]=OC_TYPE_COLOR[l.lesson_type]||['#71717A','#F1F2F5'];
+      return`<div onclick="playOnlineLesson('${l.id}')" style="display:flex;align-items:center;gap:10px;background:var(--card,#fff);border:1.5px solid var(--brd);border-radius:14px;padding:12px;margin-bottom:8px;cursor:pointer;">
+        <div style="width:44px;height:44px;border-radius:10px;background:${bg};display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px;color:${c};">▶</div>
+        <div style="flex:1;min-width:0;">
+          <div style="display:inline-block;font-size:9px;font-weight:700;color:${c};background:${bg};padding:2px 7px;border-radius:99px;margin-bottom:3px;">${l.lesson_type}강의</div>
+          <div style="font-size:13px;font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${l.title}</div>
+        </div>
+      </div>`;
+    }).join('');
+    return;
+  }
+  // 결제 후 — 6개월(24주) 커리큘럼을 주차별 아이콘으로 자동 표시. 영상이 등록된 칸만 재생 가능
+  const byKey={};
+  _ocLessons.forEach(l=>{if(l.week)byKey[`${l.week}_${l.lesson_type}`]=l;});
+  let html='';
+  for(let w=1;w<=OC_TOTAL_WEEKS;w++){
+    html+=`<div style="margin-bottom:14px;">
+      <div style="font-size:12px;font-weight:800;color:var(--text);margin-bottom:6px;">${w}주차</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;">
+        ${OC_LESSON_TYPES.map(t=>{
+          const l=byKey[`${w}_${t}`];
+          const[c,bg]=OC_TYPE_COLOR[t];
+          if(l&&l.bunny_video_id){
+            return`<div onclick="playOnlineLesson('${l.id}')" style="cursor:pointer;background:${bg};border-radius:10px;padding:9px 3px;text-align:center;">
+              <div style="font-size:16px;color:${c};">▶</div>
+              <div style="font-size:9px;font-weight:700;color:${c};margin-top:2px;">${t}</div>
+            </div>`;
+          }
+          return`<div style="background:var(--sf);border:1px dashed var(--brd);border-radius:10px;padding:9px 3px;text-align:center;opacity:.5;">
+            <div style="font-size:16px;color:var(--mu);">🔒</div>
+            <div style="font-size:9px;font-weight:700;color:var(--mu);margin-top:2px;">${t}</div>
+          </div>`;
+        }).join('')}
+      </div>
     </div>`;
-  }).join('');
+  }
+  el.innerHTML=html;
 }
 function playOnlineLesson(lid){
   const l=_ocLessons.find(x=>x.id===lid);if(!l)return;
   if(!l.bunny_video_id){tst('아직 영상이 준비되지 않았어요');return;}
+  const ytId=lsYtId(l.bunny_video_id);
+  let playerHtml;
+  if(ytId){
+    playerHtml=`<iframe src="https://www.youtube.com/embed/${ytId}?autoplay=1" style="width:100%;height:100%;border:none;" allow="autoplay; fullscreen" allowfullscreen></iframe>`;
+  }else if(BUNNY_LIBRARY_ID){
+    playerHtml=`<iframe src="https://iframe.mediadelivery.net/embed/${BUNNY_LIBRARY_ID}/${l.bunny_video_id}?autoplay=true" style="width:100%;height:100%;border:none;" allow="autoplay; fullscreen" allowfullscreen></iframe>`;
+  }else{
+    playerHtml='<div style="color:#fff;font-size:12px;display:flex;align-items:center;justify-content:center;height:100%;text-align:center;padding:20px;">Bunny 라이브러리 ID가 아직 설정되지 않았어요</div>';
+  }
   document.getElementById('rs-title').textContent=l.title;
   document.getElementById('rs-badge').textContent=l.lesson_type+'강의';
   document.getElementById('rs-content').innerHTML=`
     <div style="border-radius:12px;overflow:hidden;aspect-ratio:16/9;background:#000;margin-bottom:12px;">
-      ${BUNNY_LIBRARY_ID?`<iframe src="https://iframe.mediadelivery.net/embed/${BUNNY_LIBRARY_ID}/${l.bunny_video_id}?autoplay=true" style="width:100%;height:100%;border:none;" allow="autoplay; fullscreen" allowfullscreen></iframe>`:'<div style="color:#fff;font-size:12px;display:flex;align-items:center;justify-content:center;height:100%;text-align:center;padding:20px;">Bunny 라이브러리 ID가 아직 설정되지 않았어요</div>'}
+      ${playerHtml}
     </div>
     <button onclick="openCourseWeeks('${_ocCourseId}','${_ocCourseTitle.replace(/'/g,"\\'")}',${_ocHasAccess},${_ocPrice})" style="width:100%;padding:11px;border-radius:11px;background:var(--sf);border:1.5px solid var(--brd);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;color:var(--text);">← 목록으로</button>`;
   document.getElementById('rs-bot').innerHTML='';
