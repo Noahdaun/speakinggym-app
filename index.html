@@ -639,9 +639,10 @@ function doUpdate(){
 
           <!-- 코스 타입 -->
           <div style="font-size:12px;font-weight:600;margin-bottom:6px;">코스 타입</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:10px;">
-            <button id="ol-type-btn-일반" onclick="selectCourseType('일반')" style="padding:10px;border-radius:10px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">일반형</button>
-            <button id="ol-type-btn-관리" onclick="selectCourseType('관리')" style="padding:10px;border-radius:10px;background:var(--sf);color:var(--mu);border:1.5px solid var(--brd);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">관리형</button>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin-bottom:10px;">
+            <button id="ol-type-btn-일반" onclick="selectCourseType('일반')" style="padding:10px 4px;border-radius:10px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">일반형</button>
+            <button id="ol-type-btn-관리" onclick="selectCourseType('관리')" style="padding:10px 4px;border-radius:10px;background:var(--sf);color:var(--mu);border:1.5px solid var(--brd);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">전화관리형</button>
+            <button id="ol-type-btn-대면" onclick="selectCourseType('대면')" style="padding:10px 4px;border-radius:10px;background:var(--sf);color:var(--mu);border:1.5px solid var(--brd);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">대면관리형</button>
           </div>
 
           <!-- 결제 플랜 -->
@@ -660,11 +661,11 @@ function doUpdate(){
           <div style="font-size:12px;font-weight:600;margin-bottom:6px;">학생 선택</div>
           <select id="ol-sub-student" onchange="onSubStudentChange(this.value)" style="margin-bottom:8px;"><option value="">학생을 선택하세요</option></select>
 
-          <!-- 관리형 전화번호 (관리형 선택 시 표시) -->
+          <!-- 전화관리형 전화번호 (전화관리형 선택 시 표시) -->
           <div id="ol-phone-wrap" style="display:none;margin-bottom:8px;">
             <div style="font-size:12px;font-weight:600;margin-bottom:4px;color:var(--pud);">📱 전화번호 <span style="color:var(--rd);">*필수</span></div>
             <input class="inp" type="tel" id="ol-sub-phone" placeholder="010-0000-0000" style="margin-bottom:0;">
-            <div style="font-size:10px;color:var(--mu);margin-top:3px;">관리형은 주 1회 개별 연락을 드려요</div>
+            <div style="font-size:10px;color:var(--mu);margin-top:3px;">전화관리형은 주 1회 개별 연락을 드려요</div>
           </div>
 
           <!-- 날짜 (자동 계산) -->
@@ -677,6 +678,7 @@ function doUpdate(){
           <button onclick="grantSubscription()" style="width:100%;padding:12px;border-radius:11px;background:linear-gradient(135deg,#534AB7,#3C3489);color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">수강권 열어주기</button>
         </div>
         <div class="sec">수강 현황</div>
+        <div id="ol-sub-filter" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;"></div>
         <div id="ol-sub-list"><div class="loading">로딩중...</div></div>
       </div>
 
@@ -6265,7 +6267,7 @@ let _olPlan='1개월';
 
 function selectCourseType(type){
   _olCourseType=type;
-  ['일반','관리'].forEach(t=>{
+  ['일반','관리','대면'].forEach(t=>{
     const btn=document.getElementById(`ol-type-btn-${t}`);
     if(btn){
       if(t===type){btn.style.background='linear-gradient(135deg,#1D9E75,#159468)';btn.style.color='#fff';btn.style.border='none';}
@@ -6443,27 +6445,54 @@ async function updateBookingStatus(id, status){
   await loadBookings();
 }
 
+// 코스 타입별 표시 정보 (뱃지 색·라벨) — 온라인 수강생을 유형별로 구분해서 보기 위함
+const OL_TYPE_INFO={
+  '일반':{label:'일반형',bg:'var(--gl)',color:'var(--gd)'},
+  '관리':{label:'전화관리형',bg:'var(--pul)',color:'var(--pud)'},
+  '대면':{label:'대면관리형',bg:'var(--aml)',color:'var(--amd)'},
+};
+function olTypeInfo(t){return OL_TYPE_INFO[t]||OL_TYPE_INFO['일반'];}
+
+let _olSubsCache=[],_olSubFilter='전체';
 async function loadOlSubList(){
   const el=document.getElementById('ol-sub-list');if(!el)return;
   const{data}=await sb.from('course_subscriptions').select('*,profiles(name,email,phone),online_courses(title,month)').order('created_at',{ascending:false});
-  const subs=data||[];
+  _olSubsCache=data||[];
+  renderOlSubFilter();
+  renderOlSubList();
+}
+function renderOlSubFilter(){
+  const el=document.getElementById('ol-sub-filter');if(!el)return;
+  const counts={'전체':_olSubsCache.length,'일반':0,'관리':0,'대면':0};
+  _olSubsCache.forEach(s=>{counts[s.course_type||'일반']=(counts[s.course_type||'일반']||0)+1;});
+  const opts=[{key:'전체',label:'전체'},{key:'일반',label:'일반형'},{key:'관리',label:'전화관리형'},{key:'대면',label:'대면관리형'}];
+  el.innerHTML=opts.map(o=>{
+    const on=_olSubFilter===o.key;
+    return`<button onclick="setOlSubFilter('${o.key}')" style="padding:7px 12px;border-radius:99px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;border:${on?'none':'1.5px solid var(--brd)'};background:${on?'linear-gradient(135deg,#1D9E75,#159468)':'var(--sf)'};color:${on?'#fff':'var(--mu)'};">${o.label} ${counts[o.key]||0}</button>`;
+  }).join('');
+}
+function setOlSubFilter(key){_olSubFilter=key;renderOlSubFilter();renderOlSubList();}
+function renderOlSubList(){
+  const el=document.getElementById('ol-sub-list');if(!el)return;
+  const subs=_olSubFilter==='전체'?_olSubsCache:_olSubsCache.filter(s=>(s.course_type||'일반')===_olSubFilter);
   if(!subs.length){el.innerHTML='<div class="empty">수강생이 없어요</div>';return;}
   const today=new Date().toISOString().slice(0,10);
   el.innerHTML=subs.map(s=>{
     const name=s.profiles?.name||s.profiles?.email||'?';
     const course=s.online_courses?.title||'?';
     const expired=s.expires_at<today;
-    const isManaged=s.course_type==='관리';
+    const ti=olTypeInfo(s.course_type);
+    const showPhone=s.course_type==='관리'&&s.profiles?.phone;
     return`<div class="csm" style="margin-bottom:7px;">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
         <div>
           <div style="display:flex;align-items:center;gap:6px;">
             <div style="font-size:13px;font-weight:700;">${name}</div>
-            <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px;background:${isManaged?'var(--pul)':'var(--gl)'};color:${isManaged?'var(--pud)':'var(--gd)'};">${s.course_type||'일반'}형</span>
+            <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px;background:${ti.bg};color:${ti.color};">${ti.label}</span>
             <span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:99px;background:var(--aml);color:var(--amd);">${s.plan||'1개월'}</span>
           </div>
           <div style="font-size:11px;color:var(--mu);margin-top:2px;">${course}</div>
-          ${isManaged&&s.profiles?.phone?`<div style="font-size:11px;color:var(--pud);margin-top:2px;">📱 ${s.profiles.phone}</div>`:''}
+          ${showPhone?`<div style="font-size:11px;color:var(--pud);margin-top:2px;">📱 ${s.profiles.phone}</div>`:''}
         </div>
         <div style="text-align:right;">
           <span style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:99px;background:${expired?'var(--rl)':'var(--gl)'};color:${expired?'var(--rd)':'var(--gd)'};">${expired?'만료':'수강중'}</span>
@@ -6494,12 +6523,12 @@ async function loadOlPayList(){
     const course=s.online_courses?.title||'?';
     const price=s.online_courses?.price||0;
     total+=price;
-    const isManaged2=s.course_type==='관리';
+    const ti2=olTypeInfo(s.course_type);
     return`<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--brd);">
       <div>
         <div style="display:flex;align-items:center;gap:5px;">
           <div style="font-size:13px;font-weight:600;">${name}</div>
-          <span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:99px;background:${isManaged2?'var(--pul)':'var(--gl)'};color:${isManaged2?'var(--pud)':'var(--gd)'}">${s.course_type||'일반'}형</span>
+          <span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:99px;background:${ti2.bg};color:${ti2.color}">${ti2.label}</span>
           <span style="font-size:9px;font-weight:600;padding:2px 6px;border-radius:99px;background:var(--aml);color:var(--amd)">${s.plan||'1개월'}</span>
         </div>
         <div style="font-size:11px;color:var(--mu);">${course} · ${new Date(s.created_at).toLocaleDateString('ko-KR')}</div>
