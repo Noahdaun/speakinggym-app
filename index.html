@@ -766,6 +766,16 @@ function doUpdate(){
 
         <div class="dv"></div>
 
+        <!-- 온라인 강의 주차 배정 (선택) — 출석과 무관하게, 해당 강의 수강생한테 그 주차 리뷰로 노출됨 -->
+        <div style="font-size:12px;font-weight:600;margin-bottom:4px;color:var(--text);">🌐 온라인 강의 리뷰용 (선택)</div>
+        <div style="font-size:11px;color:var(--mu);margin-bottom:7px;">지정하면 출석과 무관하게, 그 온라인 강의를 수강 중인 학생한테 해당 주차 리뷰로 보여요.</div>
+        <div style="display:grid;grid-template-columns:2fr 1fr;gap:8px;margin-bottom:8px;">
+          <select id="ls-online-course" style="width:100%;padding:9px;border:1.5px solid var(--brd);border-radius:var(--rs);font-size:12px;background:var(--sf);font-family:inherit;"><option value="">강의 선택 안 함</option></select>
+          <input type="number" id="ls-online-week" min="1" placeholder="주차" style="width:100%;padding:9px;border:1.5px solid var(--brd);border-radius:var(--rs);font-size:12px;background:var(--sf);font-family:inherit;">
+        </div>
+
+        <div class="dv"></div>
+
         <!-- 자막 가져오기 + 표 편집 (sg_builder 이식 + SRT 자동인식) -->
         <div style="font-size:12px;font-weight:600;margin-bottom:4px;">🎬 자막</div>
         <div style="font-size:11px;color:var(--mu);margin-bottom:7px;">pipe 형식(시작초|끝초|영어|한글) 또는 SRT 파일 내용을 그대로 붙여넣으면 자동 인식돼요</div>
@@ -4865,7 +4875,7 @@ function adTab(t,b){
   document.querySelectorAll('#pad>.tbb .tbn').forEach(x=>x.classList.remove('on'));
   if(b)b.classList.add('on');
   if(t==='cl'){rClsList();}
-  if(t==='ls'){rLsList();renderLsRows();renderLsDateTags();lsRenderSubTable();}
+  if(t==='ls'){rLsList();renderLsRows();renderLsDateTags();lsRenderSubTable();loadLsOnlineCourseOptions();}
   if(t==='at'){
     document.getElementById('atd').value=new Date().toISOString().slice(0,10);
     rAtCls();
@@ -5583,6 +5593,14 @@ async function rLsList(){
   les=data||[];
 }
 
+async function loadLsOnlineCourseOptions(){
+  const sel=document.getElementById('ls-online-course');if(!sel)return;
+  const cur=sel.value;
+  const{data}=await sb.from('online_courses').select('id,title').order('month',{ascending:false});
+  sel.innerHTML='<option value="">강의 선택 안 함</option>'+(data||[]).map(c=>`<option value="${c.id}">${c.title}</option>`).join('');
+  if(cur)sel.value=cur;
+}
+
 async function renderLsRows(){
   const el=document.getElementById('lslist');if(!el)return;
   if(!les.length){el.innerHTML='<div class="empty">등록된 토픽이 없어요</div>';return;}
@@ -6190,7 +6208,10 @@ async function openCourseWeeks(courseId,title,hasAccess,price){
     ${_ocHasAccess?'':'<div style="background:var(--aml);border:1.5px solid #FAC775;border-radius:12px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:#854F0B;">🔓 무료로 공개된 영상만 보여요. 전체 강의를 보려면 구매해주세요.</div>'}
     <div id="oc-week-list"></div>`;
   document.getElementById('rs-bot').innerHTML=_ocHasAccess
-    ?`<button onclick="openCertificate()" style="width:100%;padding:12px;border-radius:12px;background:var(--sf);border:1.5px solid var(--brd);color:var(--text);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">📜 수강 확인증 받기</button>`
+    ?`<div style="display:flex;gap:8px;">
+        <button onclick="openOnlineCourseReview('${courseId}','${title.replace(/'/g,"\\'")}')" style="flex:1;padding:12px;border-radius:12px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">📖 주차별 리뷰</button>
+        <button onclick="openCertificate()" style="flex:1;padding:12px;border-radius:12px;background:var(--sf);border:1.5px solid var(--brd);color:var(--text);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">📜 수강 확인증</button>
+      </div>`
     :`<button onclick="buyOnlineCourse()" style="width:100%;padding:13px;border-radius:12px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;">전체 강의 신청하기</button>`;
   document.getElementById('rs').classList.add('on');
   renderOcWeekList();
@@ -6266,6 +6287,49 @@ function toggleOcMonth(m){
   if(_ocOpenMonths.has(m))_ocOpenMonths.delete(m);else _ocOpenMonths.add(m);
   renderOcWeekList();
 }
+
+// ── 온라인 강의 주차별 리뷰 — 기존 오프라인 리뷰 화면(자막·빈칸퀴즈·따라말하기)을 그대로 쓰되,
+// 출석일이 아니라 "온라인 강의 + 주차"로 배정된 토픽만 모아서 보여줌 ──
+async function openOnlineCourseReview(courseId,title){
+  const{data}=await sb.from('lessons').select('*').eq('online_course_id',courseId).order('online_week');
+  const topics=data||[];
+  // 리뷰 화면(oSes→openOnlineReview)이 les 배열에서 토픽을 찾으므로 캐시에 합쳐둠
+  topics.forEach(t=>{const idx=les.findIndex(x=>x.id===t.id);if(idx>=0)les[idx]=t;else les.push(t);});
+  const{data:logs}=await sb.from('review_logs').select('lesson_id,completed').eq('student_id',U.id).eq('completed',true).in('lesson_id',topics.map(t=>t.id));
+  const doneSet=new Set((logs||[]).map(l=>l.lesson_id));
+  document.getElementById('rs-title').textContent=title;
+  document.getElementById('rs-badge').textContent='주차별 리뷰';
+  document.getElementById('rs-badge').style.background='#E6F1FB';
+  document.getElementById('rs-badge').style.color='#185FA5';
+  document.getElementById('rs-top').style.background='#1E2D45';
+  document.getElementById('rs-bot').innerHTML='';
+  const byWeek={};
+  topics.forEach(t=>{const w=t.online_week||0;if(!byWeek[w])byWeek[w]=[];byWeek[w].push(t);});
+  const weeks=Object.keys(byWeek).map(Number).sort((a,b)=>a-b);
+  const el=document.getElementById('rs-content');
+  if(!weeks.length){
+    el.innerHTML='<div class="empty">아직 등록된 리뷰 토픽이 없어요<br><span style="font-size:11px;color:var(--mu);">원장님이 곧 추가해주실 거예요</span></div>';
+  }else{
+    el.innerHTML=weeks.map(w=>{
+      const ts=byWeek[w];
+      return`<div style="margin-bottom:14px;">
+        <div style="font-size:13px;font-weight:800;color:var(--text);margin-bottom:8px;">${w?`${w}주차`:'주차 미지정'}</div>
+        ${ts.map(t=>{
+          const done=doneSet.has(t.id);
+          return`<div onclick="oSes('${t.id}','${t.title.replace(/'/g,"\\'")}','${(t.url||'').replace(/'/g,"\\'")}',1)" style="display:flex;align-items:center;gap:10px;background:${done?'#F9FAFB':'var(--card,#fff)'};border:1.5px solid ${done?'var(--brd)':'#C0E8D8'};border-radius:14px;padding:12px;margin-bottom:8px;cursor:pointer;">
+            <div style="width:40px;height:40px;border-radius:99px;background:${done?'#EDEDEB':'var(--gl)'};display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px;">${done?'✅':'📖'}</div>
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:13px;font-weight:700;color:${done?'var(--mu)':'var(--text)'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${t.title}</div>
+              <div style="font-size:10px;color:var(--mu);margin-top:2px;">${done?'복습 완료':'눌러서 리뷰하기'}</div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>`;
+    }).join('');
+  }
+  document.getElementById('rs').classList.add('on');
+}
+
 // ── 수강 확인증(수료증) — 브라우저 인쇄 기능으로 PDF 저장 ──
 async function openCertificate(){
   const{data:sub}=await sb.from('course_subscriptions').select('starts_at,expires_at').eq('student_id',U.id).eq('course_id',_ocCourseId).order('created_at',{ascending:false}).maybeSingle();
@@ -6304,6 +6368,7 @@ async function openCertificate(){
 function playOnlineLesson(lid){
   const l=_ocLessons.find(x=>x.id===lid);if(!l)return;
   if(!l.bunny_video_id){tst('아직 영상이 준비되지 않았어요');return;}
+  if(P?.role!=='admin')earnXP(5,'online_watch_'+new Date().toISOString().slice(0,10)); // 달력에 온라인 접속일 표시
   const ytId=lsYtId(l.bunny_video_id);
   let playerHtml;
   if(ytId){
@@ -6896,20 +6961,23 @@ async function saveLesson(){
 
   // 수업 날짜 수집 (lsDates 배열 사용)
   const schedules=lsDates.map(d=>({lesson_date:d}));
+  // 온라인 강의 리뷰용 주차 배정 (선택)
+  const online_course_id=document.getElementById('ls-online-course')?.value||null;
+  const online_week=online_course_id?(parseInt(document.getElementById('ls-online-week')?.value)||null):null;
 
   const isEdit=document.getElementById('ls-form-title')?.textContent?.includes('수정');
   const editId=document.getElementById('ls-form-title')?.dataset?.editId;
 
   let lessonId;
   if(isEdit&&editId){
-    await sb.from('lessons').update({title,url,subtitles,key_expressions,guide,blanks,vocab}).eq('id',editId);
+    await sb.from('lessons').update({title,url,subtitles,key_expressions,guide,blanks,vocab,online_course_id,online_week}).eq('id',editId);
     lessonId=editId;
     tst('수정됐어요!');
     document.getElementById('ls-form-title').textContent='새 토픽 등록';
     delete document.getElementById('ls-form-title').dataset.editId;
     document.getElementById('ls-form-btns').innerHTML='<button class="btn btn-p" onclick="saveLesson()">토픽 등록</button>';
   } else {
-    const{data:newLesson,error}=await sb.from('lessons').insert({title,url,subtitles,key_expressions,guide,blanks,vocab}).select().single();
+    const{data:newLesson,error}=await sb.from('lessons').insert({title,url,subtitles,key_expressions,guide,blanks,vocab,online_course_id,online_week}).select().single();
     if(error){tst('등록 실패: '+error.message);return;}
     lessonId=newLesson.id;
     tst('토픽이 등록됐어요!');
@@ -6922,7 +6990,8 @@ async function saveLesson(){
     if(schedErr)tst('수업 날짜 저장 실패: '+schedErr.message);
   }
 
-  ['lt','lu','ls-expressions','ls-guide','ls-vocab','ls-blanks-paste'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ['lt','lu','ls-expressions','ls-guide','ls-vocab','ls-blanks-paste','ls-online-week'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  const ocSel=document.getElementById('ls-online-course');if(ocSel)ocSel.value='';
   lsSubs=[];lsBlanks={};lsRenderSubTable();
   lsSetVideoType('youtube');
   const pv=document.getElementById('ls-yt-preview');if(pv)pv.style.display='none';
@@ -6983,6 +7052,10 @@ async function openLsEdit(lid){
   const{data:schs}=await sb.from('lesson_schedules').select('lesson_date').eq('lesson_id',lid);
   lsDates=[...new Set((schs||[]).map(s=>s.lesson_date))].sort();
   renderLsDateTags();
+  // 온라인 강의 주차 배정 로드
+  await loadLsOnlineCourseOptions();
+  const ocSel=document.getElementById('ls-online-course');if(ocSel)ocSel.value=l.online_course_id||'';
+  const wkEl=document.getElementById('ls-online-week');if(wkEl)wkEl.value=l.online_week||'';
   const titleEl=document.getElementById('ls-form-title');
   if(titleEl){titleEl.textContent=`"${l.title}" 수정`;titleEl.dataset.editId=lid;}
   document.getElementById('ls-form-btns').innerHTML=`
@@ -6993,7 +7066,8 @@ async function openLsEdit(lid){
 }
 
 function cancelLsEdit(){
-  ['lt','lu','ls-expressions','ls-guide','ls-blanks-paste'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ['lt','lu','ls-expressions','ls-guide','ls-blanks-paste','ls-online-week'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  const ocSel=document.getElementById('ls-online-course');if(ocSel)ocSel.value='';
   lsSubs=[];lsBlanks={};lsRenderSubTable();
   lsSetVideoType('youtube');
   const pv=document.getElementById('ls-yt-preview');if(pv)pv.style.display='none';
