@@ -1411,7 +1411,7 @@ function buildHomeTodo(){
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
         <div onclick="openMyOnlineCourse()">${cardHtml('#EAF4FF','#2F80ED33','#EAF4FF','🌐','온라인 수업','수업듣기')}</div>
         <div onclick="gp('vocab')">${cardHtml('#EAFBF3','#1DB98133','#EAFBF3','📖','단어 학습',vocabLeft>0?`${vocabLeft}장 남음`:'완료 ✓')}</div>
-        <div onclick="gp('review')">${cardHtml('#F3EFFF','#8B5CF633','#F3EFFF','🔁','리뷰하기',revLeft>0?`${revLeft}개 대상`:'완료 ✓')}</div>
+        <div onclick="${P?.student_mode==='online'?'openMyOnlineCourseReview()':"gp('review')"}">${cardHtml('#F3EFFF','#8B5CF633','#F3EFFF','🔁','리뷰하기',P?.student_mode==='online'?'주차별로 보기':(revLeft>0?`${revLeft}개 대상`:'완료 ✓'))}</div>
         <div onclick="openMsgThread(U.id,'','feedback')">${cardHtml('#FFF7E6','#D9770633','#FFF7E6','⭐','피드백','원장님 피드백 보기')}</div>
       </div>
     </div>`;
@@ -6166,6 +6166,18 @@ async function openMyOnlineCourse(){
   await openCourseWeeks(sub.course_id, sub.online_courses?.title||'온라인 수업');
 }
 
+// 온라인 전용 학생이 홈 화면 "리뷰하기" 카드를 누르면 여기로 옴 — 출석 기반 리뷰 대신
+// 주차별로 배정된 토픽 리뷰 화면으로 바로 들어감
+async function openMyOnlineCourseReview(){
+  npDestroy();
+  const today=new Date().toISOString().slice(0,10);
+  const{data:subs}=await sb.from('course_subscriptions').select('*,online_courses(id,title)').eq('student_id',U.id).gte('expires_at',today).order('expires_at',{ascending:false});
+  if(!subs||!subs.length){tst('수강 중인 온라인 강의가 없어요');return;}
+  const sub=subs[0];
+  document.getElementById('rs-top').style.background='#1E2D45';
+  await openOnlineCourseReview(sub.course_id, sub.online_courses?.title||'온라인 수업');
+}
+
 // 구매하신 온라인 강의가 없을 때 — 무료 체험 영상(상단) + 강의 목록 + 구매 버튼(스마트스토어 연결)
 async function renderOlCourseStore(){
   document.getElementById('rs-title').textContent='온라인 강의';
@@ -6217,10 +6229,7 @@ async function openCourseWeeks(courseId,title,hasAccess,price){
     ${_ocHasAccess?'':'<div style="background:var(--aml);border:1.5px solid #FAC775;border-radius:12px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:#854F0B;">🔓 무료로 공개된 영상만 보여요. 전체 강의를 보려면 구매해주세요.</div>'}
     <div id="oc-week-list"></div>`;
   document.getElementById('rs-bot').innerHTML=_ocHasAccess
-    ?`<div style="display:flex;gap:8px;">
-        <button onclick="openOnlineCourseReview('${courseId}','${title.replace(/'/g,"\\'")}')" style="flex:1;padding:12px;border-radius:12px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">📖 주차별 리뷰</button>
-        <button onclick="openCertificate()" style="flex:1;padding:12px;border-radius:12px;background:var(--sf);border:1.5px solid var(--brd);color:var(--text);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">📜 수강 확인증</button>
-      </div>`
+    ?`<button onclick="openCertificate()" style="width:100%;padding:12px;border-radius:12px;background:var(--sf);border:1.5px solid var(--brd);color:var(--text);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">📜 수강 확인증 받기</button>`
     :`<button onclick="buyOnlineCourse()" style="width:100%;padding:13px;border-radius:12px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;">전체 강의 신청하기</button>`;
   document.getElementById('rs').classList.add('on');
   renderOcWeekList();
