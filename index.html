@@ -4547,7 +4547,7 @@ async function renderBookingSlots(){
           const isOthers=booked&&!isMine;
           const isPast=date<today;
           if(isPast)return`<div style="padding:9px 14px;border-radius:10px;background:#F5F3F0;border:1.5px solid var(--brd);font-size:12px;color:#CCC;">${s.slot_time}</div>`;
-          if(isMine)return`<button onclick="cancelBooking('${booked.id}')" style="padding:9px 14px;border-radius:10px;background:linear-gradient(135deg,#534AB7,#3C3489);color:#fff;border:none;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">${s.slot_time} ✓ 취소</button>`;
+          if(isMine)return`<button onclick="cancelBooking('${booked.id}','${date}','${s.slot_time}')" style="padding:9px 14px;border-radius:10px;background:linear-gradient(135deg,#534AB7,#3C3489);color:#fff;border:none;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">${s.slot_time} ✓ 취소</button>`;
           if(isOthers)return`<div style="padding:9px 14px;border-radius:10px;background:#F5F3F0;border:1.5px solid var(--brd);font-size:12px;color:#BBB;">${s.slot_time} 예약됨</div>`;
           return`<button onclick="makeBooking('${s.id}','${date}','${s.slot_time}')" style="padding:9px 14px;border-radius:10px;background:var(--gl);color:var(--gd);border:1.5px solid #C0E8D8;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">${s.slot_time}</button>`;
         }).join('')}
@@ -4558,6 +4558,14 @@ async function renderBookingSlots(){
 }
 
 async function makeBooking(slotId, date, time){
+  // 주 1회 제한 — 같은 주(월~일)에 이미 예약(취소 아님)이 있으면 막음
+  const d=new Date(date+'T00:00:00');
+  const dow=d.getDay();
+  const monday=new Date(d);monday.setDate(d.getDate()-(dow===0?6:dow-1));
+  const sunday=new Date(monday);sunday.setDate(monday.getDate()+6);
+  const monStr=monday.toISOString().slice(0,10),sunStr=sunday.toISOString().slice(0,10);
+  const{data:existing}=await sb.from('call_bookings').select('id').eq('student_id',U.id).neq('status','cancelled').gte('booking_date',monStr).lte('booking_date',sunStr).maybeSingle();
+  if(existing){tst('한 주에 한 번만 예약할 수 있어요. 먼저 기존 예약을 취소해주세요');return;}
   if(!confirm(`${date} ${time}에 예약할까요?`))return;
   const{error}=await sb.from('call_bookings').insert({student_id:U.id,slot_id:slotId,booking_date:date,status:'confirmed'});
   if(error){
@@ -4570,7 +4578,12 @@ async function makeBooking(slotId, date, time){
   checkCallBookingBanner();
 }
 
-async function cancelBooking(bookingId){
+async function cancelBooking(bookingId, date, time){
+  // 예약 시간 30분 전부터는 취소 불가
+  if(date&&time){
+    const dt=new Date(`${date}T${time}:00`);
+    if((dt-new Date())/60000<30){tst('예약 30분 전부터는 취소할 수 없어요. 원장님께 문의해주세요');return;}
+  }
   if(!confirm('예약을 취소할까요?'))return;
   await sb.from('call_bookings').update({status:'cancelled'}).eq('id',bookingId);
   tst('예약이 취소됐어요');
