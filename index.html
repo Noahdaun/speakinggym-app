@@ -6319,7 +6319,9 @@ function playOnlineLesson(lid){
     <div style="border-radius:12px;overflow:hidden;aspect-ratio:16/9;background:#000;margin-bottom:12px;">
       ${playerHtml}
     </div>
-    ${l.pdf_url?`<a href="${l.pdf_url}" target="_blank" rel="noopener" style="display:flex;align-items:center;justify-content:center;gap:7px;width:100%;padding:11px;border-radius:11px;background:var(--gl);border:1.5px solid #C0E8D8;font-size:13px;font-weight:700;color:var(--gd);text-decoration:none;margin-bottom:8px;">📄 이번 강의 자료(PDF) 다운로드</a>`:''}
+    ${l.pdf_url
+      ?`<a href="${l.pdf_url}" target="_blank" rel="noopener" style="display:flex;align-items:center;justify-content:center;gap:7px;width:100%;padding:11px;border-radius:11px;background:var(--gl);border:1.5px solid #C0E8D8;font-size:13px;font-weight:700;color:var(--gd);text-decoration:none;margin-bottom:8px;">📄 이번 강의 자료(PDF) 다운로드</a>`
+      :`<div style="display:flex;align-items:center;justify-content:center;gap:7px;width:100%;padding:11px;border-radius:11px;background:var(--sf);border:1.5px dashed var(--brd);font-size:13px;font-weight:700;color:var(--mu);margin-bottom:8px;">📄 자료(PDF) 준비중</div>`}
     <button onclick="openCourseWeeks('${_ocCourseId}','${_ocCourseTitle.replace(/'/g,"\\'")}',${_ocHasAccess},${_ocPrice})" style="width:100%;padding:11px;border-radius:11px;background:var(--sf);border:1.5px solid var(--brd);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;color:var(--text);">← 목록으로</button>`;
   document.getElementById('rs-bot').innerHTML='';
 }
