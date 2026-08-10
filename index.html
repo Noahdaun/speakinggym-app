@@ -6625,7 +6625,7 @@ function olTypeInfo(t){return OL_TYPE_INFO[t]||OL_TYPE_INFO['일반'];}
 let _olSubsCache=[],_olSubFilter='전체';
 async function loadOlSubList(){
   const el=document.getElementById('ol-sub-list');if(!el)return;
-  const{data,error}=await sb.from('course_subscriptions').select('*,profiles(name,email,phone,student_mode),online_courses(title,month)').order('created_at',{ascending:false});
+  const{data,error}=await sb.from('course_subscriptions').select('*,profiles!student_id(name,email,phone,student_mode),online_courses(title,month)').order('created_at',{ascending:false});
   if(error){
     console.error('수강 현황 로드 실패',error);
     el.innerHTML=`<div class="empty" style="color:var(--rd);">불러오기 실패: ${error.message}</div>`;
@@ -6701,7 +6701,8 @@ async function revokeSubscription(sid){
 
 async function loadOlPayList(){
   const el=document.getElementById('ol-pay-list');if(!el)return;
-  const{data}=await sb.from('course_subscriptions').select('*,profiles(name,email),online_courses(title,price)').order('created_at',{ascending:false});
+  const{data,error}=await sb.from('course_subscriptions').select('*,profiles!student_id(name,email),online_courses(title,price)').order('created_at',{ascending:false});
+  if(error){tst('결제 내역 로드 실패: '+error.message);el.innerHTML=`<div class="empty" style="color:var(--rd);">불러오기 실패: ${error.message}</div>`;return;}
   const subs=data||[];
   if(!subs.length){el.innerHTML='<div class="empty">결제 내역이 없어요</div>';return;}
   let total=0;
