@@ -6625,7 +6625,13 @@ function olTypeInfo(t){return OL_TYPE_INFO[t]||OL_TYPE_INFO['일반'];}
 let _olSubsCache=[],_olSubFilter='전체';
 async function loadOlSubList(){
   const el=document.getElementById('ol-sub-list');if(!el)return;
-  const{data}=await sb.from('course_subscriptions').select('*,profiles(name,email,phone,student_mode),online_courses(title,month)').order('created_at',{ascending:false});
+  const{data,error}=await sb.from('course_subscriptions').select('*,profiles(name,email,phone,student_mode),online_courses(title,month)').order('created_at',{ascending:false});
+  if(error){
+    console.error('수강 현황 로드 실패',error);
+    el.innerHTML=`<div class="empty" style="color:var(--rd);">불러오기 실패: ${error.message}</div>`;
+    tst('수강 현황 로드 실패: '+error.message);
+    return;
+  }
   _olSubsCache=data||[];
   renderOlSubFilter();
   renderOlSubList();
