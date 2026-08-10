@@ -6002,6 +6002,11 @@ async function openOlLessonMgr(cid, ctitle){
             <input type="checkbox" id="ol-ls-free" style="accent-color:var(--g);width:15px;height:15px;">무료공개
           </label>
         </div>
+        <div style="margin-bottom:8px;">
+          <div style="font-size:11px;color:var(--mu);margin-bottom:4px;">📄 PDF 자료 (선택, 교재·워크북)</div>
+          <input type="file" id="ol-ls-pdf" accept="application/pdf" style="width:100%;font-size:11px;">
+          <div id="ol-ls-pdf-cur" style="font-size:10px;color:var(--gm);margin-top:4px;"></div>
+        </div>
         <div style="display:flex;gap:6px;">
           <button id="ol-ls-save-btn" onclick="saveOlLesson('${cid}')" style="flex:1;padding:11px;border-radius:11px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">영상 추가</button>
           <button id="ol-ls-cancel-btn" onclick="cancelEditOlLesson()" style="display:none;padding:11px 14px;border-radius:11px;background:var(--sf);color:var(--text);border:1.5px solid var(--brd);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">취소</button>
@@ -6038,13 +6043,16 @@ async function loadOlLessons(cid){
             </div>
           </div>
           ${l.bunny_video_id?`<div style="font-size:10px;color:var(--mu);font-family:monospace;background:var(--bg);padding:4px 8px;border-radius:6px;border:1px solid var(--brd);">${vidLabel}: ${l.bunny_video_id}</div>`:'<div style="font-size:10px;color:#E24B4A;">⚠️ 영상 미등록</div>'}
+          ${l.pdf_url?`<div style="font-size:10px;color:var(--gm);margin-top:4px;">📄 자료 첨부됨</div>`:''}
         </div>`;
   }).join('');
 }
 
+let _olEditPdfUrl=null;
 function editOlLesson(lid){
   const l=_olLessonsCache.find(x=>x.id===lid);if(!l)return;
   _olEditLessonId=lid;
+  _olEditPdfUrl=l.pdf_url||null;
   document.getElementById('ol-ls-week').value=l.week||'';
   document.getElementById('ol-ls-dur').value=l.duration_min||20;
   document.getElementById('ol-ls-type').value=l.lesson_type||'메인';
@@ -6052,16 +6060,20 @@ function editOlLesson(lid){
   document.getElementById('ol-ls-title').value=l.title||'';
   document.getElementById('ol-ls-vid').value=l.bunny_video_id||'';
   document.getElementById('ol-ls-free').checked=!!l.is_free;
+  document.getElementById('ol-ls-pdf').value='';
+  document.getElementById('ol-ls-pdf-cur').textContent=l.pdf_url?'📄 등록된 자료 있음 (새 파일 선택 시 교체됨)':'';
   document.getElementById('ol-ls-save-btn').textContent='✓ 수정 저장';
   document.getElementById('ol-ls-cancel-btn').style.display='block';
   document.getElementById('ol-lesson-pop')?.scrollTo({top:0,behavior:'smooth'});
 }
 
 function cancelEditOlLesson(){
-  _olEditLessonId=null;
+  _olEditLessonId=null;_olEditPdfUrl=null;
   ['ol-ls-week','ol-ls-title','ol-ls-vid'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   document.getElementById('ol-ls-free').checked=false;
   document.getElementById('ol-ls-session').value='1';
+  const pdfEl=document.getElementById('ol-ls-pdf');if(pdfEl)pdfEl.value='';
+  document.getElementById('ol-ls-pdf-cur').textContent='';
   document.getElementById('ol-ls-save-btn').textContent='영상 추가';
   document.getElementById('ol-ls-cancel-btn').style.display='none';
 }
@@ -6074,18 +6086,32 @@ async function saveOlLesson(cid){
   const title=document.getElementById('ol-ls-title')?.value?.trim();
   const bunny_video_id=document.getElementById('ol-ls-vid')?.value?.trim()||null;
   const is_free=document.getElementById('ol-ls-free')?.checked||false;
+  const pdfFile=document.getElementById('ol-ls-pdf')?.files?.[0]||null;
   if(!title){tst('영상 제목을 입력해주세요');return;}
+  const btn=document.getElementById('ol-ls-save-btn');
+  const btnLabel=btn?btn.textContent:'';
+  let pdf_url=_olEditPdfUrl;
+  if(pdfFile){
+    if(btn){btn.textContent='⏳ 업로드중...';btn.disabled=true;}
+    const path=`${cid}/${Date.now()}_${pdfFile.name}`;
+    const{error:upErr}=await sb.storage.from('materials').upload(path,pdfFile,{upsert:true,contentType:'application/pdf'});
+    if(upErr){tst('PDF 업로드 실패: '+upErr.message);if(btn){btn.textContent=btnLabel;btn.disabled=false;}return;}
+    pdf_url=sb.storage.from('materials').getPublicUrl(path).data.publicUrl;
+  }
   if(_olEditLessonId){
-    const{error}=await sb.from('online_lessons').update({week,lesson_type,sort_order,title,bunny_video_id,duration_min,is_free}).eq('id',_olEditLessonId);
+    const{error}=await sb.from('online_lessons').update({week,lesson_type,sort_order,title,bunny_video_id,duration_min,is_free,pdf_url}).eq('id',_olEditLessonId);
+    if(btn){btn.textContent=btnLabel;btn.disabled=false;}
     if(error){tst('수정 실패: '+error.message);return;}
     tst('수정됐어요!');
     cancelEditOlLesson();
   }else{
-    if(!week){tst('주차를 입력해주세요');return;}
-    const{error}=await sb.from('online_lessons').insert({course_id:cid,week,lesson_type,sort_order,title,bunny_video_id,duration_min,is_free});
+    if(!week){tst('주차를 입력해주세요');if(btn){btn.textContent=btnLabel;btn.disabled=false;}return;}
+    const{error}=await sb.from('online_lessons').insert({course_id:cid,week,lesson_type,sort_order,title,bunny_video_id,duration_min,is_free,pdf_url});
+    if(btn){btn.textContent=btnLabel;btn.disabled=false;}
     if(error){tst('저장 실패: '+error.message);return;}
     ['ol-ls-week','ol-ls-title','ol-ls-vid'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
     document.getElementById('ol-ls-free').checked=false;
+    const pdfEl=document.getElementById('ol-ls-pdf');if(pdfEl)pdfEl.value='';
     tst('영상이 추가됐어요!');
   }
   await loadOlLessons(cid);
@@ -6163,7 +6189,9 @@ async function openCourseWeeks(courseId,title,hasAccess,price){
   document.getElementById('rs-content').innerHTML=`
     ${_ocHasAccess?'':'<div style="background:var(--aml);border:1.5px solid #FAC775;border-radius:12px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:#854F0B;">🔓 무료로 공개된 영상만 보여요. 전체 강의를 보려면 구매해주세요.</div>'}
     <div id="oc-week-list"></div>`;
-  document.getElementById('rs-bot').innerHTML=_ocHasAccess?'':`<button onclick="buyOnlineCourse()" style="width:100%;padding:13px;border-radius:12px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;">전체 강의 신청하기</button>`;
+  document.getElementById('rs-bot').innerHTML=_ocHasAccess
+    ?`<button onclick="openCertificate()" style="width:100%;padding:12px;border-radius:12px;background:var(--sf);border:1.5px solid var(--brd);color:var(--text);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">📜 수강 확인증 받기</button>`
+    :`<button onclick="buyOnlineCourse()" style="width:100%;padding:13px;border-radius:12px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;">전체 강의 신청하기</button>`;
   document.getElementById('rs').classList.add('on');
   renderOcWeekList();
 }
@@ -6238,6 +6266,41 @@ function toggleOcMonth(m){
   if(_ocOpenMonths.has(m))_ocOpenMonths.delete(m);else _ocOpenMonths.add(m);
   renderOcWeekList();
 }
+// ── 수강 확인증(수료증) — 브라우저 인쇄 기능으로 PDF 저장 ──
+async function openCertificate(){
+  const{data:sub}=await sb.from('course_subscriptions').select('starts_at,expires_at').eq('student_id',U.id).eq('course_id',_ocCourseId).order('created_at',{ascending:false}).maybeSingle();
+  const name=P?.name||U.email;
+  const today=new Date().toISOString().slice(0,10);
+  const start=sub?.starts_at||today;
+  const end=sub?.expires_at||today;
+  const pop=document.createElement('div');
+  pop.id='cert-pop';
+  pop.style.cssText='position:fixed;inset:0;background:#F5F3F0;z-index:600;overflow-y:auto;display:flex;flex-direction:column;align-items:center;padding:24px 16px;';
+  pop.innerHTML=`
+    <div id="cert-card" style="width:100%;max-width:520px;background:#fff;border:6px double #1D9E75;border-radius:6px;padding:40px 32px;text-align:center;">
+      <div style="font-size:12px;letter-spacing:3px;color:#9CA3A0;font-weight:700;">SPEAKING GYM</div>
+      <div style="font-size:24px;font-weight:800;color:#085041;margin:14px 0 24px;">수강 확인증</div>
+      <div style="font-size:13px;color:#374151;margin-bottom:6px;">성명</div>
+      <div style="font-size:20px;font-weight:800;color:#111827;margin-bottom:20px;">${name}</div>
+      <div style="font-size:13px;color:#374151;line-height:2;">
+        위 학생은 아래 온라인 과정을 수강하였음을 확인합니다.<br>
+        <b>${_ocCourseTitle}</b><br>
+        수강 기간: ${start} ~ ${end}
+      </div>
+      <div style="margin-top:32px;font-size:12px;color:#6B7280;">발급일 ${today}</div>
+      <div style="margin-top:6px;font-size:13px;font-weight:700;color:#085041;">Speaking Gym with Noah</div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:16px;width:100%;max-width:520px;">
+      <button onclick="document.getElementById('cert-pop').remove();document.getElementById('cert-print-style')?.remove();" style="flex:1;padding:12px;border-radius:11px;background:#fff;border:1.5px solid #E8E4DE;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">닫기</button>
+      <button onclick="window.print()" style="flex:1;padding:12px;border-radius:11px;background:linear-gradient(135deg,#1D9E75,#159468);color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">🖨️ PDF로 저장 / 인쇄</button>
+    </div>`;
+  document.body.appendChild(pop);
+  const style=document.createElement('style');
+  style.id='cert-print-style';
+  style.textContent='@media print{ body *{visibility:hidden;} #cert-pop, #cert-pop *{visibility:visible;} #cert-pop{position:fixed;inset:0;background:#fff;} #cert-pop button{display:none;} }';
+  document.head.appendChild(style);
+}
+
 function playOnlineLesson(lid){
   const l=_ocLessons.find(x=>x.id===lid);if(!l)return;
   if(!l.bunny_video_id){tst('아직 영상이 준비되지 않았어요');return;}
@@ -6256,6 +6319,7 @@ function playOnlineLesson(lid){
     <div style="border-radius:12px;overflow:hidden;aspect-ratio:16/9;background:#000;margin-bottom:12px;">
       ${playerHtml}
     </div>
+    ${l.pdf_url?`<a href="${l.pdf_url}" target="_blank" rel="noopener" style="display:flex;align-items:center;justify-content:center;gap:7px;width:100%;padding:11px;border-radius:11px;background:var(--gl);border:1.5px solid #C0E8D8;font-size:13px;font-weight:700;color:var(--gd);text-decoration:none;margin-bottom:8px;">📄 이번 강의 자료(PDF) 다운로드</a>`:''}
     <button onclick="openCourseWeeks('${_ocCourseId}','${_ocCourseTitle.replace(/'/g,"\\'")}',${_ocHasAccess},${_ocPrice})" style="width:100%;padding:11px;border-radius:11px;background:var(--sf);border:1.5px solid var(--brd);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;color:var(--text);">← 목록으로</button>`;
   document.getElementById('rs-bot').innerHTML='';
 }
