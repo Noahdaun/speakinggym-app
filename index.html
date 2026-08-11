@@ -6155,7 +6155,7 @@ async function saveOlLesson(cid){
   let pdf_url=_olEditPdfUrl;
   if(pdfFile){
     if(btn){btn.textContent='⏳ 업로드중...';btn.disabled=true;}
-    const path=`${cid}/${Date.now()}_${pdfFile.name}`;
+    const path=`${cid}/${Date.now()}.pdf`; // 원본 파일명(한글·공백 등)은 저장 경로에 안 쓰고 안전한 이름으로 저장
     const{error:upErr}=await sb.storage.from('materials').upload(path,pdfFile,{upsert:true,contentType:'application/pdf'});
     if(upErr){tst('PDF 업로드 실패: '+upErr.message);if(btn){btn.textContent=btnLabel;btn.disabled=false;}return;}
     pdf_url=sb.storage.from('materials').getPublicUrl(path).data.publicUrl;
