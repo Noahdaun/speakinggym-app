@@ -688,18 +688,25 @@ function doUpdate(){
 
       <!-- 전화스케줄 탭 -->
       <div id="ol-schedule" style="display:none;padding:0 14px;">
-        <!-- 관리자: 시간 슬롯 설정 (표에서 클릭해서 켜고 끄기) -->
-        <div class="card" style="margin-bottom:16px;">
-          <div style="font-size:13px;font-weight:700;margin-bottom:4px;">⏰ 운영 시간 설정</div>
-          <div style="font-size:11px;color:var(--mu);margin-bottom:10px;">칸을 눌러서 예약 가능한 시간을 켜고 끄세요 (초록 = 예약 가능)</div>
-          <div id="slot-grid" style="overflow-x:auto;"><div class="loading">로딩중...</div></div>
-        </div>
-        <!-- 예약 현황 -->
+        <!-- 예약 현황 (위로 올림) -->
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
           <div class="sec" style="margin-bottom:0;">예약 현황</div>
           <input type="date" id="booking-date-filter" onchange="loadBookings()" style="padding:5px 8px;border:1.5px solid var(--brd);border-radius:8px;font-size:12px;background:var(--sf);font-family:inherit;">
         </div>
-        <div id="booking-list"><div class="loading">로딩중...</div></div>
+        <div id="booking-list" style="margin-bottom:16px;"><div class="loading">로딩중...</div></div>
+        <!-- 관리자: 시간 슬롯 설정 (표에서 클릭해서 켜고 끄기, 기본은 접혀있음) -->
+        <div class="card">
+          <div onclick="toggleSlotGridCard()" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;">
+            <div>
+              <div style="font-size:13px;font-weight:700;">⏰ 운영 시간 설정</div>
+              <div style="font-size:11px;color:var(--mu);margin-top:2px;">칸을 눌러서 예약 가능한 시간을 켜고 끄세요</div>
+            </div>
+            <span id="slot-grid-toggle-ic" style="font-size:12px;color:var(--mu);">▼</span>
+          </div>
+          <div id="slot-grid-wrap" style="display:none;margin-top:10px;">
+            <div id="slot-grid" style="overflow-x:auto;"><div class="loading">로딩중...</div></div>
+          </div>
+        </div>
       </div>
 
       <!-- 결제내역 탭 -->
@@ -6537,6 +6544,13 @@ function callTimeSlots(){
   const list=[];
   for(let h=CALL_HOURS_START;h<CALL_HOURS_END;h++){list.push(`${String(h).padStart(2,'0')}:00`);list.push(`${String(h).padStart(2,'0')}:30`);}
   return list;
+}
+function toggleSlotGridCard(){
+  const wrap=document.getElementById('slot-grid-wrap');
+  const ic=document.getElementById('slot-grid-toggle-ic');
+  const open=wrap.style.display==='none';
+  wrap.style.display=open?'block':'none';
+  if(ic)ic.textContent=open?'▲':'▼';
 }
 let _slotCache={}; // `${day}_${time}` -> {id,is_active}
 async function loadCallSlots(){
