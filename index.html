@@ -4446,12 +4446,12 @@ async function checkCallBookingBanner(){
   if(!wrap)return;
   // 이번 주 예약이 있는지 확인
   const mon=getThisMonday();
-  const sun=new Date(mon);sun.setDate(sun.getDate()+6);
+  const sun=parseYMD(mon);sun.setDate(sun.getDate()+6);
   const{data:booking}=await sb.from('call_bookings')
     .select('id,booking_date,call_slots(day_of_week,slot_time),status')
     .eq('student_id',U.id)
     .gte('booking_date',mon)
-    .lte('booking_date',sun.toISOString().slice(0,10))
+    .lte('booking_date',fmtYMD(sun))
     .neq('status','cancelled')
     .maybeSingle();
   const existing=wrap.innerHTML;
@@ -4484,12 +4484,19 @@ async function checkCallBookingBanner(){
   wrap.innerHTML=callHtml+(existing||'');
 }
 
+// "YYYY-MM-DD" 문자열을 브라우저 시간대와 무관하게 항상 그 날짜 그대로 로컬 Date로 만듦
+// (new Date("YYYY-MM-DD")는 UTC 자정으로 해석돼서, 시간대에 따라 하루 밀리는 버그가 생김)
+function parseYMD(s){
+  const[y,m,d]=s.split('-').map(Number);
+  return new Date(y,m-1,d);
+}
+function fmtYMD(d){return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
 function getThisMonday(){
   const d=new Date();
   const day=d.getDay();
   const diff=d.getDate()-(day===0?6:day-1);
   const mon=new Date(d);mon.setDate(diff);
-  return mon.toISOString().slice(0,10);
+  return fmtYMD(mon);
 }
 
 async function openCallBooking(){
@@ -4532,18 +4539,18 @@ async function moveBookingWeek(dir){
 
 async function renderBookingSlots(){
   const offset=window._bookingWeekOffset||0;
-  const mon=new Date(getThisMonday());
+  const mon=parseYMD(getThisMonday());
   mon.setDate(mon.getDate()+offset*7);
   const sun=new Date(mon);sun.setDate(sun.getDate()+6);
-  const monStr=mon.toISOString().slice(0,10);
-  const sunStr=sun.toISOString().slice(0,10);
+  const monStr=fmtYMD(mon);
+  const sunStr=fmtYMD(sun);
   const lbl=document.getElementById('booking-week-lbl');
   if(lbl)lbl.textContent=`${mon.getMonth()+1}/${mon.getDate()} ~ ${sun.getMonth()+1}/${sun.getDate()}`;
   const wrap=document.getElementById('booking-slots-wrap');
   if(!wrap)return;
   // 이번 주 월~금 날짜 계산 (월요일=0)
   const dayDates={};
-  CALL_DAYS.forEach((day,i)=>{const d=new Date(mon);d.setDate(mon.getDate()+i);dayDates[day]=d.toISOString().slice(0,10);});
+  CALL_DAYS.forEach((day,i)=>{const d=new Date(mon);d.setDate(mon.getDate()+i);dayDates[day]=fmtYMD(d);});
   // 슬롯 로드
   const{data:slots}=await sb.from('call_slots').select('*').eq('is_active',true).order('slot_time');
   // 예약된 슬롯 로드
@@ -4556,13 +4563,13 @@ async function renderBookingSlots(){
   const myBooking=(bookings||[]).find(b=>b.student_id===U.id&&b.status!=='cancelled');
   const daySlots={};
   CALL_DAYS.forEach(day=>{daySlots[day]=slots?.filter(s=>s.day_of_week===day)||[];});
-  const today=new Date().toISOString().slice(0,10);
+  const today=fmtYMD(new Date());
   let html='';
   CALL_DAYS.forEach(day=>{
     const date=dayDates[day];
     const daySlotList=daySlots[day];
     if(!daySlotList.length)return;
-    const d=new Date(date);
+    const d=parseYMD(date);
     html+=`<div style="margin-bottom:14px;">
       <div style="font-size:13px;font-weight:700;margin-bottom:8px;">${day}요일 <span style="font-size:11px;font-weight:400;color:var(--mu);">${d.getMonth()+1}/${d.getDate()}</span></div>
       <div style="display:flex;flex-wrap:wrap;gap:7px;">
@@ -4589,7 +4596,7 @@ async function makeBooking(slotId, date, time){
   const dow=d.getDay();
   const monday=new Date(d);monday.setDate(d.getDate()-(dow===0?6:dow-1));
   const sunday=new Date(monday);sunday.setDate(monday.getDate()+6);
-  const monStr=monday.toISOString().slice(0,10),sunStr=sunday.toISOString().slice(0,10);
+  const monStr=fmtYMD(monday),sunStr=fmtYMD(sunday);
   const{data:existing}=await sb.from('call_bookings').select('id').eq('student_id',U.id).neq('status','cancelled').gte('booking_date',monStr).lte('booking_date',sunStr).maybeSingle();
   if(existing){tst('한 주에 한 번만 예약할 수 있어요. 먼저 기존 예약을 취소해주세요');return;}
   if(!confirm(`${date} ${time}에 예약할까요?`))return;
