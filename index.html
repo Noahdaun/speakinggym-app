@@ -688,11 +688,12 @@ function doUpdate(){
 
       <!-- 전화스케줄 탭 -->
       <div id="ol-schedule" style="display:none;padding:0 14px;">
-        <!-- 예약 현황 (위로 올림) -->
+        <!-- 예약 현황 (위로 올림) — 기본으로 앞으로의 모든 예약을 날짜별로 보여줌. 날짜를 고르면 그 날만 좁혀서 봄 -->
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-          <div class="sec" style="margin-bottom:0;">예약 현황</div>
+          <div class="sec" style="margin-bottom:0;">예약 현황 (앞으로 전체)</div>
           <input type="date" id="booking-date-filter" onchange="loadBookings()" style="padding:5px 8px;border:1.5px solid var(--brd);border-radius:8px;font-size:12px;background:var(--sf);font-family:inherit;">
         </div>
+        <div id="booking-date-filter-clear" style="display:none;margin-bottom:8px;"><button onclick="clearBookingDateFilter()" style="font-size:11px;color:var(--mu);background:none;border:none;cursor:pointer;font-family:inherit;text-decoration:underline;">날짜 선택 해제하고 전체 보기</button></div>
         <div id="booking-list" style="margin-bottom:16px;"><div class="loading">로딩중...</div></div>
         <!-- 관리자: 시간 슬롯 설정 (표에서 클릭해서 켜고 끄기, 기본은 접혀있음) -->
         <div class="card">
@@ -6593,22 +6594,32 @@ async function toggleGridSlot(day,time){
 }
 
 // ── 예약 현황 (관리자) ──
+function clearBookingDateFilter(){
+  const df=document.getElementById('booking-date-filter');if(df)df.value='';
+  loadBookings();
+}
 async function loadBookings(){
   const el=document.getElementById('booking-list');if(!el)return;
   const date=document.getElementById('booking-date-filter')?.value;
-  if(!date){el.innerHTML='<div class="empty">날짜를 선택해주세요</div>';return;}
-  const{data,error}=await sb.from('call_bookings')
-    .select('*,profiles!student_id(name,email,phone),call_slots(day_of_week,slot_time)')
-    .eq('booking_date',date)
-    .order('created_at');
+  const clearWrap=document.getElementById('booking-date-filter-clear');
+  if(clearWrap)clearWrap.style.display=date?'block':'none';
+  let q=sb.from('call_bookings').select('*,profiles!student_id(name,email,phone),call_slots(day_of_week,slot_time)');
+  if(date){
+    q=q.eq('booking_date',date).order('created_at');
+  }else{
+    // 날짜 미선택 — 오늘부터 앞으로의 모든 예약을 한번에 보여줌
+    q=q.gte('booking_date',fmtYMD(new Date())).order('booking_date').order('created_at');
+  }
+  const{data,error}=await q;
   if(error){
     console.error('예약 현황 로드 실패',error);
     el.innerHTML=`<div class="empty" style="color:var(--rd);">불러오기 실패: ${error.message}</div>`;
     return;
   }
   const bookings=data||[];
-  if(!bookings.length){el.innerHTML='<div class="empty">이 날 예약이 없어요</div>';return;}
-  el.innerHTML=bookings.map(b=>{
+  if(!bookings.length){el.innerHTML=`<div class="empty">${date?'이 날 예약이 없어요':'예정된 예약이 없어요'}</div>`;return;}
+  const dw=['일','월','화','수','목','금','토'];
+  const bookingCard=b=>{
     const name=b.profiles?.name||b.profiles?.email||'?';
     const phone=b.profiles?.phone||'전화번호 없음';
     const time=b.call_slots?.slot_time||'?';
@@ -6630,6 +6641,23 @@ async function loadBookings(){
         ${b.status!=='done'?`<button onclick="updateBookingStatus('${b.id}','done')" style="flex:1;padding:7px;border-radius:8px;background:var(--gl);color:var(--gd);border:1.5px solid #C0E8D8;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">통화완료</button>`:''}
         ${b.status!=='cancelled'?`<button onclick="updateBookingStatus('${b.id}','cancelled')" style="flex:1;padding:7px;border-radius:8px;background:var(--rl);color:var(--rd);border:1px solid #FCA5A5;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">취소</button>`:''}
       </div>
+    </div>`;
+  };
+  if(date){
+    el.innerHTML=bookings.map(bookingCard).join('');
+    return;
+  }
+  // 날짜별로 묶어서 헤더와 함께 표시
+  const byDate={};
+  bookings.forEach(b=>{if(!byDate[b.booking_date])byDate[b.booking_date]=[];byDate[b.booking_date].push(b);});
+  const dates=Object.keys(byDate).sort();
+  const today=fmtYMD(new Date());
+  el.innerHTML=dates.map(ds=>{
+    const d=parseYMD(ds);
+    const label=`${d.getMonth()+1}/${d.getDate()} (${dw[d.getDay()]})${ds===today?' · 오늘':''}`;
+    return`<div style="margin-bottom:14px;">
+      <div style="font-size:12px;font-weight:800;color:var(--text);margin-bottom:6px;">${label}</div>
+      ${byDate[ds].map(bookingCard).join('')}
     </div>`;
   }).join('');
 }
@@ -6772,9 +6800,7 @@ function olTab(t, b){
     loadOlSubList();
   }
   if(t==='schedule'){
-    // 날짜 필터 기본값 오늘
-    const df=document.getElementById('booking-date-filter');
-    if(df&&!df.value)df.value=new Date().toISOString().slice(0,10);
+    // 날짜 필터는 기본으로 비워둠 — 앞으로의 모든 예약을 날짜별로 한번에 보여줌
     loadCallSlots();
     loadBookings();
   }
