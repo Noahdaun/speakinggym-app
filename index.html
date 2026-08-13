@@ -3318,17 +3318,20 @@ function renderMissingAlert(doneSet, cls='all'){
     </div>`;
     return;
   }
+  // "전체"일 땐 학생이 너무 많아서 이름을 쭉 나열하면 복잡해지니 숫자만 보여주고,
+  // 특정 반을 골랐을 때만(사람 수가 적으니) 개별 이름+알림 버튼을 보여줌
+  const showNames=cls!=='all';
   alertDiv.innerHTML=`<div style="background:#FFF8F0;border-radius:11px;padding:11px 13px;border:1.5px solid #FAC775;">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;">
-      <div style="font-size:12px;font-weight:700;color:var(--amd);">⚠️ 미완료 학생 ${missing.length}명</div>
-      <div onclick='openBroadcastBoxCustom(${JSON.stringify(missing.map(s=>s.id))},"미완료 학생 전체")' style="font-size:11px;color:#854F0B;background:var(--aml);padding:4px 10px;border-radius:8px;cursor:pointer;font-weight:600;">전체 알림</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;${showNames?'margin-bottom:9px;':''}">
+      <div style="font-size:12px;font-weight:700;color:var(--amd);">⚠️ 미완료 학생 ${missing.length}명${showNames?'':' — 반을 선택하면 이름이 보여요'}</div>
+      <div onclick='openBroadcastBoxCustom(${JSON.stringify(missing.map(s=>s.id))},"미완료 학생 전체")' style="font-size:11px;color:#854F0B;background:var(--aml);padding:4px 10px;border-radius:8px;cursor:pointer;font-weight:600;white-space:nowrap;margin-left:8px;">전체 알림</div>
     </div>
-    <div style="display:flex;gap:5px;flex-wrap:wrap;">
+    ${showNames?`<div style="display:flex;gap:5px;flex-wrap:wrap;">
       ${missing.map(s=>`<div style="background:#fff;border-radius:99px;padding:4px 11px;font-size:11px;border:1px solid #FAC775;display:flex;align-items:center;gap:5px;">
         ${dispName(s.name,s.email)}
         <div onclick="openMsgThread('${s.id}','${dispName(s.name,s.email).replace(/'/g,"\\'")}')" style="font-size:10px;color:#854F0B;background:var(--aml);padding:1px 7px;border-radius:99px;cursor:pointer;font-weight:600;">알림</div>
       </div>`).join('')}
-    </div>
+    </div>`:''}
   </div>`;
 }
 function renderSList(cls,doneSet){
@@ -3420,28 +3423,7 @@ function sAdCls(cls,btn){
   sb.from('review_logs').select('student_id').eq('completed',true).gte('completed_at',td).then(({data:lg})=>{
     const doneSet=new Set((lg||[]).map(l=>l.student_id));
     renderSList(cls,doneSet);
-    const alertDiv=document.getElementById('missing-alert');
-    if(alertDiv){
-      if(!missing.length){
-        alertDiv.innerHTML=`<div style="background:var(--gl);border-radius:11px;padding:11px 13px;border:1.5px solid #C0E8D8;display:flex;align-items:center;gap:8px;">
-          <div style="font-size:20px;">🎉</div>
-          <div><div style="font-size:12px;font-weight:700;color:var(--gd);">전원 완료!</div><div style="font-size:11px;color:var(--gm);margin-top:1px;">오늘 모든 학생이 리뷰를 완료했어요</div></div>
-        </div>`;
-      } else {
-        alertDiv.innerHTML=`<div style="background:#FFF8F0;border-radius:11px;padding:11px 13px;border:1.5px solid #FAC775;">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;">
-            <div style="font-size:12px;font-weight:700;color:var(--amd);">⚠️ 미완료 학생 ${missing.length}명</div>
-            <div onclick='openBroadcastBoxCustom(${JSON.stringify(missing.map(s=>s.id))},"미완료 학생 전체")' style="font-size:11px;color:#854F0B;background:var(--aml);padding:4px 10px;border-radius:8px;cursor:pointer;font-weight:600;">전체 알림</div>
-          </div>
-          <div style="display:flex;gap:5px;flex-wrap:wrap;">
-            ${missing.map(s=>`<div style="background:#fff;border-radius:99px;padding:4px 11px;font-size:11px;border:1px solid #FAC775;display:flex;align-items:center;gap:5px;">
-              ${dispName(s.name,s.email)}
-              <div onclick="openMsgThread('${s.id}','${dispName(s.name,s.email).replace(/'/g,"\\'")}')" style="font-size:10px;color:#854F0B;background:var(--aml);padding:1px 7px;border-radius:99px;cursor:pointer;font-weight:600;">알림</div>
-            </div>`).join('')}
-          </div>
-        </div>`;
-      }
-    }
+    renderMissingAlert(doneSet,cls);
   });
 }
 
