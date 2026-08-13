@@ -1259,7 +1259,9 @@ async function doSignup(){
   const{data,error}=await sb.auth.signUp({email:e,password:p,options:{data:{name:n}}});
   if(error){er.textContent='가입 실패: '+error.message;return;}
   if(data?.user){
-    await sb.from('profiles').upsert({id:data.user.id,email:e,name:n,role:'student',class_name:selSignupCls||null});
+    // 가입할 때 고른 반 이름에 "온라인"이 들어있으면 온라인 전용 학생 플래그를 자동으로 켜줌
+    const autoOnlineMode=selSignupCls&&selSignupCls.includes('온라인')?'online':'offline';
+    await sb.from('profiles').upsert({id:data.user.id,email:e,name:n,role:'student',class_name:selSignupCls||null,student_mode:autoOnlineMode});
     er.style.color='var(--g)';er.textContent='가입 완료! 로그인해주세요';
     setTimeout(()=>{goLogin();document.getElementById('le').value=e;},1500);
   }
