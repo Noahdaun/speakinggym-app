@@ -2097,7 +2097,7 @@ async function completeOnlineReview(){
   earnXP(XP_TABLE.follow,'online_review_complete_'+ses.lid+'_'+ses.round);
   tst(done?'복습 완료! 🎉':`${newCount}/5회 · 계속해봐요`);
   const justLid=ses.lid;
-  setTimeout(()=>{cses(true);refreshReview().then(()=>autoNextReview(justLid));lCal();buildHomeTodo();},1000);
+  setTimeout(()=>{cses(true);refreshReview().then(()=>autoNextReview(justLid));lCal();buildHomeTodo();loadMyStats();renderXPBar();},1000);
 }
 // 퀴즈 모드(암기카드·빈칸채우기)가 rs-bot을 자기 용도로 갈아치우기 때문에,
 // 다른 탭으로 돌아오면 "오늘 복습 완료" 버튼을 다시 세팅해줌
@@ -2314,7 +2314,7 @@ async function tapRSC(n){
     earnXP(XP_TABLE.follow,'follow_complete_'+ses.lid+'_'+ses.round);
     tst('5회 달성! 따라하기 완료!');
     const justLid=ses.lid;
-    setTimeout(()=>{cses();refreshReview().then(()=>autoNextReview(justLid));lCal();lRec();buildHomeTodo();},1200);
+    setTimeout(()=>{cses();refreshReview().then(()=>autoNextReview(justLid));lCal();lRec();buildHomeTodo();loadMyStats();renderXPBar();},1200);
   }
 }
 
