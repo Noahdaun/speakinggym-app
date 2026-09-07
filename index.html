@@ -4857,7 +4857,7 @@ async function saveAllAtt(d, cls){
 async function seedVocabForOnlineCourse(courseId){
   if(!courseId)return;
   const today=new Date().toISOString().slice(0,10);
-  const{data:subs}=await sb.from('course_subscriptions').select('student_id').eq('course_id',courseId).gte('expires_at',today);
+  const{data:subs}=await sb.from('course_subscriptions').select('student_id').eq('course_id',courseId).gte('expires_at',videoGraceCutoffStr());
   const studentIds=[...new Set((subs||[]).map(s=>s.student_id))];
   if(!studentIds.length)return;
   const{data:lsData}=await sb.from('lessons').select('vocab').eq('online_course_id',courseId).not('vocab','is',null);
@@ -6193,26 +6193,30 @@ async function deleteOlLesson(lid, cid){
   await loadOlLessons(cid);
 }
 
+// 영상 시청은 결제 만료일이 지나도 2개월 유예를 줌 (전화상담 등 서비스는 유예 없이 원래 만료일 그대로 — checkCallBookingBanner 참고)
+function videoGraceCutoffStr(){
+  const d=new Date();d.setMonth(d.getMonth()-2);
+  return fmtYMD(d);
+}
+
 // ── 온라인 강의 (수강생용) — 결제한 강의를 달력으로 보고, 날짜 눌러서 그날 영상 재생 ──
 async function openMyOnlineCourse(){
   npDestroy();
-  const today=new Date().toISOString().slice(0,10);
-  const{data:subs}=await sb.from('course_subscriptions').select('*,online_courses(id,title)').eq('student_id',U.id).gte('expires_at',today).order('expires_at',{ascending:false});
+  const{data:subs}=await sb.from('course_subscriptions').select('*,online_courses(id,title)').eq('student_id',U.id).gte('expires_at',videoGraceCutoffStr()).order('expires_at',{ascending:false});
   document.getElementById('rs-top').style.background='#1E2D45';
   if(!subs||!subs.length){
     await renderOlCourseStore();
     return;
   }
   const sub=subs[0];
-  await openCourseWeeks(sub.course_id, sub.online_courses?.title||'온라인 수업');
+  await openCourseWeeks(sub.course_id, sub.online_courses?.title||'온라인 수업', true, 0, sub.expires_at);
 }
 
 // 온라인 전용 학생이 홈 화면 "리뷰하기" 카드를 누르면 여기로 옴 — 출석 기반 리뷰 대신
 // 주차별로 배정된 토픽 리뷰 화면으로 바로 들어감
 async function openMyOnlineCourseReview(){
   npDestroy();
-  const today=new Date().toISOString().slice(0,10);
-  const{data:subs}=await sb.from('course_subscriptions').select('*,online_courses(id,title)').eq('student_id',U.id).gte('expires_at',today).order('expires_at',{ascending:false});
+  const{data:subs}=await sb.from('course_subscriptions').select('*,online_courses(id,title)').eq('student_id',U.id).gte('expires_at',videoGraceCutoffStr()).order('expires_at',{ascending:false});
   if(!subs||!subs.length){tst('수강 중인 온라인 강의가 없어요');return;}
   const sub=subs[0];
   document.getElementById('rs-top').style.background='#1E2D45';
@@ -6255,10 +6259,11 @@ function buyOnlineCourse(){
   window.open(EXTERNAL_COURSE_LINK,'_blank');
 }
 
-let _ocCourseId=null,_ocCourseTitle='',_ocLessons=[],_ocHasAccess=true,_ocPrice=0;
+let _ocCourseId=null,_ocCourseTitle='',_ocLessons=[],_ocHasAccess=true,_ocPrice=0,_ocExpiresAt=null;
 // 가입 날짜와 무관하게 주차별로 강의를 보여줌 (달력 방식 폐기)
-async function openCourseWeeks(courseId,title,hasAccess,price){
+async function openCourseWeeks(courseId,title,hasAccess,price,expiresAt){
   _ocCourseId=courseId;_ocCourseTitle=title;_ocHasAccess=hasAccess!==false;_ocPrice=price||0;
+  if(expiresAt!==undefined)_ocExpiresAt=expiresAt;
   document.getElementById('rs-title').textContent=title;
   document.getElementById('rs-badge').textContent=_ocHasAccess?'온라인 수업':'무료 미리보기';
   document.getElementById('rs-badge').style.background='#E6F1FB';
@@ -6266,8 +6271,11 @@ async function openCourseWeeks(courseId,title,hasAccess,price){
   document.getElementById('rs-top').style.background='#1E2D45';
   const{data}=await sb.from('online_lessons').select('*').eq('course_id',courseId).order('week');
   _ocLessons=(data||[]);
+  const today=fmtYMD(new Date());
+  const inGrace=_ocHasAccess&&_ocExpiresAt&&_ocExpiresAt<today;
   document.getElementById('rs-content').innerHTML=`
-    ${_ocHasAccess?'':'<div style="background:var(--aml);border:1.5px solid #FAC775;border-radius:12px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:#854F0B;">🔓 무료로 공개된 영상만 보여요. 전체 강의를 보려면 구매해주세요.</div>'}
+    ${!_ocHasAccess?'<div style="background:var(--aml);border:1.5px solid #FAC775;border-radius:12px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:#854F0B;">🔓 무료로 공개된 영상만 보여요. 전체 강의를 보려면 구매해주세요.</div>':''}
+    ${inGrace?`<div style="background:#FFF3E0;border:1.5px solid #FFCC80;border-radius:12px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:#8A5300;">⏳ 수강 기간(${_ocExpiresAt})이 지났어요. 지금은 유예 기간이라 영상은 계속 보이지만, 곧 안 보일 수 있으니 재결제해주세요.</div>`:''}
     <div id="oc-week-list"></div>`;
   document.getElementById('rs-bot').innerHTML=_ocHasAccess
     ?`<button onclick="openCertificate()" style="width:100%;padding:12px;border-radius:12px;background:var(--sf);border:1.5px solid var(--brd);color:var(--text);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">📜 수강 확인증 받기</button>`
@@ -6737,12 +6745,26 @@ function renderOlSubList(){
         </div>
       </div>
       ${s.payment_memo?`<div style="font-size:11px;color:var(--mu);background:var(--sf);padding:4px 8px;border-radius:6px;margin-bottom:5px;">💳 ${s.payment_memo}</div>`:''}
+      ${expired&&(s.course_type==='관리'||s.course_type==='대면')?`<div style="background:#FFF3E0;border:1.5px solid #FFCC80;border-radius:8px;padding:7px 9px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
+        <span style="font-size:11px;color:#8A5300;">⏳ 재결제 없이 만료됨 — 전화·대면 상담은 중단, 영상만 유예기간</span>
+        <button onclick="downgradeToGeneral('${s.id}')" style="padding:5px 9px;border-radius:7px;background:#fff;border:1px solid #FFCC80;color:#8A5300;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">일반형으로 전환</button>
+      </div>`:''}
       <div style="display:flex;gap:6px;">
         <button onclick="toggleStudentMode('${s.student_id}',${isOnlineMode})" style="flex:1;padding:7px;border-radius:8px;background:${isOnlineMode?'#E6F1FB':'var(--sf)'};color:${isOnlineMode?'#185FA5':'var(--text)'};border:1.5px solid ${isOnlineMode?'#B5D4F4':'var(--brd)'};font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">${isOnlineMode?'🌐 온라인 전용 학생':'오프라인 학생 (눌러서 온라인 전용으로)'}</button>
         <button onclick="revokeSubscription('${s.id}')" style="padding:7px 10px;border-radius:8px;background:var(--rl);color:var(--rd);border:1px solid #FCA5A5;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">취소</button>
       </div>
     </div>`;
   }).join('');
+}
+
+// 전화관리형/대면관리형인데 재결제 없이 만료된 학생을 원장님이 확인하고 한 번에 일반형으로 라벨 전환
+// (자동으로는 안 바꾸고, 항상 원장님 클릭으로만 확정)
+async function downgradeToGeneral(subId){
+  if(!confirm('이 수강권을 일반형으로 전환할까요?\n(전화·대면 상담 대상에서 빠지고, 영상은 유예기간 동안 계속 볼 수 있어요)'))return;
+  const{error}=await sb.from('course_subscriptions').update({course_type:'일반'}).eq('id',subId);
+  if(error){tst('전환 실패: '+error.message);return;}
+  tst('일반형으로 전환했어요');
+  await loadOlSubList();
 }
 
 // 온라인 전용 학생 분류 — 켜두면 홈 화면 달력의 출석률/숙제·출석/결석 표시가 숨겨짐
