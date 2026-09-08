@@ -6209,7 +6209,13 @@ async function openMyOnlineCourse(){
     return;
   }
   const sub=subs[0];
-  await openCourseWeeks(sub.course_id, sub.online_courses?.title||'온라인 수업', true, 0, sub.expires_at);
+  await openCourseWeeks(sub.course_id, sub.online_courses?.title||'온라인 수업', true, 0, sub.expires_at, sub.unlocked_months);
+}
+
+// 처음 수강권 열어줄 때 플랜에 따라 기본으로 몇 개월차까지 열어줄지 (이후엔 원장님이 직접 조정 가능)
+function olPlanToMonths(plan){
+  if(plan==='6개월'||plan==='1년')return 6; // 코스 전체가 6개월(24주) 분량이라 사실상 전체 오픈
+  return 1; // '1개월' 또는 미지정
 }
 
 // 온라인 전용 학생이 홈 화면 "리뷰하기" 카드를 누르면 여기로 옴 — 출석 기반 리뷰 대신
@@ -6220,7 +6226,7 @@ async function openMyOnlineCourseReview(){
   if(!subs||!subs.length){tst('수강 중인 온라인 강의가 없어요');return;}
   const sub=subs[0];
   document.getElementById('rs-top').style.background='#1E2D45';
-  await openOnlineCourseReview(sub.course_id, sub.online_courses?.title||'온라인 수업');
+  await openOnlineCourseReview(sub.course_id, sub.online_courses?.title||'온라인 수업', sub.unlocked_months||1);
 }
 
 // 구매하신 온라인 강의가 없을 때 — 무료 체험 영상(상단) + 강의 목록 + 구매 버튼(스마트스토어 연결)
@@ -6259,11 +6265,12 @@ function buyOnlineCourse(){
   window.open(EXTERNAL_COURSE_LINK,'_blank');
 }
 
-let _ocCourseId=null,_ocCourseTitle='',_ocLessons=[],_ocHasAccess=true,_ocPrice=0,_ocExpiresAt=null;
+let _ocCourseId=null,_ocCourseTitle='',_ocLessons=[],_ocHasAccess=true,_ocPrice=0,_ocExpiresAt=null,_ocUnlockedMonths=1;
 // 가입 날짜와 무관하게 주차별로 강의를 보여줌 (달력 방식 폐기)
-async function openCourseWeeks(courseId,title,hasAccess,price,expiresAt){
+async function openCourseWeeks(courseId,title,hasAccess,price,expiresAt,unlockedMonths){
   _ocCourseId=courseId;_ocCourseTitle=title;_ocHasAccess=hasAccess!==false;_ocPrice=price||0;
   if(expiresAt!==undefined)_ocExpiresAt=expiresAt;
+  if(unlockedMonths!==undefined)_ocUnlockedMonths=unlockedMonths||1;
   document.getElementById('rs-title').textContent=title;
   document.getElementById('rs-badge').textContent=_ocHasAccess?'온라인 수업':'무료 미리보기';
   document.getElementById('rs-badge').style.background='#E6F1FB';
@@ -6331,6 +6338,16 @@ function renderOcWeekList(){
   let html='';
   for(let m=1;m<=totalMonths;m++){
     const startW=(m-1)*4+1,endW=Math.min(m*4,OC_TOTAL_WEEKS);
+    const locked=m>_ocUnlockedMonths;
+    if(locked){
+      html+=`<div style="border:1.5px dashed #FFCC80;border-radius:14px;overflow:hidden;margin-bottom:10px;background:#FFF9F0;">
+        <div onclick="buyOnlineCourse()" style="display:flex;align-items:center;justify-content:space-between;padding:13px 14px;cursor:pointer;">
+          <span style="font-size:14px;font-weight:800;color:#8A5300;">🔒 ${m}개월차 <span style="font-size:11px;font-weight:500;color:#B5813A;">(${startW}~${endW}주차)</span></span>
+          <span style="font-size:11px;font-weight:700;color:#8A5300;white-space:nowrap;">추가 결제 필요 →</span>
+        </div>
+      </div>`;
+      continue;
+    }
     const isOpen=_ocOpenMonths.has(m);
     let doneCnt=0,totalCnt=0;
     for(let w=startW;w<=endW;w++)OC_LESSON_TYPES.forEach(t=>OC_SESSIONS.forEach(s=>{totalCnt++;if(byKey[`${w}_${t}_${s}`]?.bunny_video_id)doneCnt++;}));
@@ -6357,9 +6374,10 @@ function toggleOcMonth(m){
 
 // ── 온라인 강의 주차별 리뷰 — 기존 오프라인 리뷰 화면(자막·빈칸퀴즈·따라말하기)을 그대로 쓰되,
 // 출석일이 아니라 "온라인 강의 + 주차"로 배정된 토픽만 모아서 보여줌 ──
-async function openOnlineCourseReview(courseId,title){
+async function openOnlineCourseReview(courseId,title,unlockedMonths){
+  const maxWeek=(unlockedMonths||1)*4;
   const{data}=await sb.from('lessons').select('*').eq('online_course_id',courseId).order('online_week');
-  const topics=data||[];
+  const topics=(data||[]).filter(t=>!t.online_week||t.online_week<=maxWeek);
   // 리뷰 화면(oSes→openOnlineReview)이 les 배열에서 토픽을 찾으므로 캐시에 합쳐둠
   topics.forEach(t=>{const idx=les.findIndex(x=>x.id===t.id);if(idx>=0)les[idx]=t;else les.push(t);});
   const{data:logs}=await sb.from('review_logs').select('lesson_id,completed').eq('student_id',U.id).eq('completed',true).in('lesson_id',topics.map(t=>t.id));
@@ -6531,10 +6549,11 @@ async function grantSubscription(){
   // 중복 체크
   const{data:ex}=await sb.from('course_subscriptions').select('id').eq('student_id',sid).eq('course_id',cid).eq('course_type',_olCourseType).maybeSingle();
   if(ex){
+    // 기존 수강권이면 몇 개월차까지 열려있는지(unlocked_months)는 원장님이 목록에서 직접 조정한 값을 그대로 유지 — 여기선 안 건드림
     await sb.from('course_subscriptions').update({starts_at:start,expires_at:end,payment_memo:memo,granted_by:U.id,plan:_olPlan}).eq('id',ex.id);
     tst('수강권이 업데이트됐어요!');
   } else {
-    const{error}=await sb.from('course_subscriptions').insert({student_id:sid,course_id:cid,starts_at:start,expires_at:end,payment_memo:memo,granted_by:U.id,course_type:_olCourseType,plan:_olPlan});
+    const{error}=await sb.from('course_subscriptions').insert({student_id:sid,course_id:cid,starts_at:start,expires_at:end,payment_memo:memo,granted_by:U.id,course_type:_olCourseType,plan:_olPlan,unlocked_months:olPlanToMonths(_olPlan)});
     if(error){tst('저장 실패: '+error.message);return;}
     tst('수강권이 열렸어요! 🎫');
   }
@@ -6744,6 +6763,15 @@ function renderOlSubList(){
           <div style="font-size:10px;color:var(--mu);margin-top:2px;">${s.expires_at}까지</div>
         </div>
       </div>
+      <div style="margin-bottom:6px;">
+        <div onclick="toggleMonthPicker('${s.id}')" style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:99px;background:#E6F1FB;border:1px solid #B5D4F4;cursor:pointer;">
+          <span style="font-size:11px;font-weight:700;color:#185FA5;">📅 ${s.unlocked_months||1}개월차까지 열림</span>
+          <span style="font-size:9px;color:#185FA5;">${_olMonthPickerOpenId===s.id?'▲':'▼ 변경'}</span>
+        </div>
+        ${_olMonthPickerOpenId===s.id?`<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px;">
+          ${[1,2,3,4,5,6].map(n=>`<button onclick="setUnlockedMonths('${s.id}',${n})" style="width:34px;height:34px;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;background:${(s.unlocked_months||1)===n?'linear-gradient(135deg,#1D9E75,#159468)':'var(--sf)'};color:${(s.unlocked_months||1)===n?'#fff':'var(--text)'};border:1.5px solid ${(s.unlocked_months||1)===n?'transparent':'var(--brd)'};">${n}</button>`).join('')}
+        </div>`:''}
+      </div>
       ${s.payment_memo?`<div style="font-size:11px;color:var(--mu);background:var(--sf);padding:4px 8px;border-radius:6px;margin-bottom:5px;">💳 ${s.payment_memo}</div>`:''}
       ${expired&&(s.course_type==='관리'||s.course_type==='대면')?`<div style="background:#FFF3E0;border:1.5px solid #FFCC80;border-radius:8px;padding:7px 9px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
         <span style="font-size:11px;color:#8A5300;">⏳ 재결제 없이 만료됨 — 전화·대면 상담은 중단, 영상만 유예기간</span>
@@ -6755,6 +6783,31 @@ function renderOlSubList(){
       </div>
     </div>`;
   }).join('');
+}
+
+// 몇 개월차까지 열려있는지 — 원장님이 클릭해서 직접 확인·조정
+let _olMonthPickerOpenId=null;
+function toggleMonthPicker(subId){
+  _olMonthPickerOpenId=_olMonthPickerOpenId===subId?null:subId;
+  renderOlSubList();
+}
+async function setUnlockedMonths(subId,newMonths){
+  const sub=_olSubsCache.find(s=>s.id===subId);if(!sub)return;
+  const oldMonths=sub.unlocked_months||1;
+  const updates={unlocked_months:newMonths};
+  let msg=`${newMonths}개월차까지로 설정했어요`;
+  if(newMonths>oldMonths){
+    // 늘어난 만큼(추가 결제받은 개월수) 접속 만료일도 같이 연장
+    const delta=newMonths-oldMonths;
+    const newExp=parseYMD(sub.expires_at);newExp.setMonth(newExp.getMonth()+delta);
+    updates.expires_at=fmtYMD(newExp);
+    msg=`${newMonths}개월차까지 열었어요! 만료일도 ${delta}개월 연장됐어요`;
+  }
+  const{error}=await sb.from('course_subscriptions').update(updates).eq('id',subId);
+  if(error){tst('변경 실패: '+error.message);return;}
+  tst(msg);
+  _olMonthPickerOpenId=null;
+  await loadOlSubList();
 }
 
 // 전화관리형/대면관리형인데 재결제 없이 만료된 학생을 원장님이 확인하고 한 번에 일반형으로 라벨 전환
