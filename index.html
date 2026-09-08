@@ -5981,7 +5981,10 @@ function renderOlCourseList(){
     <div class="card" style="margin-bottom:10px;">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:8px;">
         <div style="flex:1;min-width:0;">
-          <div style="font-size:14px;font-weight:700;">${c.title}</div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <div style="font-size:14px;font-weight:700;">${c.title}</div>
+            <span onclick="editCourseTitle('${c.id}','${c.title.replace(/'/g,"\\'")}')" style="font-size:10px;color:var(--mu);cursor:pointer;text-decoration:underline;white-space:nowrap;">이름수정</span>
+          </div>
           <div style="font-size:11px;color:var(--mu);margin-top:2px;">${c.month} · ${c.price.toLocaleString()}원</div>
           ${c.description?`<div style="font-size:11px;color:var(--text3);margin-top:3px;">${c.description}</div>`:''}
         </div>
@@ -5995,6 +5998,15 @@ function renderOlCourseList(){
         <button onclick="deleteOnlineCourse('${c.id}')" style="padding:9px 12px;border-radius:9px;background:var(--rl);color:var(--rd);border:1.5px solid #FCA5A5;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">삭제</button>
       </div>
     </div>`).join('');
+}
+
+async function editCourseTitle(cid,curTitle){
+  const newTitle=prompt('강의 이름을 입력해주세요',curTitle);
+  if(!newTitle||!newTitle.trim()||newTitle.trim()===curTitle)return;
+  const{error}=await sb.from('online_courses').update({title:newTitle.trim()}).eq('id',cid);
+  if(error){tst('수정 실패: '+error.message);return;}
+  tst('강의 이름이 수정됐어요!');
+  await loadOlCourses();
 }
 
 async function saveOnlineCourse(){
