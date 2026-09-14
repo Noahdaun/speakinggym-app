@@ -6279,7 +6279,7 @@ function buyOnlineCourse(){
   window.open(EXTERNAL_COURSE_LINK,'_blank');
 }
 
-let _ocCourseId=null,_ocCourseTitle='',_ocLessons=[],_ocHasAccess=true,_ocPrice=0,_ocExpiresAt=null,_ocUnlockedMonths=1;
+let _ocCourseId=null,_ocCourseTitle='',_ocLessons=[],_ocHasAccess=true,_ocPrice=0,_ocExpiresAt=null,_ocUnlockedMonths=1,_ocWatchedSet=new Set();
 // 가입 날짜와 무관하게 주차별로 강의를 보여줌 (달력 방식 폐기)
 async function openCourseWeeks(courseId,title,hasAccess,price,expiresAt,unlockedMonths){
   _ocCourseId=courseId;_ocCourseTitle=title;_ocHasAccess=hasAccess!==false;_ocPrice=price||0;
@@ -6292,6 +6292,8 @@ async function openCourseWeeks(courseId,title,hasAccess,price,expiresAt,unlocked
   document.getElementById('rs-top').style.background='#1E2D45';
   const{data}=await sb.from('online_lessons').select('*').eq('course_id',courseId).order('week');
   _ocLessons=(data||[]);
+  const{data:views}=await sb.from('online_lesson_views').select('lesson_id').eq('student_id',U.id);
+  _ocWatchedSet=new Set((views||[]).map(v=>v.lesson_id));
   const today=fmtYMD(new Date());
   const inGrace=_ocHasAccess&&_ocExpiresAt&&_ocExpiresAt<today;
   document.getElementById('rs-content').innerHTML=`
@@ -6331,8 +6333,16 @@ function renderOcWeekList(){
   _ocLessons.forEach(l=>{if(l.week)byKey[`${l.week}_${l.lesson_type}_${l.sort_order===2?2:1}`]=l;});
   const totalMonths=Math.ceil(OC_TOTAL_WEEKS/4);
   const ocTile=(l,t)=>{
-    const[c,bg]=OC_TYPE_COLOR[t];
     if(l&&l.bunny_video_id){
+      const watched=_ocWatchedSet.has(l.id);
+      // 시청 완료한 칸은 유형 색과 무관하게 회색톤+체크로 확실히 구분되게 표시
+      if(watched){
+        return`<div onclick="playOnlineLesson('${l.id}')" style="cursor:pointer;background:#EDEDEB;border:1px solid #D4D4D2;border-radius:9px;padding:7px 2px;text-align:center;">
+          <div style="font-size:14px;color:#9A9A96;">✅</div>
+          <div style="font-size:8px;font-weight:700;color:#8A8A86;margin-top:1px;">${t}</div>
+        </div>`;
+      }
+      const[c,bg]=OC_TYPE_COLOR[t];
       return`<div onclick="playOnlineLesson('${l.id}')" style="cursor:pointer;background:${bg};border-radius:9px;padding:7px 2px;text-align:center;">
         <div style="font-size:14px;color:${c};">▶</div>
         <div style="font-size:8px;font-weight:700;color:${c};margin-top:1px;">${t}</div>
@@ -6467,7 +6477,13 @@ async function openCertificate(){
 function playOnlineLesson(lid){
   const l=_ocLessons.find(x=>x.id===lid);if(!l)return;
   if(!l.bunny_video_id){tst('아직 영상이 준비되지 않았어요');return;}
-  if(P?.role!=='admin')earnXP(5,'online_watch_'+new Date().toISOString().slice(0,10)); // 달력에 온라인 접속일 표시
+  if(P?.role!=='admin'){
+    earnXP(5,'online_watch_'+new Date().toISOString().slice(0,10)); // 달력에 온라인 접속일 표시
+    if(!_ocWatchedSet.has(lid)){
+      _ocWatchedSet.add(lid); // 화면엔 바로 회색 체크로 반영
+      sb.from('online_lesson_views').upsert({student_id:U.id,lesson_id:lid},{onConflict:'student_id,lesson_id'}).then(({error})=>{if(error)console.warn('시청기록 저장 실패',error);});
+    }
+  }
   const ytId=lsYtId(l.bunny_video_id);
   let playerHtml;
   if(ytId){
