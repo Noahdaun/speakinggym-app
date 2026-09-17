@@ -367,6 +367,11 @@ function doUpdate(){
         <div id="fca"><div class="loading">단어 불러오는 중...</div></div>
       </div>
       <div id="vl" style="display:none;">
+        <div style="font-size:13px;font-weight:600;margin-bottom:10px;">단어 직접 추가</div>
+        <input class="inp" type="text" id="ae" placeholder="영어 표현">
+        <input class="inp" type="text" id="ak" placeholder="한국어 뜻">
+        <button class="btn btn-p" onclick="addV()">추가하기</button>
+        <div class="dv"></div>
         <div class="tbb">
           <button class="tbn on" onclick="vf('a',this)">전체</button>
           <button class="tbn" onclick="vf('1',this)">처음</button>
@@ -374,11 +379,6 @@ function doUpdate(){
           <button class="tbn" onclick="vf('5',this)">마스터</button>
         </div>
         <div id="vli"></div>
-        <div class="dv"></div>
-        <div style="font-size:13px;font-weight:600;margin-bottom:10px;">단어 직접 추가</div>
-        <input class="inp" type="text" id="ae" placeholder="영어 표현">
-        <input class="inp" type="text" id="ak" placeholder="한국어 뜻">
-        <button class="btn btn-p" onclick="addV()">추가하기</button>
       </div>
     </div>
 
