@@ -743,6 +743,7 @@ function doUpdate(){
           <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><rect x="1" y="2" width="13" height="11" rx="2" stroke="currentColor" stroke-width="1.3"/><line x1="4" y1="5.5" x2="11" y2="5.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><line x1="4" y1="8" x2="9" y2="8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
           오늘 학습 요약
         </button>
+        <div id="mg-mini-revenue"></div>
         <div class="pills" id="adcp"></div>
         <div id="adsl"><div class="loading">로딩중...</div></div>
       </div>
@@ -3256,24 +3257,60 @@ async function loadStudents(){
   const{data}=await sb.from('profiles').select('*').eq('role','student').order('name');
   sts=data||[];
 }
+let mgMissionMap={};
 async function lAdm(){
   await Promise.all([loadClasses(),loadStudents()]);
   const td=new Date().toISOString().slice(0,10);
-  const{data:lg}=await sb.from('review_logs').select('student_id').eq('completed',true).gte('completed_at',td);
+  const[{data:lg},{data:activeMissions}]=await Promise.all([
+    sb.from('review_logs').select('student_id').eq('completed',true).gte('completed_at',td),
+    sb.from('special_missions').select('student_id,content,mission_date').eq('completed',false).order('mission_date',{ascending:false})
+  ]);
   const doneSet=new Set((lg||[]).map(l=>l.student_id));
+  mgMissionMap={};
+  (activeMissions||[]).forEach(m=>{if(!mgMissionMap[m.student_id])mgMissionMap[m.student_id]=m.content;});
   const total=sts.length,done=doneSet.size,todo=total-done;
   if(document.getElementById('a-tot'))document.getElementById('a-tot').textContent=total;
   if(document.getElementById('a-done'))document.getElementById('a-done').textContent=done;
   if(document.getElementById('a-todo'))document.getElementById('a-todo').textContent=todo;
-  const cls=['all',...classes];
+  const cls=['all',...classes,'등록안함'];
   const adcp=document.getElementById('adcp');
   if(adcp)adcp.innerHTML=cls.map((c,i)=>`<div class="pill ${i===0?'on':''}" onclick="sAdCls('${c}',this)">${c==='all'?'전체':c}</div>`).join('');
+  // 이번 달 예상 수입 배너
+  renderMiniRevenue();
   // 반별 완료율 바
   renderClassBars(doneSet);
   // 미완료 알림 섹션
   renderMissingAlert(doneSet);
   renderSList('all',doneSet);
   if(!les.length){const{data:lss}=await sb.from('lessons').select('*').order('created_at',{ascending:false});les=lss||[];}
+}
+
+// ── 학생 목록 상단 "이번 달 예상 수입" 배너 (오프라인 결제 payments 테이블 기준) ──
+async function renderMiniRevenue(){
+  const el=document.getElementById('mg-mini-revenue');if(!el)return;
+  const{data:allPay}=await sb.from('payments').select('amount,pay_date,months');
+  const payments=allPay||[];
+  const today=new Date();
+  const thisYM=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
+  let total=0;
+  payments.forEach(p=>{
+    const months=p.months||1;
+    const perMonth=Math.round((p.amount||0)/months);
+    const startYM=(p.pay_date||'').slice(0,7);
+    for(let i=0;i<months;i++){if(ymAdd(startYM,i)===thisYM)total+=perMonth;}
+  });
+  el.innerHTML=`<div onclick="openRevenueTab()" style="background:linear-gradient(135deg,#1a2940,#243054);border-radius:14px;padding:14px 16px;margin-bottom:10px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;">
+    <div>
+      <div style="font-size:11px;color:rgba(255,255,255,.65);margin-bottom:3px;">이번 달 예상 수입 (오프라인 결제 기준)</div>
+      <div style="font-size:20px;font-weight:800;color:#fff;">${total.toLocaleString()}원</div>
+    </div>
+    <svg width="14" height="14" viewBox="0 0 14 14"><polyline points="5,2 10,7 5,12" fill="none" stroke="rgba(255,255,255,.6)" stroke-width="1.8"/></svg>
+  </div>`;
+}
+function openRevenueTab(){
+  const btn=[...document.querySelectorAll('#pad>.tbb .tbn')].find(b=>b.getAttribute('onclick')?.includes("adTab('mg'"));
+  adTab('mg',btn);
+  mgTab('pay');
 }
 
 function renderClassBars(doneSet){
@@ -3308,6 +3345,8 @@ function renderClassBars(doneSet){
 function renderMissingAlert(doneSet, cls='all'){
   const targetSts = cls==='all'
     ? sts.filter(s=>s.class_name) // 반배정된 학생만
+    : cls==='등록안함'
+    ? sts.filter(s=>!s.class_name)
     : sts.filter(s=>s.class_name===cls);
   const missing=targetSts.filter(s=>!doneSet.has(s.id));
   const el=document.getElementById('missing-alert');
@@ -3341,28 +3380,82 @@ function renderMissingAlert(doneSet, cls='all'){
   </div>`;
 }
 function renderSList(cls,doneSet){
-  const filt=cls==='all'?sts:sts.filter(s=>s.class_name===cls);
-  const av=['#EEEDFE','#E1F5EE','#FAEEDA','#FCEBEB','#F3F0FC'];
-  const tc=['#3C3489','#085041','#633806','#791F1F','#534AB7'];
   const el=document.getElementById('adsl');
   if(!el)return;
-  el.innerHTML=filt.length?filt.map((s,i)=>{
+  const av=['#EEEDFE','#E1F5EE','#FAEEDA','#FCEBEB','#F3F0FC'];
+  const tc=['#3C3489','#085041','#633806','#791F1F','#534AB7'];
+  const cardHtml=(s,i)=>{
     const ini=dispInitial(s.name,s.email),done=doneSet?.has(s.id);
-    return`<div class="card" style="margin-bottom:8px;">
-      <div class="row" style="margin-bottom:7px;">
-        <div style="display:flex;align-items:center;gap:9px;cursor:pointer;" onclick="openSD('${s.id}','${(s.name||s.email).replace(/'/g,"\\'")}','${s.class_name||''}')">
-          <div class="sa" style="background:${av[i%5]};color:${tc[i%5]};">${ini}</div>
-          <div><div style="font-size:13px;font-weight:600;">${dispName(s.name,s.email)}</div><div class="mu">${s.class_name||'반 없음'}</div></div>
-        </div>
-        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
-          <span class="bdg ${done?'bg':'bgr'}">${done?'리뷰완료':'미완료'}</span>
-          <div onclick="delStudent('${s.id}','${dispName(s.name,s.email).replace(/'/g,"\\'")}',event)" style="font-size:10px;color:var(--rd);background:var(--rl);padding:2px 8px;border-radius:6px;cursor:pointer;font-weight:600;">삭제</div>
+    const mission=mgMissionMap[s.id];
+    const safeName=(s.name||s.email||'').replace(/'/g,"\\'");
+    return`<div class="card" style="margin-bottom:0;">
+      <div style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:6px;" onclick="openSD('${s.id}','${safeName}','${s.class_name||''}')">
+        <div class="sa" style="background:${av[i%5]};color:${tc[i%5]};flex-shrink:0;">${ini}</div>
+        <div style="min-width:0;flex:1;">
+          <div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${dispName(s.name,s.email)}</div>
+          <span class="bdg ${done?'bg':'bgr'}" style="font-size:9px;">${done?'리뷰완료':'미완료'}</span>
         </div>
       </div>
+      ${mission?`<div style="font-size:10px;color:#6D5B9E;background:#F3EEFF;border-radius:7px;padding:4px 7px;margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">🎯 ${mission}</div>`:''}
       <div id="sstat-${s.id}"><div style="font-size:10px;color:var(--mu);">통계 로딩중...</div></div>
+      <div onclick="openClassPicker('${s.id}','${safeName}','${s.class_name||''}',event)" style="text-align:center;font-size:10px;color:var(--text2);background:var(--sf);padding:5px 0;border-radius:6px;cursor:pointer;font-weight:600;margin-top:7px;">${s.class_name?'반이동':'반배정'}</div>
     </div>`;
-  }).join(''):'<div class="empty">학생이 없어요</div>';
+  };
+  const gridHtml=list=>`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;">${list.map((s,i)=>cardHtml(s,i)).join('')}</div>`;
+  const sectionHead=(label,count)=>`<div style="font-size:12px;font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:6px;color:${label==='등록안함'?'var(--mu)':'var(--text)'};">${label}<span style="background:var(--sf);color:var(--mu);font-size:10px;padding:1px 7px;border-radius:99px;">${count}명</span></div>`;
+
+  let html='',filt=[];
+  if(cls==='all'){
+    classes.forEach(c=>{
+      const members=sts.filter(s=>s.class_name===c);
+      if(!members.length)return;
+      html+=sectionHead(c,members.length)+gridHtml(members);
+    });
+    const unassigned=sts.filter(s=>!s.class_name);
+    if(unassigned.length)html+=sectionHead('등록안함',unassigned.length)+gridHtml(unassigned);
+    filt=sts;
+  } else if(cls==='등록안함'){
+    filt=sts.filter(s=>!s.class_name);
+    html=filt.length?gridHtml(filt):'';
+  } else {
+    filt=sts.filter(s=>s.class_name===cls);
+    html=filt.length?gridHtml(filt):'';
+  }
+  el.innerHTML=html||'<div class="empty">학생이 없어요</div>';
   filt.forEach(s=>loadSStat(s.id));
+}
+
+// ── 반이동 · 반배정 공용 팝업 — 현재 반이 체크표시로 보이고, 다른 반을 누르면 즉시 이동됨 ──
+function openClassPicker(sid,name,curCls,e){
+  e?.stopPropagation();
+  document.getElementById('cls-pick-pop')?.remove();
+  const pop=document.createElement('div');
+  pop.id='cls-pick-pop';
+  pop.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9200;display:flex;align-items:flex-end;justify-content:center;';
+  const opts=classes.map(c=>{
+    const on=c===curCls;
+    return`<div onclick="pickClass('${sid}','${c}')" style="display:flex;align-items:center;gap:8px;padding:13px;border-radius:12px;margin-bottom:6px;background:${on?'#E1F5EE':'#fff'};border:1.5px solid ${on?'#1D9E75':'var(--brd)'};cursor:pointer;">
+      <div style="flex:1;font-size:13px;font-weight:${on?'700':'600'};color:${on?'#085041':'var(--text2)'};">${c}</div>
+      ${on?`<svg width="15" height="15" viewBox="0 0 15 15"><polyline points="3,8 6,11 12,4" fill="none" stroke="#1D9E75" stroke-width="2"/></svg>`:''}
+    </div>`;
+  }).join('');
+  pop.innerHTML=`<div style="background:var(--bg);border-radius:20px 20px 0 0;width:100%;max-width:480px;padding:16px 14px 26px;max-height:80vh;overflow-y:auto;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+      <div style="font-size:15px;font-weight:800;">${name} · ${curCls?'반 이동':'반 배정'}</div>
+      <div onclick="document.getElementById('cls-pick-pop')?.remove()" style="width:26px;height:26px;border-radius:8px;background:var(--sf);display:flex;align-items:center;justify-content:center;cursor:pointer;">✕</div>
+    </div>
+    <div style="font-size:11px;color:var(--mu);margin-bottom:10px;">현재 반: ${curCls||'없음'}</div>
+    ${opts||'<div class="empty">등록된 반이 없어요</div>'}
+    <div class="dv"></div>
+    <div onclick="pickClass('${sid}','')" style="display:flex;align-items:center;gap:8px;padding:13px;border-radius:12px;background:var(--sf);cursor:pointer;">
+      <div style="font-size:13px;font-weight:600;color:var(--mu);">반 배정 해제 (등록안함으로)</div>
+    </div>
+  </div>`;
+  document.body.appendChild(pop);
+}
+function pickClass(sid,cls){
+  document.getElementById('cls-pick-pop')?.remove();
+  adminChangeCls(sid,cls);
 }
 async function loadSStat(sid){
   const el=document.getElementById(`sstat-${sid}`);if(!el)return;
@@ -3604,17 +3697,57 @@ function sdTab(t,b){
   if(t==='eval')loadSDEval();
 }
 
-// ── 학생상세 "미션·평가" 탭 — 특별 미션 + 영역별 점수(1~10, 덮어쓰기) + 원장님 메모 ──
+// ── 학생상세 "미션·평가" 탭 — 결제 내역 + 특별 미션 + 영역별 점수(1~10, 덮어쓰기) + 원장님 메모 ──
 const SD_SKILLS=['발음','문법','단어','스피킹','리스닝'];
+let sdPays=[],sdSubs=[];
+function openSDPayHistory(){
+  document.getElementById('sd-pay-pop')?.remove();
+  const pop=document.createElement('div');
+  pop.id='sd-pay-pop';
+  pop.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9200;display:flex;align-items:flex-end;justify-content:center;';
+  const offlineRows=sdPays.map(p=>{
+    const d=parseYMD(p.pay_date);
+    return`<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--brd);">
+      <div><div style="font-size:12px;font-weight:600;">오프라인 수강료${p.memo?` · ${p.memo}`:''}</div><div style="font-size:10px;color:var(--mu);margin-top:2px;">${d.getMonth()+1}월 ${d.getDate()}일 · ${p.months||1}개월</div></div>
+      <div style="font-size:13px;font-weight:700;">${(p.amount||0).toLocaleString()}원</div>
+    </div>`;
+  }).join('');
+  const onlineRows=sdSubs.map(s=>{
+    const d=s.starts_at?parseYMD(s.starts_at.slice(0,10)):null;
+    return`<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--brd);">
+      <div><div style="font-size:12px;font-weight:600;">온라인 · ${s.online_courses?.title||'강의'}</div><div style="font-size:10px;color:var(--mu);margin-top:2px;">${d?`${d.getMonth()+1}월 ${d.getDate()}일 · `:''}${s.plan||''} · ${s.course_type||''}</div></div>
+      <div style="font-size:11px;color:var(--mu);">금액 미기록</div>
+    </div>`;
+  }).join('');
+  pop.innerHTML=`<div style="background:var(--bg);border-radius:20px 20px 0 0;width:100%;max-width:480px;padding:16px 14px 26px;max-height:82vh;overflow-y:auto;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <div style="font-size:15px;font-weight:800;">결제 내역</div>
+      <div onclick="document.getElementById('sd-pay-pop')?.remove()" style="width:26px;height:26px;border-radius:8px;background:var(--sf);display:flex;align-items:center;justify-content:center;cursor:pointer;">✕</div>
+    </div>
+    ${offlineRows||onlineRows?`${offlineRows}${onlineRows}`:'<div class="empty">결제 내역이 없어요</div>'}
+  </div>`;
+  document.body.appendChild(pop);
+}
 async function loadSDEval(){
   const el=document.getElementById('sd-eval-content');if(!el)return;
   el.innerHTML='<div class="loading">로딩중...</div>';
-  const[{data:missions},{data:scores},{data:notes}]=await Promise.all([
+  const[{data:missions},{data:scores},{data:notes},{data:pays},{data:subs}]=await Promise.all([
     sb.from('special_missions').select('*').eq('student_id',sdSid).order('mission_date',{ascending:false}),
     sb.from('skill_scores').select('*').eq('student_id',sdSid).order('score_date',{ascending:false}),
-    sb.from('admin_notes').select('*').eq('student_id',sdSid).order('created_at',{ascending:false})
+    sb.from('admin_notes').select('*').eq('student_id',sdSid).order('created_at',{ascending:false}),
+    sb.from('payments').select('*').eq('student_id',sdSid).order('pay_date',{ascending:false}),
+    sb.from('course_subscriptions').select('*,online_courses(title)').eq('student_id',sdSid).order('starts_at',{ascending:false})
   ]);
   const td=new Date().toISOString().slice(0,10);
+  sdPays=pays||[];sdSubs=subs||[];
+  const totalPaid=sdPays.reduce((s,p)=>s+(p.amount||0),0);
+  const payHtml=`<div class="card" style="margin-bottom:10px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;">
+      <div><div style="font-size:11px;color:var(--mu);margin-bottom:3px;">누적 결제 금액 (오프라인)</div><div style="font-size:19px;font-weight:800;">${totalPaid.toLocaleString()}원</div></div>
+      <div onclick="openSDPayHistory()" style="font-size:11px;font-weight:700;color:var(--gd);background:var(--gl);padding:7px 12px;border-radius:9px;cursor:pointer;white-space:nowrap;">결제 내역 보기 →</div>
+    </div>
+    ${sdSubs.length?`<div style="font-size:10px;color:var(--mu);margin-top:8px;">온라인 강의 ${sdSubs.length}건 수강중/이력 있음 · 금액은 결제 내역에서 확인</div>`:''}
+  </div>`;
   // 스킬별 최신 점수
   const latestScore={};(scores||[]).forEach(s=>{if(!latestScore[s.skill])latestScore[s.skill]=s;});
   const missionHtml=(missions||[]).length?missions.map(m=>{
@@ -3652,6 +3785,7 @@ async function loadSDEval(){
   }).join(''):'<div class="empty">작성된 메모가 없어요</div>';
 
   el.innerHTML=`
+    ${payHtml}
     <div class="card" style="margin-bottom:10px;">
       <div style="font-size:13px;font-weight:700;margin-bottom:10px;">🎯 특별 미션</div>
       <div style="display:flex;gap:6px;margin-bottom:10px;">
