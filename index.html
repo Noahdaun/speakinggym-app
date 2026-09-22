@@ -3257,16 +3257,27 @@ async function loadStudents(){
   sts=data||[];
 }
 let mgMissionMap={};
+let mgPeriodMap={};
 async function lAdm(){
   await Promise.all([loadClasses(),loadStudents()]);
   const td=new Date().toISOString().slice(0,10);
-  const[{data:lg},{data:activeMissions}]=await Promise.all([
+  const[{data:lg},{data:activeMissions},{data:allPayments}]=await Promise.all([
     sb.from('review_logs').select('student_id').eq('completed',true).gte('completed_at',td),
-    sb.from('special_missions').select('student_id,content,mission_date').eq('completed',false).order('mission_date',{ascending:false})
+    sb.from('special_missions').select('student_id,content,mission_date').eq('completed',false).order('mission_date',{ascending:false}),
+    sb.from('payments').select('student_id,pay_date,months').order('pay_date',{ascending:false})
   ]);
   const doneSet=new Set((lg||[]).map(l=>l.student_id));
   mgMissionMap={};
   (activeMissions||[]).forEach(m=>{if(!mgMissionMap[m.student_id])mgMissionMap[m.student_id]=m.content;});
+  // 학생별 최근 결제의 등록기간 (가장 최근 결제 1건 기준 — pay_date~pay_date+months)
+  mgPeriodMap={};
+  (allPayments||[]).forEach(p=>{
+    if(mgPeriodMap[p.student_id])return; // 이미 최신 결제(내림차순 정렬이라 첫 항목이 최신)로 채워짐
+    const start=parseYMD(p.pay_date);
+    const end=new Date(start);
+    end.setMonth(end.getMonth()+(p.months||1));
+    mgPeriodMap[p.student_id]={start,end};
+  });
   const total=sts.length,done=doneSet.size,todo=total-done;
   if(document.getElementById('a-tot'))document.getElementById('a-tot').textContent=total;
   if(document.getElementById('a-done'))document.getElementById('a-done').textContent=done;
@@ -3381,6 +3392,8 @@ function renderSList(cls,doneSet){
   const cardHtml=(s,i)=>{
     const ini=dispInitial(s.name,s.email),done=doneSet?.has(s.id);
     const mission=mgMissionMap[s.id];
+    const period=mgPeriodMap[s.id];
+    const periodText=period?`${period.start.getMonth()+1}/${period.start.getDate()} ~ ${period.end.getMonth()+1}/${period.end.getDate()}`:'등록 정보 없음';
     const safeName=(s.name||s.email||'').replace(/'/g,"\\'");
     return`<div class="card" style="margin-bottom:0;">
       <div style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:6px;" onclick="openSD('${s.id}','${safeName}','${s.class_name||''}')">
@@ -3391,8 +3404,8 @@ function renderSList(cls,doneSet){
         </div>
       </div>
       ${mission?`<div style="font-size:10px;color:#6D5B9E;background:#F3EEFF;border-radius:7px;padding:4px 7px;margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">🎯 ${mission}</div>`:''}
-      <div id="sstat-${s.id}"><div style="font-size:10px;color:var(--mu);">통계 로딩중...</div></div>
-      <div onclick="openClassPicker('${s.id}','${safeName}','${s.class_name||''}',event)" style="text-align:center;font-size:10px;color:var(--text2);background:var(--sf);padding:5px 0;border-radius:6px;cursor:pointer;font-weight:600;margin-top:7px;">${s.class_name?'반이동':'반배정'}</div>
+      <div style="font-size:11px;color:var(--mu);margin-bottom:6px;">📅 ${periodText}</div>
+      <div onclick="openClassPicker('${s.id}','${safeName}','${s.class_name||''}',event)" style="text-align:center;font-size:10px;color:var(--text2);background:var(--sf);padding:5px 0;border-radius:6px;cursor:pointer;font-weight:600;">${s.class_name?'반이동':'반배정'}</div>
     </div>`;
   };
   const gridHtml=list=>`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;">${list.map((s,i)=>cardHtml(s,i)).join('')}</div>`;
@@ -3416,7 +3429,6 @@ function renderSList(cls,doneSet){
     html=filt.length?gridHtml(filt):'';
   }
   el.innerHTML=html||'<div class="empty">학생이 없어요</div>';
-  filt.forEach(s=>loadSStat(s.id));
 }
 
 // ── 반이동 · 반배정 공용 팝업 — 현재 반이 체크표시로 보이고, 다른 반을 누르면 즉시 이동됨 ──
