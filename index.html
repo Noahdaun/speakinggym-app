@@ -3651,6 +3651,7 @@ async function renderSD(){
         <button class="tbn" onclick="sdTab('stat',this)">학습현황</button>
         <button class="tbn" onclick="sdTab('eval',this)">미션·평가</button>
         <button class="tbn" onclick="sdTab('notify',this)">알림</button>
+        <button class="tbn" onclick="sdTab('paynew',this)">결제 추가</button>
       </div>
       <!-- 달력 탭 -->
       <div id="sd-cal">
@@ -3686,6 +3687,10 @@ async function renderSD(){
       </div>
       <!-- 알림 탭 -->
       <div id="sd-notify" style="display:none;" class="sd-notify-wrap"></div>
+      <!-- 결제 추가 탭 -->
+      <div id="sd-paynew" style="display:none;">
+        <div id="sd-paynew-content"></div>
+      </div>
     </div>`;
   // 리뷰 기록 미리 로드
   loadSDRev();
@@ -3696,11 +3701,40 @@ async function sdMv(d){sdM+=d;if(sdM>11){sdM=0;sdY++;}if(sdM<0){sdM=11;sdY--;}aw
 function closeSD(){document.getElementById('sdp').classList.remove('on');}
 
 function sdTab(t,b){
-  ['cal','rev','stat','eval','notify'].forEach(x=>{const el=document.getElementById(`sd-${x}`);if(el)el.style.display=x===t?'block':'none';});
+  ['cal','rev','stat','eval','notify','paynew'].forEach(x=>{const el=document.getElementById(`sd-${x}`);if(el)el.style.display=x===t?'block':'none';});
   document.querySelectorAll('#sdp .tbb .tbn').forEach(x=>x.classList.remove('on'));
   if(b)b.classList.add('on');
   if(t==='stat')loadSDStat();
   if(t==='eval')loadSDEval();
+  if(t==='paynew')renderSDPayNew();
+}
+
+// ── 학생상세 "결제 추가" 탭 — 학생 목록에서 학생 고를 필요 없이 바로 이 학생 앞으로 결제 입력 ──
+function renderSDPayNew(){
+  const el=document.getElementById('sd-paynew-content');if(!el)return;
+  const td=new Date().toISOString().slice(0,10);
+  el.innerHTML=`
+    <div class="card">
+      <div style="font-size:13px;font-weight:700;margin-bottom:10px;">${sdName}님 결제 입력</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+        <input class="inp" type="number" id="sd-pay-amount" placeholder="결제 금액" style="margin-bottom:0;">
+        <input class="inp" type="number" id="sd-pay-months" placeholder="등록 개월수" value="1" min="1" style="margin-bottom:0;">
+      </div>
+      <input class="inp" type="date" id="sd-pay-date" value="${td}">
+      <input class="inp" type="text" id="sd-pay-memo" placeholder="메모 (선택)">
+      <button class="btn btn-p" onclick="submitSDPayment()">결제 저장</button>
+    </div>`;
+}
+async function submitSDPayment(){
+  const amount=parseInt(document.getElementById('sd-pay-amount')?.value);
+  const pay_date=document.getElementById('sd-pay-date')?.value;
+  const months=parseInt(document.getElementById('sd-pay-months')?.value)||1;
+  const memo=document.getElementById('sd-pay-memo')?.value?.trim()||null;
+  const ok=await recordPayment(sdSid,amount,pay_date,months,memo);
+  if(!ok)return;
+  document.getElementById('sd-pay-amount').value='';
+  document.getElementById('sd-pay-memo').value='';
+  lAdm(); // 학생 목록의 등록기간·이번달 예상수입도 갱신
 }
 
 // ── 학생상세 "미션·평가" 탭 — 결제 내역 + 특별 미션 + 영역별 점수(1~10, 덮어쓰기) + 원장님 메모 ──
