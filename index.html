@@ -299,6 +299,8 @@ function doUpdate(){
     <div id="ph" class="pg on">
       <!-- 스트릭 + 이번주 랭킹 -->
       <div id="xp-bar-wrap"></div>
+      <!-- 원장님이 내준 특별 미션 -->
+      <div id="home-mission"></div>
       <!-- 이번주 학습시간 그래프 -->
       <div id="home-stats"></div>
       <!-- 알림 -->
@@ -3548,6 +3550,7 @@ async function renderSD(){
         <button class="tbn on" onclick="sdTab('cal',this)">달력</button>
         <button class="tbn" onclick="sdTab('rev',this)">리뷰 기록</button>
         <button class="tbn" onclick="sdTab('stat',this)">학습현황</button>
+        <button class="tbn" onclick="sdTab('eval',this)">미션·평가</button>
         <button class="tbn" onclick="sdTab('notify',this)">알림</button>
       </div>
       <!-- 달력 탭 -->
@@ -3578,6 +3581,10 @@ async function renderSD(){
       <div id="sd-stat" style="display:none;">
         <div id="sd-stat-content"><div class="loading">로딩중...</div></div>
       </div>
+      <!-- 미션·평가 탭 -->
+      <div id="sd-eval" style="display:none;">
+        <div id="sd-eval-content"><div class="loading">로딩중...</div></div>
+      </div>
       <!-- 알림 탭 -->
       <div id="sd-notify" style="display:none;" class="sd-notify-wrap"></div>
     </div>`;
@@ -3590,10 +3597,181 @@ async function sdMv(d){sdM+=d;if(sdM>11){sdM=0;sdY++;}if(sdM<0){sdM=11;sdY--;}aw
 function closeSD(){document.getElementById('sdp').classList.remove('on');}
 
 function sdTab(t,b){
-  ['cal','rev','stat','notify'].forEach(x=>{const el=document.getElementById(`sd-${x}`);if(el)el.style.display=x===t?'block':'none';});
+  ['cal','rev','stat','eval','notify'].forEach(x=>{const el=document.getElementById(`sd-${x}`);if(el)el.style.display=x===t?'block':'none';});
   document.querySelectorAll('#sdp .tbb .tbn').forEach(x=>x.classList.remove('on'));
   if(b)b.classList.add('on');
   if(t==='stat')loadSDStat();
+  if(t==='eval')loadSDEval();
+}
+
+// ── 학생상세 "미션·평가" 탭 — 특별 미션 + 영역별 점수(1~10, 덮어쓰기) + 원장님 메모 ──
+const SD_SKILLS=['발음','문법','단어','스피킹','리스닝'];
+async function loadSDEval(){
+  const el=document.getElementById('sd-eval-content');if(!el)return;
+  el.innerHTML='<div class="loading">로딩중...</div>';
+  const[{data:missions},{data:scores},{data:notes}]=await Promise.all([
+    sb.from('special_missions').select('*').eq('student_id',sdSid).order('mission_date',{ascending:false}),
+    sb.from('skill_scores').select('*').eq('student_id',sdSid).order('score_date',{ascending:false}),
+    sb.from('admin_notes').select('*').eq('student_id',sdSid).order('created_at',{ascending:false})
+  ]);
+  const td=new Date().toISOString().slice(0,10);
+  // 스킬별 최신 점수
+  const latestScore={};(scores||[]).forEach(s=>{if(!latestScore[s.skill])latestScore[s.skill]=s;});
+  const missionHtml=(missions||[]).length?missions.map(m=>{
+    const d=parseYMD(m.mission_date);
+    return`<div style="display:flex;align-items:center;gap:8px;padding:9px 10px;background:var(--sf);border-radius:10px;margin-bottom:6px;cursor:pointer;" onclick="toggleSDMission('${m.id}',${!m.completed})">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="flex-shrink:0;">${m.completed
+        ?`<circle cx="8" cy="8" r="7" fill="#1D9E75"/><path d="M4.5 8l2.3 2.3L11.5 6" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>`
+        :`<circle cx="8" cy="8" r="6.5" stroke="#A78BDB" stroke-width="1.6"/>`}</svg>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:12px;font-weight:600;color:var(--text);${m.completed?'text-decoration:line-through;color:var(--mu);':''}">${m.content}</div>
+        <div style="font-size:10px;color:var(--mu);">${d.getMonth()+1}월 ${d.getDate()}일${m.completed?' · 완료':''}</div>
+      </div>
+    </div>`;
+  }).join(''):'<div class="empty">등록된 미션이 없어요</div>';
+
+  const skillHtml=SD_SKILLS.map(sk=>{
+    const s=latestScore[sk];
+    const score=s?s.score:0;
+    const pct=score?Math.round(score/10*100):0;
+    const color=score&&score<=3?'#DC2626':'#1D9E75';
+    return`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;cursor:pointer;" onclick="openSkillGraph('${sk}')">
+      <div style="width:44px;font-size:12px;font-weight:700;color:var(--text);flex-shrink:0;">${sk}</div>
+      <div style="flex:1;height:10px;border-radius:99px;background:#F2F3F0;overflow:hidden;"><div style="height:10px;border-radius:99px;background:${color};width:${pct}%;"></div></div>
+      <div style="width:34px;font-size:11px;font-weight:700;color:var(--text2);text-align:right;flex-shrink:0;">${score?`${score}/10`:'-'}</div>
+      <svg width="12" height="12" viewBox="0 0 12 12" style="flex-shrink:0;"><polyline points="4,1 9,6 4,11" fill="none" stroke="#CBCCC9" stroke-width="1.8"/></svg>
+    </div>`;
+  }).join('');
+
+  const noteHtml=(notes||[]).length?notes.map(n=>{
+    const dt=new Date(n.created_at).toLocaleDateString('ko-KR',{month:'numeric',day:'numeric'});
+    return`<div style="background:var(--sf);border-radius:10px;padding:9px 10px;margin-bottom:6px;">
+      <div style="font-size:10px;color:var(--mu);margin-bottom:3px;">${dt}</div>
+      <div style="font-size:12px;color:var(--text);line-height:1.5;white-space:pre-wrap;">${n.note}</div>
+    </div>`;
+  }).join(''):'<div class="empty">작성된 메모가 없어요</div>';
+
+  el.innerHTML=`
+    <div class="card" style="margin-bottom:10px;">
+      <div style="font-size:13px;font-weight:700;margin-bottom:10px;">🎯 특별 미션</div>
+      <div style="display:flex;gap:6px;margin-bottom:10px;">
+        <input class="inp" type="date" id="sd-mission-date" value="${td}" style="width:130px;margin-bottom:0;">
+        <input class="inp" type="text" id="sd-mission-text" placeholder="예: 발표 영상 촬영해오기" style="flex:1;margin-bottom:0;">
+      </div>
+      <button class="btn btn-p" style="margin-bottom:10px;" onclick="addSDMission()">미션 추가</button>
+      ${missionHtml}
+    </div>
+    <div class="card" style="margin-bottom:10px;">
+      <div style="font-size:13px;font-weight:700;margin-bottom:8px;">📈 영역별 평가 (원장님 채점)</div>
+      ${skillHtml}
+      <div style="font-size:10px;color:var(--mu);margin-top:8px;">막대를 누르면 날짜별 변화 그래프와 점수 입력창이 열려요 · 3점 이하는 빨강으로 표시돼요</div>
+    </div>
+    <div class="card">
+      <div style="font-size:13px;font-weight:700;margin-bottom:8px;">📝 원장님 메모 (학생에게 안 보임)</div>
+      <textarea class="inp" id="sd-note-text" placeholder="예: 발음 좋음, 숙제 성실함, 다음 레벨업 필요"></textarea>
+      <button class="btn btn-p" onclick="addSDNote()">메모 추가</button>
+      <div class="dv"></div>
+      ${noteHtml}
+    </div>`;
+}
+
+async function addSDMission(){
+  const date=document.getElementById('sd-mission-date').value;
+  const text=document.getElementById('sd-mission-text').value.trim();
+  if(!text){tst('미션 내용을 입력해주세요');return;}
+  const{error}=await sb.from('special_missions').insert({student_id:sdSid,content:text,mission_date:date,created_by:U.id});
+  if(error){tst('추가 실패: '+error.message);return;}
+  tst('미션을 추가했어요!');
+  loadSDEval();
+}
+async function toggleSDMission(id,completed){
+  const{error}=await sb.from('special_missions').update({completed,completed_at:completed?new Date().toISOString():null}).eq('id',id);
+  if(error){tst('변경 실패: '+error.message);return;}
+  loadSDEval();
+}
+async function addSDNote(){
+  const text=document.getElementById('sd-note-text').value.trim();
+  if(!text){tst('메모 내용을 입력해주세요');return;}
+  const{error}=await sb.from('admin_notes').insert({student_id:sdSid,note:text});
+  if(error){tst('추가 실패: '+error.message);return;}
+  tst('메모를 저장했어요!');
+  loadSDEval();
+}
+
+// ── 영역별 점수 변화 그래프 + 날짜별 점수 입력(같은 날짜면 덮어씀) ──
+let sdSkillCur='';
+async function openSkillGraph(skill){
+  sdSkillCur=skill;
+  const pop=document.createElement('div');
+  pop.id='skg-pop';
+  pop.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9200;display:flex;align-items:flex-end;justify-content:center;';
+  pop.innerHTML=`<div style="background:var(--bg);border-radius:20px 20px 0 0;width:100%;max-width:480px;padding:16px 14px 30px;max-height:88vh;overflow-y:auto;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+      <div style="font-size:16px;font-weight:800;">${skill} 변화 그래프</div>
+      <div onclick="closeSkillGraph()" style="width:28px;height:28px;border-radius:8px;background:var(--sf);display:flex;align-items:center;justify-content:center;cursor:pointer;">
+        <svg width="12" height="12" viewBox="0 0 12 12"><line x1="1" y1="1" x2="11" y2="11" stroke="#888" stroke-width="1.8"/><line x1="11" y1="1" x2="1" y2="11" stroke="#888" stroke-width="1.8"/></svg>
+      </div>
+    </div>
+    <div id="skg-body"></div>
+  </div>`;
+  document.body.appendChild(pop);
+  await renderSkillGraph();
+}
+function closeSkillGraph(){document.getElementById('skg-pop')?.remove();}
+async function renderSkillGraph(){
+  const el=document.getElementById('skg-body');if(!el)return;
+  const{data,error}=await sb.from('skill_scores').select('*').eq('student_id',sdSid).eq('skill',sdSkillCur).order('score_date',{ascending:true});
+  if(error){el.innerHTML='불러오기 실패: '+error.message;return;}
+  const rows=data||[];
+  const last6=rows.slice(-6);
+  const W=310,H=110,padX=16,padY=14;
+  let chartHtml='<div class="empty" style="padding:20px 0;">아직 기록된 점수가 없어요</div>';
+  if(last6.length){
+    const n=last6.length;
+    const pts=last6.map((r,i)=>{
+      const x=n===1?W/2:padX+(W-padX*2)*(i/(n-1));
+      const y=padY+(H-padY*2)*(1-(r.score-1)/9);
+      return{x,y,score:r.score,date:r.score_date};
+    });
+    const path=pts.map((p,i)=>(i===0?'M':'L')+p.x.toFixed(1)+' '+p.y.toFixed(1)).join(' ');
+    const dots=pts.map(p=>`<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3.5" fill="#1D9E75" stroke="#fff" stroke-width="1.5"/>`).join('');
+    const labels=pts.map(p=>{const d=parseYMD(p.date);return`<div style="position:absolute;left:${p.x-14}px;top:${H+2}px;width:28px;text-align:center;font-size:9px;color:var(--mu);">${d.getMonth()+1}/${d.getDate()}</div>`;}).join('');
+    chartHtml=`<div style="position:relative;width:${W}px;height:${H+16}px;margin:0 auto;">
+      <svg width="${W}" height="${H}"><path d="${path}" fill="none" stroke="#1D9E75" stroke-width="2"/>${dots}</svg>
+      ${labels}
+    </div>`;
+  }
+  const chips=Array.from({length:10},(_,i)=>i+1).map(n=>
+    `<div class="skg-chip" data-n="${n}" onclick="skgPick(${n})" style="flex:1;height:30px;border-radius:8px;background:var(--sf);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:var(--mu);cursor:pointer;">${n}</div>`
+  ).join('');
+  el.innerHTML=`
+    ${chartHtml}
+    <div class="dv"></div>
+    <div style="font-size:12px;font-weight:700;margin-bottom:8px;">오늘 점수 기록하기</div>
+    <input class="inp" type="date" id="skg-date" value="${new Date().toISOString().slice(0,10)}" style="margin-bottom:8px;">
+    <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px;">
+      <div style="display:flex;gap:4px;width:100%;">${chips}</div>
+    </div>
+    <button class="btn btn-p" onclick="saveSkillScore()">이 날짜로 기록 추가</button>`;
+  sdSkillPick=0;
+}
+let sdSkillPick=0;
+function skgPick(n){
+  sdSkillPick=n;
+  document.querySelectorAll('.skg-chip').forEach(c=>{
+    const on=Number(c.dataset.n)===n;
+    c.style.background=on?'#1D9E75':'var(--sf)';
+    c.style.color=on?'#fff':'var(--mu)';
+  });
+}
+async function saveSkillScore(){
+  if(!sdSkillPick){tst('점수를 선택해주세요');return;}
+  const date=document.getElementById('skg-date').value;
+  const{error}=await sb.from('skill_scores').upsert({student_id:sdSid,skill:sdSkillCur,score:sdSkillPick,score_date:date},{onConflict:'student_id,skill,score_date'});
+  if(error){tst('저장 실패: '+error.message);return;}
+  tst('점수를 기록했어요!');
+  await renderSkillGraph();
+  loadSDEval();
 }
 
 async function loadAdminCert(){
@@ -3847,6 +4025,31 @@ async function loadXP(){
   if(data){myXP=data.total_xp||0;myLevel=data.level||1;}
   else{myXP=0;myLevel=1;}
   renderXPBar();
+  loadHomeMission();
+}
+
+// ── 홈 화면 "원장님이 내준 특별 미션" 카드 — 원장님만 완료 체크 가능, 학생은 대기중 표시만 봄 ──
+async function loadHomeMission(){
+  if(P?.role==='admin')return;
+  const el=document.getElementById('home-mission');if(!el)return;
+  const{data,error}=await sb.from('special_missions').select('*').eq('student_id',U.id).eq('completed',false).order('mission_date',{ascending:false}).limit(1);
+  if(error){console.warn('미션 로드 실패',error);el.innerHTML='';return;}
+  const m=data&&data[0];
+  if(!m){el.innerHTML='';return;}
+  const d=parseYMD(m.mission_date);
+  const dateStr=`${d.getMonth()+1}월 ${d.getDate()}일`;
+  el.innerHTML=`
+    <div style="background:#F3EEFF;border:1.5px solid #D9CCF5;border-radius:16px;padding:16px;margin-bottom:10px;">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+        <span style="font-size:15px;">🎯</span><span style="font-size:13px;font-weight:800;color:#4C3B8C;">원장님이 내준 특별 미션</span>
+      </div>
+      <div style="font-size:15px;font-weight:700;color:#1E293B;line-height:1.4;margin-bottom:6px;">${m.content}</div>
+      <div style="font-size:11px;color:#8B7CB8;margin-bottom:10px;">${dateStr}에 등록됨</div>
+      <div style="display:inline-flex;align-items:center;gap:5px;background:#fff;border-radius:99px;padding:6px 10px;">
+        <span style="width:10px;height:10px;border-radius:50%;border:2px solid #A78BDB;display:inline-block;"></span>
+        <span style="font-size:11px;font-weight:700;color:#6D5B9E;">원장님 확인 대기중</span>
+      </div>
+    </div>`;
 }
 
 async function earnXP(amount,reason){
@@ -5410,7 +5613,7 @@ function gp(n){
   const btns=document.querySelectorAll('.bni');if(idx>=0&&btns[idx])btns[idx].classList.add('on');
   if(n==='vocab'){if(!loaded.vocab){loaded.vocab=true;startVocab();}else{renderVHead();renderFC();}}
   if(n==='review'){lRev();}
-  if(n==='home'){lRev().then(buildHomeTodo);loadMyNotices();loadMyStats();updatePushBanner();}
+  if(n==='home'){lRev().then(buildHomeTodo);loadMyNotices();loadMyStats();updatePushBanner();loadHomeMission();}
   if(n==='record'){if(!loaded.record){loaded.record=true;lRec();}lRank('rec-rank-my','rec-rank-list');}
   if(n==='rank'){setRankPeriod(curRankPeriod);}
   if(n==='cert'){lCert();}
