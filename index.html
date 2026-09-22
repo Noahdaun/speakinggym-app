@@ -3711,18 +3711,20 @@ function openSDPayHistory(){
   const pop=document.createElement('div');
   pop.id='sd-pay-pop';
   pop.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9200;display:flex;align-items:flex-end;justify-content:center;';
-  const offlineRows=sdPays.map(p=>{
+  const payRows=sdPays.map(p=>{
     const d=parseYMD(p.pay_date);
-    return`<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--brd);">
-      <div><div style="font-size:12px;font-weight:600;">오프라인 수강료${p.memo?` · ${p.memo}`:''}</div><div style="font-size:10px;color:var(--mu);margin-top:2px;">${d.getMonth()+1}월 ${d.getDate()}일 · ${p.months||1}개월</div></div>
-      <div style="font-size:13px;font-weight:700;">${(p.amount||0).toLocaleString()}원</div>
+    return`<div onclick="openEditPayment('${p.id}')" style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--brd);cursor:pointer;gap:8px;">
+      <div style="min-width:0;"><div style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.memo?p.memo:'수강료'}</div><div style="font-size:10px;color:var(--mu);margin-top:2px;">${d.getMonth()+1}월 ${d.getDate()}일 · ${p.months||1}개월</div></div>
+      <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">
+        <div style="font-size:13px;font-weight:700;">${(p.amount||0).toLocaleString()}원</div>
+        <svg width="13" height="13" viewBox="0 0 13 13"><polyline points="4,2 9,6.5 4,11" fill="none" stroke="#CBCCC9" stroke-width="1.8"/></svg>
+      </div>
     </div>`;
   }).join('');
   const onlineRows=sdSubs.map(s=>{
     const d=s.starts_at?parseYMD(s.starts_at.slice(0,10)):null;
     return`<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--brd);">
-      <div><div style="font-size:12px;font-weight:600;">온라인 · ${s.online_courses?.title||'강의'}</div><div style="font-size:10px;color:var(--mu);margin-top:2px;">${d?`${d.getMonth()+1}월 ${d.getDate()}일 · `:''}${s.plan||''} · ${s.course_type||''}</div></div>
-      <div style="font-size:11px;color:var(--mu);">금액 미기록</div>
+      <div><div style="font-size:12px;font-weight:600;">온라인 접근권 · ${s.online_courses?.title||'강의'}</div><div style="font-size:10px;color:var(--mu);margin-top:2px;">${d?`${d.getMonth()+1}월 ${d.getDate()}일 · `:''}${s.plan||''} · ${s.course_type||''} · 결제 내역에 없으면 위 목록에 직접 추가해주세요</div></div>
     </div>`;
   }).join('');
   pop.innerHTML=`<div style="background:var(--bg);border-radius:20px 20px 0 0;width:100%;max-width:480px;padding:16px 14px 26px;max-height:82vh;overflow-y:auto;">
@@ -3730,9 +3732,59 @@ function openSDPayHistory(){
       <div style="font-size:15px;font-weight:800;">결제 내역</div>
       <div onclick="document.getElementById('sd-pay-pop')?.remove()" style="width:26px;height:26px;border-radius:8px;background:var(--sf);display:flex;align-items:center;justify-content:center;cursor:pointer;">✕</div>
     </div>
-    ${offlineRows||onlineRows?`${offlineRows}${onlineRows}`:'<div class="empty">결제 내역이 없어요</div>'}
+    ${payRows||'<div class="empty">결제 내역이 없어요</div>'}
+    ${onlineRows}
   </div>`;
   document.body.appendChild(pop);
+}
+
+// ── 결제 내역 수정/삭제 — 저장하면 1페이지 학생 카드 등록기간 + 이번 달 예상수입 배너도 다시 계산됨 ──
+function openEditPayment(payId){
+  const p=sdPays.find(x=>x.id===payId);if(!p)return;
+  document.getElementById('edit-pay-pop')?.remove();
+  const pop=document.createElement('div');
+  pop.id='edit-pay-pop';
+  pop.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9300;display:flex;align-items:flex-end;justify-content:center;';
+  pop.innerHTML=`<div style="background:var(--bg);border-radius:20px 20px 0 0;width:100%;max-width:480px;padding:16px 14px 26px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <div style="font-size:15px;font-weight:800;">결제 내역 수정</div>
+      <div onclick="document.getElementById('edit-pay-pop')?.remove()" style="width:26px;height:26px;border-radius:8px;background:var(--sf);display:flex;align-items:center;justify-content:center;cursor:pointer;">✕</div>
+    </div>
+    <input class="inp" type="number" id="ep-amount" placeholder="결제 금액" value="${p.amount||0}">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <input class="inp" type="date" id="ep-date" value="${p.pay_date}">
+      <input class="inp" type="number" id="ep-months" placeholder="등록 개월수" min="1" value="${p.months||1}">
+    </div>
+    <input class="inp" type="text" id="ep-memo" placeholder="메모 (선택)" value="${p.memo?p.memo.replace(/"/g,'&quot;'):''}">
+    <button class="btn btn-p" onclick="saveEditPayment('${payId}')">저장하기</button>
+    <button onclick="deletePayment('${payId}')" style="width:100%;padding:13px;border-radius:10px;background:var(--rl);color:var(--rd);border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:8px;">이 결제 기록 삭제</button>
+    <div style="font-size:10px;color:var(--mu);margin-top:10px;line-height:1.6;">저장하면 1페이지 학생 카드의 등록기간과 이번 달 예상 수입 배너도 즉시 다시 계산돼요.</div>
+  </div>`;
+  document.body.appendChild(pop);
+}
+async function saveEditPayment(payId){
+  const amount=Number(document.getElementById('ep-amount').value)||0;
+  const pay_date=document.getElementById('ep-date').value;
+  const months=Number(document.getElementById('ep-months').value)||1;
+  const memo=document.getElementById('ep-memo').value.trim();
+  if(!pay_date){tst('결제일을 입력해주세요');return;}
+  const{error}=await sb.from('payments').update({amount,pay_date,months,memo}).eq('id',payId);
+  if(error){tst('저장 실패: '+error.message);return;}
+  document.getElementById('edit-pay-pop')?.remove();
+  document.getElementById('sd-pay-pop')?.remove();
+  tst('결제 내역을 수정했어요!');
+  await loadSDEval();
+  lAdm(); // 학생 목록의 등록기간·이번달 예상수입도 갱신
+}
+async function deletePayment(payId){
+  if(!confirm('이 결제 기록을 삭제할까요?'))return;
+  const{error}=await sb.from('payments').delete().eq('id',payId);
+  if(error){tst('삭제 실패: '+error.message);return;}
+  document.getElementById('edit-pay-pop')?.remove();
+  document.getElementById('sd-pay-pop')?.remove();
+  tst('결제 기록을 삭제했어요');
+  await loadSDEval();
+  lAdm();
 }
 async function loadSDEval(){
   const el=document.getElementById('sd-eval-content');if(!el)return;
