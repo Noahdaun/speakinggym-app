@@ -3250,7 +3250,11 @@ function rectab(t,b){
 // ── ADMIN ──
 async function loadClasses(){
   const{data}=await sb.from('classes').select('name').order('name');
-  classes=(data||[]).map(c=>c.name);
+  classes=sortClassNames((data||[]).map(c=>c.name));
+}
+// 온라인 반은 항상 목록 맨 아래로 — 나머지는 이름순 그대로
+function sortClassNames(names){
+  return[...names.filter(n=>!n.includes('온라인')),...names.filter(n=>n.includes('온라인')).sort()];
 }
 async function loadStudents(){
   const{data}=await sb.from('profiles').select('*').eq('role','student').order('name');
@@ -7538,7 +7542,7 @@ async function addClass(){
   if(classes.includes(name)){tst('이미 있는 반 이름이에요');return;}
   const{error}=await sb.from('classes').insert({name,price});
   if(error&&!error.message?.includes('duplicate')){tst('추가 실패: '+error.message);return;}
-  classes.push(name);classes.sort();
+  classes.push(name);classes=sortClassNames(classes);
   classPrices[name]=price||0;
   document.getElementById('ncls').value='';
   document.getElementById('ncls-price').value='';
