@@ -3267,17 +3267,21 @@ async function loadStudents(){
 }
 let mgMissionMap={};
 let mgPeriodMap={};
+let mgHwMap={};
 async function lAdm(){
   await Promise.all([loadClasses(),loadStudents()]);
   const td=new Date().toISOString().slice(0,10);
-  const[{data:lg},{data:activeMissions},{data:allPayments}]=await Promise.all([
+  const[{data:lg},{data:activeMissions},{data:allPayments},{data:hwToday}]=await Promise.all([
     sb.from('review_logs').select('student_id').eq('completed',true).gte('completed_at',td),
-    sb.from('special_missions').select('student_id,content,mission_date').eq('completed',false).order('mission_date',{ascending:false}),
-    sb.from('payments').select('student_id,pay_date,months').order('pay_date',{ascending:false})
+    sb.from('special_missions').select('id,student_id,content,mission_date').eq('completed',false).order('mission_date',{ascending:false}),
+    sb.from('payments').select('student_id,pay_date,months').order('pay_date',{ascending:false}),
+    sb.from('homework_checks').select('student_id,done').eq('check_date',td)
   ]);
   const doneSet=new Set((lg||[]).map(l=>l.student_id));
   mgMissionMap={};
-  (activeMissions||[]).forEach(m=>{if(!mgMissionMap[m.student_id])mgMissionMap[m.student_id]=m.content;});
+  (activeMissions||[]).forEach(m=>{if(!mgMissionMap[m.student_id])mgMissionMap[m.student_id]={id:m.id,content:m.content};});
+  mgHwMap={};
+  (hwToday||[]).forEach(h=>{mgHwMap[h.student_id]=!!h.done;});
   // 학생별 최근 결제의 등록기간 (가장 최근 결제 1건 기준 — pay_date~pay_date+months)
   mgPeriodMap={};
   (allPayments||[]).forEach(p=>{
@@ -3393,31 +3397,50 @@ function renderMissingAlert(doneSet, cls='all'){
     </div>`:''}
   </div>`;
 }
+let _lastAdCls='all',_lastDoneSet=new Set();
 function renderSList(cls,doneSet){
   const el=document.getElementById('adsl');
   if(!el)return;
+  _lastAdCls=cls;_lastDoneSet=doneSet;
   const av=['#EEEDFE','#E1F5EE','#FAEEDA','#FCEBEB','#F3F0FC'];
   const tc=['#3C3489','#085041','#633806','#791F1F','#534AB7'];
+  const chip=(label,done,onclick)=>`<div ${onclick?`onclick="${onclick}"`:''} style="display:flex;align-items:center;justify-content:center;gap:3px;width:48px;padding:3px 6px;border-radius:7px;background:${done?'#E1F5EE':'#F5F3F0'};flex-shrink:0;${onclick?'cursor:pointer;':''}">
+    <svg width="10" height="10" viewBox="0 0 10 10">${done
+      ?`<circle cx="5" cy="5" r="4.5" fill="#1D9E75"/><path d="M2.8 5.1l1.4 1.4 2.8-3" stroke="#fff" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>`
+      :`<circle cx="5" cy="5" r="4.2" fill="none" stroke="${label==='미션없음'?'#CBCCC9':'#A1A1AA'}" stroke-width="1.1"/>`}</svg>
+    <span style="font-size:10px;font-weight:700;color:${done?'#085041':(label==='미션없음'?'#A1A1AA':'#71717A')};white-space:nowrap;">${label}</span>
+  </div>`;
   const cardHtml=(s,i)=>{
-    const ini=dispInitial(s.name,s.email),done=doneSet?.has(s.id);
+    const ini=dispInitial(s.name,s.email);
     const mission=mgMissionMap[s.id];
+    const hwDone=!!mgHwMap[s.id];
     const period=mgPeriodMap[s.id];
     const periodText=period?`${period.start.getMonth()+1}/${period.start.getDate()} ~ ${period.end.getMonth()+1}/${period.end.getDate()}`:'등록 정보 없음';
+    let flagHtml='';
+    if(period){
+      const daysLeft=Math.ceil((period.end-new Date())/86400000);
+      if(daysLeft<0)flagHtml=`<span style="font-size:9px;font-weight:700;color:#B91C1C;background:#FEE2E2;padding:2px 7px;border-radius:99px;white-space:nowrap;">재결제 필요</span>`;
+      else if(daysLeft<=7)flagHtml=`<span style="font-size:9px;font-weight:700;color:#B45309;background:#FEF3C7;padding:2px 7px;border-radius:99px;white-space:nowrap;">재결제 ${daysLeft}일전</span>`;
+    }
     const safeName=(s.name||s.email||'').replace(/'/g,"\\'");
     return`<div class="card" style="margin-bottom:0;">
-      <div style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:6px;" onclick="openSD('${s.id}','${safeName}','${s.class_name||''}')">
-        <div class="sa" style="background:${av[i%5]};color:${tc[i%5]};flex-shrink:0;">${ini}</div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div class="sa" style="background:${av[i%5]};color:${tc[i%5]};flex-shrink:0;cursor:pointer;" onclick="openSD('${s.id}','${safeName}','${s.class_name||''}')">${ini}</div>
         <div style="min-width:0;flex:1;">
-          <div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${dispName(s.name,s.email)}</div>
-          <span class="bdg ${done?'bg':'bgr'}" style="font-size:9px;">${done?'리뷰완료':'미완료'}</span>
+          <div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;margin-bottom:2px;" onclick="openSD('${s.id}','${safeName}','${s.class_name||''}')">${dispName(s.name,s.email)}</div>
+          <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">
+            <span style="font-size:8px;color:var(--mu);white-space:nowrap;">${periodText}</span>
+            ${flagHtml}
+            ${chip('숙제',hwDone,`toggleHwCheck('${s.id}',${!hwDone})`)}
+            ${mission?chip('미션',false,`toggleCardMission('${s.id}','${mission.id}')`):chip('미션없음',false,'')}
+            <div onclick="openClassPicker('${s.id}','${safeName}','${s.class_name||''}',event)" style="font-size:10px;color:var(--text2);background:var(--sf);padding:4px 10px;border-radius:7px;cursor:pointer;font-weight:600;white-space:nowrap;flex-shrink:0;">${s.class_name?'반이동':'반배정'}</div>
+          </div>
         </div>
       </div>
-      ${mission?`<div style="font-size:10px;color:#6D5B9E;background:#F3EEFF;border-radius:7px;padding:4px 7px;margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">🎯 ${mission}</div>`:''}
-      <div style="font-size:11px;color:var(--mu);margin-bottom:6px;">📅 ${periodText}</div>
-      <div onclick="openClassPicker('${s.id}','${safeName}','${s.class_name||''}',event)" style="text-align:center;font-size:10px;color:var(--text2);background:var(--sf);padding:5px 0;border-radius:6px;cursor:pointer;font-weight:600;">${s.class_name?'반이동':'반배정'}</div>
+      ${mission?`<div style="font-size:10px;color:#6D5B9E;margin-top:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">🎯 ${mission.content}</div>`:''}
     </div>`;
   };
-  const gridHtml=list=>`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;">${list.map((s,i)=>cardHtml(s,i)).join('')}</div>`;
+  const gridHtml=list=>`<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;">${list.map((s,i)=>cardHtml(s,i)).join('')}</div>`;
   const sectionHead=(label,count)=>`<div style="font-size:12px;font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:6px;color:${label==='등록안함'?'var(--mu)':'var(--text)'};">${label}<span style="background:var(--sf);color:var(--mu);font-size:10px;padding:1px 7px;border-radius:99px;">${count}명</span></div>`;
 
   let html='',filt=[];
@@ -3471,6 +3494,22 @@ function openClassPicker(sid,name,curCls,e){
 function pickClass(sid,cls){
   document.getElementById('cls-pick-pop')?.remove();
   adminChangeCls(sid,cls);
+}
+
+// ── 학생 목록 카드의 "숙제"/"미션" 체크 칩 — 원장님이 탭해서 바로 토글 ──
+async function toggleHwCheck(sid,newVal){
+  const td=new Date().toISOString().slice(0,10);
+  const{error}=await sb.from('homework_checks').upsert({student_id:sid,check_date:td,done:newVal,updated_at:new Date().toISOString()},{onConflict:'student_id,check_date'});
+  if(error){tst('저장 실패: '+error.message);return;}
+  mgHwMap[sid]=newVal;
+  renderSList(_lastAdCls||'all',_lastDoneSet);
+}
+async function toggleCardMission(sid,missionId){
+  const{error}=await sb.from('special_missions').update({completed:true,completed_at:new Date().toISOString()}).eq('id',missionId);
+  if(error){tst('저장 실패: '+error.message);return;}
+  delete mgMissionMap[sid];
+  tst('미션 완료 처리했어요!');
+  renderSList(_lastAdCls||'all',_lastDoneSet);
 }
 async function loadSStat(sid){
   const el=document.getElementById(`sstat-${sid}`);if(!el)return;
