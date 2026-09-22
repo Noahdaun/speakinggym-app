@@ -255,10 +255,11 @@ function doUpdate(){
   </div>
   <div class="lbx" id="subox" style="display:none;">
     <div class="logo-wrap"><h1>Speaking Gym</h1><p>계정 만들기</p></div>
-    <input class="inp" type="text" id="sun" placeholder="이름 (예: 김지수 / Jane Kim)">
+    <input class="inp" type="text" id="sun-kr" placeholder="한국어 이름 (예: 김지수)">
+    <input class="inp" type="text" id="sun-en" placeholder="영어 이름 (예: Jane Kim)">
     <input class="inp" type="email" id="sue" placeholder="이메일">
     <input class="inp" type="password" id="sup" placeholder="비밀번호 (6자 이상)">
-    <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px;">수강 중인 반 <span style="font-weight:400;color:var(--mu);">(선택)</span></div>
+    <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px;">수강 중인 반</div>
     <div id="su-cls" style="display:flex;gap:6px;flex-wrap:wrap;min-height:28px;margin-bottom:12px;"></div>
     <button class="btn btn-p" onclick="doSignup()">가입하기</button>
     <button class="btn btn-o" style="margin-top:8px;" onclick="goLogin()">로그인으로 돌아가기</button>
@@ -1204,6 +1205,7 @@ function goSignup(){
   document.getElementById('lbox').style.display='none';
   document.getElementById('fpbox').style.display='none';
   document.getElementById('subox').style.display='block';
+  selSignupCls='';
   loadSignupClasses();
 }
 function goLogin(){
@@ -1240,7 +1242,7 @@ async function doResetPassword(){
 }
 async function loadSignupClasses(){
   const{data}=await sb.from('classes').select('name').order('name');
-  const list=(data||[]).map(c=>c.name);
+  const list=sortClassNames((data||[]).map(c=>c.name));
   const el=document.getElementById('su-cls');
   if(!list.length){el.innerHTML='<div style="font-size:11px;color:var(--mu);">등록된 반이 없어요 — 선생님께 문의해주세요</div>';return;}
   el.innerHTML=list.map(c=>`
@@ -1255,10 +1257,13 @@ function toggleSUCls(cls,el){
   el.style.borderColor='#1D9E75';el.style.color='#085041';el.style.background='#E1F5EE';el.style.fontWeight='700';
 }
 async function doSignup(){
-  const n=document.getElementById('sun').value.trim(),e=document.getElementById('sue').value.trim(),p=document.getElementById('sup').value;
+  const nKr=document.getElementById('sun-kr').value.trim(),nEn=document.getElementById('sun-en').value.trim();
+  const e=document.getElementById('sue').value.trim(),p=document.getElementById('sup').value;
   const er=document.getElementById('suerr');er.textContent='';er.style.color='#E24B4A';
-  if(!n||!e||!p){er.textContent='모든 항목을 입력해주세요';return;}
+  if(!nKr||!nEn||!e||!p){er.textContent='모든 항목을 입력해주세요';return;}
+  if(!selSignupCls){er.textContent='수강 중인 반을 선택해주세요';return;}
   if(p.length<6){er.textContent='비밀번호는 6자 이상이어야 해요';return;}
+  const n=`${nKr} / ${nEn}`;
   const{data,error}=await sb.auth.signUp({email:e,password:p,options:{data:{name:n}}});
   if(error){er.textContent='가입 실패: '+error.message;return;}
   if(data?.user){
