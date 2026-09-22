@@ -744,7 +744,6 @@ function doUpdate(){
           오늘 학습 요약
         </button>
         <div id="mg-mini-revenue"></div>
-        <div class="pills" id="adcp"></div>
         <div id="adsl"><div class="loading">로딩중...</div></div>
       </div>
 
@@ -3272,13 +3271,8 @@ async function lAdm(){
   if(document.getElementById('a-tot'))document.getElementById('a-tot').textContent=total;
   if(document.getElementById('a-done'))document.getElementById('a-done').textContent=done;
   if(document.getElementById('a-todo'))document.getElementById('a-todo').textContent=todo;
-  const cls=['all',...classes,'등록안함'];
-  const adcp=document.getElementById('adcp');
-  if(adcp)adcp.innerHTML=cls.map((c,i)=>`<div class="pill ${i===0?'on':''}" onclick="sAdCls('${c}',this)">${c==='all'?'전체':c}</div>`).join('');
   // 이번 달 예상 수입 배너
   renderMiniRevenue();
-  // 반별 완료율 바
-  renderClassBars(doneSet);
   // 미완료 알림 섹션
   renderMissingAlert(doneSet);
   renderSList('all',doneSet);
