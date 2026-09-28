@@ -1675,6 +1675,10 @@ async function lRev(){
   renderRT(items.slice(0,4));
   renderRH(logs||[]);
 }
+// 복습 횟수를 숫자/글자 대신 점 5개로 표시 (오프라인·온라인 리뷰 목록 공통)
+function reviewDots(count,color='#1D9E75'){
+  return`<div style="display:flex;gap:3px;align-items:center;margin-top:3px;">${Array(5).fill(0).map((_,i)=>`<div style="width:7px;height:7px;border-radius:99px;background:${i<(count||0)?color:'#E8E4DE'};"></div>`).join('')}</div>`;
+}
 function renderRT(items){
   if(!items.length){document.getElementById('rtd').innerHTML='<div class="empty">오늘 복습할 레슨이 없어요.<br>선생님이 출석을 체크하면 자동으로 나타나요.</div>';return;}
   const today=new Date();
@@ -1693,7 +1697,8 @@ function renderRT(items){
       <div style="width:40px;height:40px;border-radius:99px;background:${bg};display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px;">${isFollow?'🎧':'📖'}</div>
       <div style="flex:1;min-width:0;">
         <div style="font-size:13px;font-weight:700;color:${it.done?'var(--mu)':'var(--text)'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${it.lesson.title}</div>
-        <div style="font-size:10px;color:${it.done?'#C4C4C4':'var(--mu)'};margin-top:2px;">${dayLabel} · ${label}${it.count?` · ${it.count}/5`:''}</div>
+        <div style="font-size:10px;color:${it.done?'#C4C4C4':'var(--mu)'};margin-top:2px;">${dayLabel} · ${label}</div>
+        ${reviewDots(it.count,it.done?'#A1A1AA':color)}
       </div>
       ${it.done?`<svg width="20" height="20" viewBox="0 0 20 20"><circle cx="10" cy="10" r="9" fill="none" stroke="#A1A1AA" stroke-width="1.5"/><polyline points="6,10 9,13 14,7" fill="none" stroke="#A1A1AA" stroke-width="1.8"/></svg>`:`<svg width="18" height="18" viewBox="0 0 18 18"><polyline points="7,4 12,9 7,14" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`}
     </div>`;
@@ -6912,8 +6917,9 @@ async function openOnlineCourseReview(courseId,title,unlockedMonths){
   const topics=(data||[]).filter(t=>!t.online_week||t.online_week<=maxWeek);
   // 리뷰 화면(oSes→openOnlineReview)이 les 배열에서 토픽을 찾으므로 캐시에 합쳐둠
   topics.forEach(t=>{const idx=les.findIndex(x=>x.id===t.id);if(idx>=0)les[idx]=t;else les.push(t);});
-  const{data:logs}=await sb.from('review_logs').select('lesson_id,completed').eq('student_id',U.id).eq('completed',true).in('lesson_id',topics.map(t=>t.id));
-  const doneSet=new Set((logs||[]).map(l=>l.lesson_id));
+  const{data:logs}=await sb.from('review_logs').select('lesson_id,completed,count').eq('student_id',U.id).in('lesson_id',topics.map(t=>t.id));
+  const doneSet=new Set((logs||[]).filter(l=>l.completed).map(l=>l.lesson_id));
+  const countMap={};(logs||[]).forEach(l=>{countMap[l.lesson_id]=l.count||0;});
   document.getElementById('rs-title').textContent=title;
   document.getElementById('rs-badge').textContent='주차별 리뷰';
   document.getElementById('rs-badge').style.background='#E6F1FB';
@@ -6938,6 +6944,7 @@ async function openOnlineCourseReview(courseId,title,unlockedMonths){
             <div style="flex:1;min-width:0;">
               <div style="font-size:13px;font-weight:700;color:${done?'var(--mu)':'var(--text)'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${t.title}</div>
               <div style="font-size:10px;color:var(--mu);margin-top:2px;">${done?'복습 완료':'눌러서 리뷰하기'}</div>
+              ${reviewDots(countMap[t.id],done?'#A1A1AA':'#1D9E75')}
             </div>
           </div>`;
         }).join('')}
