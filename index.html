@@ -2067,8 +2067,9 @@ async function oSes(lid,title,url,round){
 async function openOnlineReview(lid,title,round){
   npDestroy();
   const l=les.find(x=>x.id===lid);if(!l)return;
+  sesTimeStop(true); // 이전 세션이 남아있으면 먼저 저장
   ses={lid,title,url:l.url,round:typeof round==='number'?round:null,startedAt:Date.now()};
-  sb.auth.getSession().then(({data})=>{if(ses)ses.token=data?.session?.access_token;});
+  sesTimeStart('review');
   document.getElementById('rs-title').textContent=title;
   document.getElementById('rs-badge').textContent=typeof round==='number'?`${round}회 전`:'둘러보기';
   document.getElementById('rs-badge').style.background='#E6F1FB';
@@ -2097,15 +2098,14 @@ async function openOnlineReview(lid,title,round){
 async function completeOnlineReview(){
   if(!ses||typeof ses.round!=='number'){cses();return;}
   const now=new Date().toISOString();
-  const durSec=ses.startedAt?Math.round((Date.now()-ses.startedAt)/1000):0;
+  await sesTimeStop(true); // 시간은 review_sessions에 세션 단위로 따로 저장 (review_logs에 누적하지 않음)
   let newCount=1,done=false;
   try{
-    const{data:ex}=await sb.from('review_logs').select('id,count,duration_sec').eq('student_id',U.id).eq('lesson_id',ses.lid).eq('review_round',ses.round).single();
+    const{data:ex}=await sb.from('review_logs').select('id,count').eq('student_id',U.id).eq('lesson_id',ses.lid).eq('review_round',ses.round).maybeSingle();
     newCount=Math.min((ex?.count||0)+1,5);
     done=newCount>=5;
-    const totalDurSec=(ex?.duration_sec||0)+durSec;
-    if(ex)await sb.from('review_logs').update({count:newCount,completed:done,completed_at:done?now:null,duration_sec:totalDurSec,last_activity_at:now}).eq('id',ex.id);
-    else await sb.from('review_logs').insert({student_id:U.id,lesson_id:ses.lid,review_round:ses.round,count:newCount,completed:done,completed_at:done?now:null,duration_sec:totalDurSec,last_activity_at:now});
+    if(ex)await sb.from('review_logs').update({count:newCount,completed:done,completed_at:done?now:null,last_activity_at:now}).eq('id',ex.id);
+    else await sb.from('review_logs').insert({student_id:U.id,lesson_id:ses.lid,review_round:ses.round,count:newCount,completed:done,completed_at:done?now:null,last_activity_at:now});
   }catch(e){}
   earnXP(XP_TABLE.follow,'online_review_complete_'+ses.lid+'_'+ses.round);
   tst(done?'복습 완료! 🎉':`${newCount}/5회 · 계속해봐요`);
@@ -3037,31 +3037,55 @@ function cses(skipConfirm){
       return;
     }
   }
-  npDestroy();document.getElementById('rs').classList.remove('on');ses=null;
+  sesTimeStop(true);npDestroy();document.getElementById('rs').classList.remove('on');ses=null;
 }
 
-// 화면이 꺼지거나(백그라운드 전환) 앱이 그냥 닫힐 때 — 완료 버튼을 못 누르고 나가도
-// 지금까지 진행된 시간만이라도 최대한 저장해본다 (5회 카운트는 올리지 않음, 시간만 기록)
-async function saveReviewTimeCheckpoint(){
-  if(!ses||typeof ses.round!=='number'||!ses.startedAt||!ses.token)return;
-  const durSec=Math.round((Date.now()-ses.startedAt)/1000);
-  if(durSec<5)return;
-  const headers={'Content-Type':'application/json','apikey':SK,'Authorization':'Bearer '+ses.token};
-  const nowIso=new Date().toISOString();
-  try{
-    const r=await fetch(`${SU}/rest/v1/review_logs?student_id=eq.${U.id}&lesson_id=eq.${ses.lid}&review_round=eq.${ses.round}&select=id,duration_sec`,{headers,keepalive:true});
-    const rows=await r.json();
-    if(rows&&rows[0]){
-      if((rows[0].duration_sec||0)<durSec){
-        await fetch(`${SU}/rest/v1/review_logs?id=eq.${rows[0].id}`,{method:'PATCH',headers:{...headers,'Prefer':'return=minimal'},body:JSON.stringify({duration_sec:durSec,last_activity_at:nowIso}),keepalive:true});
-      }
-    }else{
-      await fetch(`${SU}/rest/v1/review_logs`,{method:'POST',headers:{...headers,'Prefer':'return=minimal'},body:JSON.stringify({student_id:U.id,lesson_id:ses.lid,review_round:ses.round,count:0,completed:false,duration_sec:durSec,last_activity_at:nowIso}),keepalive:true});
-    }
-  }catch(e){}
+// ── 리뷰 시간 측정 (세션 단위) ──
+// 화면이 보이고 + 최근 5분 안에 터치/클릭/스크롤이 있었던 시간만 센다 (방치·백그라운드 시간 제외).
+// 세션마다 고유 id로 한 줄(review_sessions)을 만들고 "지금까지 총 활동시간"을 덮어쓰는(upsert) 방식이라
+// 여러 번 저장해도 이중 합산되지 않는다.
+const SES_IDLE_LIMIT_MS=5*60*1000;
+let _sesTimer=null,_sesLastInput=Date.now();
+['pointerdown','keydown','touchstart','scroll','click'].forEach(ev=>document.addEventListener(ev,()=>{_sesLastInput=Date.now();},{capture:true,passive:true}));
+function sesTimeStart(kind){
+  if(!ses)return;
+  ses.sid=(crypto.randomUUID?crypto.randomUUID():'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0;return(c==='x'?r:(r&3|8)).toString(16);}));
+  ses.kind=kind;ses.activeSec=0;ses.flushedSec=-1;ses.dateStr=fmtYMD(new Date());
+  _sesLastInput=Date.now();
+  const refreshToken=()=>sb.auth.getSession().then(({data})=>{if(ses)ses.token=data?.session?.access_token;});
+  refreshToken();
+  clearInterval(_sesTimer);
+  _sesTimer=setInterval(()=>{
+    if(!ses||!ses.sid){clearInterval(_sesTimer);return;}
+    if(document.hidden)return;
+    if(Date.now()-_sesLastInput>SES_IDLE_LIMIT_MS)return;
+    ses.activeSec++;
+    if(ses.activeSec%30===0){refreshToken();flushSesTime(false);}
+  },1000);
 }
-document.addEventListener('visibilitychange',()=>{if(document.hidden)saveReviewTimeCheckpoint();});
-window.addEventListener('pagehide',()=>{saveReviewTimeCheckpoint();});
+async function flushSesTime(keepalive){
+  const s=ses;
+  if(!s||!s.sid||!U)return;
+  const sec=s.activeSec||0;
+  if(sec<5||sec===s.flushedSec)return;
+  s.flushedSec=sec;
+  const row={id:s.sid,student_id:U.id,lesson_id:String(s.lid),kind:s.kind,seconds:sec,session_date:s.dateStr,updated_at:new Date().toISOString()};
+  try{
+    if(keepalive&&s.token){
+      // 화면이 꺼지거나 탭이 닫히는 중에도 끝까지 전송되도록 keepalive 사용
+      await fetch(`${SU}/rest/v1/review_sessions?on_conflict=id`,{method:'POST',headers:{'Content-Type':'application/json','apikey':SK,'Authorization':'Bearer '+s.token,'Prefer':'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(row),keepalive:true});
+    }else{
+      const{error}=await sb.from('review_sessions').upsert(row,{onConflict:'id'});
+      if(error){s.flushedSec=-1;console.warn('리뷰 시간 저장 실패',error);}
+    }
+  }catch(e){s.flushedSec=-1;}
+}
+async function sesTimeStop(flush=true){
+  clearInterval(_sesTimer);_sesTimer=null;
+  if(flush)await flushSesTime(false);
+}
+document.addEventListener('visibilitychange',()=>{if(document.hidden)flushSesTime(true);});
+window.addEventListener('pagehide',()=>{flushSesTime(true);});
 
 
 
@@ -3095,9 +3119,8 @@ async function lRec(){
   renderVDist();
   if(document.getElementById('rv-total'))document.getElementById('rv-total').textContent=vc.length;
   if(document.getElementById('rv-master'))document.getElementById('rv-master').textContent=vc.filter(v=>v.box_level===5).length;
-  // 총 공부 시간 (review_logs duration_sec 합산)
-  const{data:durData}=await sb.from('review_logs').select('duration_sec').eq('student_id',U.id);
-  const totalSec=(durData||[]).reduce((s,l)=>s+(l.duration_sec||0),0);
+  // 총 공부 시간 = 예전 방식 누적(review_logs.duration_sec) + 새 방식 세션 합계(review_sessions)
+  const totalSec=await getTotalStudySec(U.id);
   const totalMin=Math.round(totalSec/60);
   const timeStr=totalMin>=60?`${Math.floor(totalMin/60)}h ${totalMin%60}m`:`${totalMin}m`;
   const timeEl=document.getElementById('rv-study-time');
@@ -4206,8 +4229,7 @@ async function loadSDStat(){
   }
 
   // 총 공부 시간
-  const{data:durData}=await sb.from('review_logs').select('duration_sec').eq('student_id',sdSid);
-  const totalSec=(durData||[]).reduce((s,l)=>s+(l.duration_sec||0),0);
+  const totalSec=await getTotalStudySec(sdSid);
   const totalMin=Math.round(totalSec/60);
   const timeStr=totalMin>=60?`${Math.floor(totalMin/60)}h ${totalMin%60}m`:`${totalMin}m`;
 
@@ -4262,10 +4284,13 @@ async function loadSDStat(){
 
 async function loadSDRev(){
   const el=document.getElementById('sd-rev-content');if(!el)return;
-  const[{data:logs},{data:subs}]=await Promise.all([
+  const[{data:logs},{data:subs},{data:sess}]=await Promise.all([
     sb.from('review_logs').select('*').eq('student_id',sdSid).order('completed_at',{ascending:false}),
-    sb.from('hw_submissions').select('*').eq('student_id',sdSid).order('submitted_at',{ascending:false})
+    sb.from('hw_submissions').select('*').eq('student_id',sdSid).order('submitted_at',{ascending:false}),
+    sb.from('review_sessions').select('lesson_id,seconds').eq('student_id',sdSid)
   ]);
+  // 새 방식(세션 단위)으로 기록된 레슨별 실제 공부 시간
+  const sessSecByLesson={};(sess||[]).forEach(s=>{sessSecByLesson[s.lesson_id]=(sessSecByLesson[s.lesson_id]||0)+(s.seconds||0);});
   if(!logs?.length){el.innerHTML='<div class="empty">리뷰 기록이 없어요</div>';return;}
   // 레슨별 그룹
   const byLesson={};
@@ -4274,7 +4299,7 @@ async function loadSDRev(){
     const lesson=les.find(x=>x.id===lid);if(!lesson)return'';
     const sorted=lgs.sort((a,b)=>a.review_round-b.review_round);
     return`<div class="card" style="margin-bottom:8px;">
-      <div style="font-size:13px;font-weight:700;margin-bottom:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${lesson.title}</div>
+      <div style="font-size:13px;font-weight:700;margin-bottom:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${lesson.title}${sessSecByLesson[lid]?` <span style="font-size:10px;font-weight:600;color:var(--gd);">⏱ 실제 ${Math.max(1,Math.round(sessSecByLesson[lid]/60))}분</span>`:''}</div>
       ${sorted.map(l=>{
         const rtype2=getRoundType(l.review_round);
         const sub=(subs||[]).find(s=>s.lesson_id===lid&&s.review_round===l.review_round);
@@ -4403,21 +4428,38 @@ async function getStreakDays(){
   while(activeDates.has(cur.toISOString().slice(0,10))){streak++;cur.setDate(cur.getDate()-1);}
   return streak;
 }
+// ── 리뷰 시간 집계 헬퍼 (review_sessions 기준) ──
+// 기간별 학생 합계: { 학생id: 초 }  (start가 null이면 전체 기간)
+async function secsByStudent(startStr,sid){
+  const{data,error}=await sb.rpc('review_secs_by_student',{start_date:startStr||null,sid:sid||null});
+  if(error)console.warn('리뷰 시간 집계 실패',error);
+  const m={};(data||[]).forEach(r=>{m[r.student_id]=Number(r.seconds)||0;});
+  return m;
+}
+// 총 공부 시간 = 예전 누적(review_logs.duration_sec, 부풀려졌을 수 있음) + 새 세션 기록
+async function getTotalStudySec(sid){
+  const[{data:old},mNew]=await Promise.all([
+    sb.from('review_logs').select('duration_sec').eq('student_id',sid),
+    secsByStudent(null,sid)
+  ]);
+  return(old||[]).reduce((s,l)=>s+(l.duration_sec||0),0)+(mNew[sid]||0);
+}
+function weekStartYMD(){
+  const now=new Date(),day=now.getDay();
+  const monday=new Date(now);monday.setDate(now.getDate()+(day===0?-6:1-day));
+  return fmtYMD(monday);
+}
 // 스트릭 카드 + 이번주 랭킹(리뷰 누적시간 기준)을 한 카드로 합침
 async function renderXPBar(){
   const el=document.getElementById('xp-bar-wrap');if(!el)return;
   const streak=await getStreakDays();
   let rankHtml='';
   try{
-    const now=new Date();
-    const day=now.getDay();
-    const monday=new Date(now);monday.setDate(now.getDate()+(day===0?-6:1-day));
-    const weekStartStr=monday.toISOString().slice(0,10);
-    const[{data:rv},{data:profiles}]=await Promise.all([
-      sb.from('review_logs').select('student_id,duration_sec').gte('last_activity_at',weekStartStr),
+    const weekStartStr=weekStartYMD();
+    const[totals,{data:profiles}]=await Promise.all([
+      secsByStudent(weekStartStr),
       sb.from('profiles').select('id').eq('role','student')
     ]);
-    const totals={};(rv||[]).forEach(r=>{totals[r.student_id]=(totals[r.student_id]||0)+(r.duration_sec||0);});
     const ranked=(profiles||[]).map(p=>({sid:p.id,sec:totals[p.id]||0})).sort((a,b)=>b.sec-a.sec);
     const myIdx=ranked.findIndex(r=>r.sid===U.id);
     if(myIdx>=0){
@@ -4458,11 +4500,12 @@ async function loadMyStats(){
   const day=now.getDay();
   const monday=new Date(now);monday.setDate(now.getDate()+(day===0?-6:1-day));
   const weekDates=[];
-  for(let i=0;i<7;i++){const d=new Date(monday);d.setDate(monday.getDate()+i);weekDates.push(d.toISOString().slice(0,10));}
+  for(let i=0;i<7;i++){const d=new Date(monday);d.setDate(monday.getDate()+i);weekDates.push(fmtYMD(d));}
   const weekStartStr=weekDates[0];
-  const todayStr=now.toISOString().slice(0,10);
-  const{data:myRv}=await sb.from('review_logs').select('last_activity_at,duration_sec').eq('student_id',U.id).gte('last_activity_at',weekStartStr);
-  const secByDate={};(myRv||[]).forEach(r=>{const d=r.last_activity_at?.slice(0,10);if(!d)return;secByDate[d]=(secByDate[d]||0)+(r.duration_sec||0);});
+  const todayStr=fmtYMD(now);
+  // 요일별 시간은 세션 기록(날짜별)으로 계산 — 누적값을 마지막 날에 몰아주지 않음
+  const{data:myRv}=await sb.from('review_sessions').select('session_date,seconds').eq('student_id',U.id).gte('session_date',weekStartStr);
+  const secByDate={};(myRv||[]).forEach(r=>{secByDate[r.session_date]=(secByDate[r.session_date]||0)+(r.seconds||0);});
   const daySecs=weekDates.map(d=>secByDate[d]||0);
   const myWeekSec=daySecs.reduce((a,b)=>a+b,0);
   let classAvgSec=0;
@@ -4472,8 +4515,7 @@ async function loadMyStats(){
       const{data:peers}=await sb.from('profiles').select('id').eq('role','student').eq('class_name',myCls).neq('id',U.id);
       const peerIds=(peers||[]).map(p=>p.id);
       if(peerIds.length){
-        const{data:peerRv}=await sb.from('review_logs').select('student_id,duration_sec').gte('last_activity_at',weekStartStr).in('student_id',peerIds);
-        const bySt={};(peerRv||[]).forEach(r=>{bySt[r.student_id]=(bySt[r.student_id]||0)+(r.duration_sec||0);});
+        const bySt=await secsByStudent(weekStartStr);
         const vals=peerIds.map(id=>bySt[id]||0);
         classAvgSec=Math.round(vals.reduce((a,b)=>a+b,0)/vals.length);
       }
@@ -6028,7 +6070,9 @@ function renderFreeStudyList(lessons){
 function openFreeStudy(lid){
   const l=les.find(x=>x.id===lid);if(!l)return;
   npDestroy();
+  sesTimeStop(true);
   ses={lid,title:l.title,url:l.url,round:'free',free:true,startedAt:Date.now()};
+  sesTimeStart('free');
   document.getElementById('rs-title').textContent=l.title;
   document.getElementById('rs-badge').textContent='자유학습';
   document.getElementById('rs-badge').style.background='#E1F5EE';
@@ -7438,12 +7482,10 @@ function olTab(t, b){
 let curRankPeriod='week';
 function rankPeriodStart(period){
   const now=new Date();
-  if(period==='day')return now.toISOString().slice(0,10);
-  if(period==='month')return new Date(now.getFullYear(),now.getMonth(),1).toISOString().slice(0,10);
+  if(period==='day')return fmtYMD(now);
+  if(period==='month')return fmtYMD(new Date(now.getFullYear(),now.getMonth(),1));
   if(period==='all')return null;
-  const day=now.getDay();
-  const monday=new Date(now);monday.setDate(now.getDate()+(day===0?-6:1-day));
-  return monday.toISOString().slice(0,10);
+  return weekStartYMD();
 }
 function setRankPeriod(p){
   curRankPeriod=p;
@@ -7462,17 +7504,17 @@ async function lRank(myId,listId,period){
   const listEl=document.getElementById(listId||'rank-list');if(!listEl)return;
   listEl.innerHTML='<div class="loading">로딩중...</div>';
   const startStr=rankPeriodStart(period);
-  let rvQuery=sb.from('review_logs').select('student_id,duration_sec');
-  if(startStr)rvQuery=rvQuery.gte('last_activity_at',startStr);
-  const[{data:rv},{data:profiles},{data:xpData}]=await Promise.all([
-    rvQuery,
+  // 일/주/월은 세션 기록만, 전체 기간은 예전 누적값(review_logs)도 함께 더함
+  const[sessTotals,legacyRows,{data:profiles},{data:xpData}]=await Promise.all([
+    secsByStudent(startStr),
+    period==='all'?sb.from('review_logs').select('student_id,duration_sec').then(r=>r.data||[]):Promise.resolve([]),
     sb.from('profiles').select('id,name,email,weekly_goal_min').eq('role','student'),
     sb.from('user_xp').select('student_id,total_xp')
   ]);
   if(!profiles?.length){listEl.innerHTML='<div class="empty">아직 랭킹 데이터가 없어요</div>';return;}
   const profMap={};(profiles||[]).forEach(p=>profMap[p.id]=p);
   const xpMap={};(xpData||[]).forEach(x=>xpMap[x.student_id]=x.total_xp||0);
-  const totals={};(rv||[]).forEach(r=>{totals[r.student_id]=(totals[r.student_id]||0)+(r.duration_sec||0);});
+  const totals={...sessTotals};legacyRows.forEach(r=>{totals[r.student_id]=(totals[r.student_id]||0)+(r.duration_sec||0);});
   const ranked=profiles.map(p=>({sid:p.id,sec:totals[p.id]||0})).sort((a,b)=>b.sec-a.sec);
   const myRank=ranked.findIndex(r=>r.sid===U.id)+1;
   const myData=ranked.find(r=>r.sid===U.id);
