@@ -1172,9 +1172,12 @@ function updatePushBanner(){
 // 메시지 등 이벤트가 생겼을 때 대상 사용자(들)에게 푸시 발송 요청 (배포 전이면 조용히 무시)
 async function triggerPush(userIds,title,body){
   if(!PUSH_ENDPOINT||!userIds?.length)return;
+  // 서버가 "누가 보냈는지" 확인할 수 있도록 공개 키가 아니라 로그인한 사용자의 토큰을 보냄
+  const{data:{session:pushSess}}=await sb.auth.getSession();
+  const pushToken=pushSess?.access_token||SK;
   for(const uid of userIds){
     try{
-      const r=await fetch(PUSH_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json','apikey':SK,'Authorization':'Bearer '+SK},body:JSON.stringify({user_id:uid,title,body})});
+      const r=await fetch(PUSH_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json','apikey':SK,'Authorization':'Bearer '+pushToken},body:JSON.stringify({user_id:uid,title,body})});
       if(!r.ok)console.warn('푸시 전송 실패',r.status,await r.text());
     }catch(e){console.warn('푸시 전송 실패',e);}
   }
