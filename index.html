@@ -7511,7 +7511,8 @@ async function lRank(myId,listId,period){
   // 일/주/월은 세션 기록만, 전체 기간은 예전 누적값(review_logs)도 함께 더함
   const[sessTotals,legacyRows,{data:profiles},{data:xpData}]=await Promise.all([
     secsByStudent(startStr),
-    period==='all'?sb.from('review_logs').select('student_id,duration_sec').then(r=>r.data||[]):Promise.resolve([]),
+    // 예전 누적값은 보안상 다른 학생의 기록 줄을 직접 못 읽으므로, 학생별 합계만 돌려주는 서버 함수로 가져옴
+    period==='all'?sb.rpc('review_legacy_secs').then(r=>(r.data||[]).map(x=>({student_id:x.student_id,duration_sec:Number(x.seconds)||0}))):Promise.resolve([]),
     sb.from('profiles').select('id,name,email,weekly_goal_min').eq('role','student'),
     sb.from('user_xp').select('student_id,total_xp')
   ]);
