@@ -537,7 +537,7 @@ function doUpdate(){
                   <div onclick="toggleRankSection()" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:#FFB347;cursor:pointer;">
                     🏆 랭킹 보기
                   </div>
-                  <div onclick="openTuitionPay()" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:#7DD3B0;cursor:pointer;">
+                  <div id="tuition-pay-btn" onclick="openTuitionPay()" style="display:none;align-items:center;gap:4px;font-size:11px;color:#7DD3B0;cursor:pointer;">
                     💳 수강료 결제
                   </div>
                 </div>
@@ -1010,6 +1010,8 @@ const SCHEDULE_GATE_CUTOFF='2026-07-19T14:52:25.000Z';
 // ⚠️ 아래는 토스페이먼츠 공식 문서에서 제공하는 공용 테스트 클라이언트 키입니다.
 // 실제 서비스 전에는 반드시 본인 가맹점의 테스트/운영 클라이언트 키로 교체하세요.
 const TOSS_CLIENT_KEY='test_ck_D5GePWvyJnrK0W0k6q8gLzN97Eoq';
+// 토스 결제 열기/닫기 스위치. 운영용 키로 교체하고 서버(security_phase2_payment.sql)도 다시 켠 뒤에만 true로 바꾸세요.
+const TOSS_ENABLED=false;
 
 function tossOrderId(){
   return `order_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
@@ -1042,6 +1044,7 @@ async function startTossPayment({productType,courseId,months,amount,orderName}){
 
 // ── 학생용 수강료(오프라인 수강권) 결제 ──
 async function openTuitionPay(){
+  if(!TOSS_ENABLED){tst('온라인 수강료 결제는 아직 준비 중이에요. 원장님께 문의해주세요');return;}
   if(!P?.class_name){tst('배정된 반이 없어 결제할 수 없어요. 원장님께 문의해주세요');return;}
   const{data:cls}=await sb.from('classes').select('price').eq('name',P.class_name).maybeSingle();
   const price=cls?.price;
@@ -1348,6 +1351,7 @@ async function initApp(u){
     loadMyStats();
     checkCallBookingBanner();
     checkTossReturn();
+    if(TOSS_ENABLED){const tb=document.getElementById('tuition-pay-btn');if(tb)tb.style.display='inline-flex';}
   }
   refreshMsgBadge();
   updatePushBanner();
